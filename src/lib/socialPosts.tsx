@@ -41,6 +41,7 @@ export function pickStyles(v: unknown): PostStyle[] {
 export type PostData = {
   cardSrc: string          // data URL of the player's card PNG (720×1140); '' for the photo looks
   photoSrc?: string        // the family's uploaded photo (photo looks)
+  clubLogoSrc?: string     // the team's / club's logo, or '' (Bo: "make sure we have the team's logo in there")
   first: string            // first name only
   club: string
   team: string
@@ -92,6 +93,20 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
   ) : (
     <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(44), lineHeight: 1 }}>{cut(event.toUpperCase(), 26)}</div>
   )
+  // The team's logo on a white tile (logos are drawn for light backgrounds). Nothing when there's none.
+  const teamLogo = (size: number, extra: CSSProperties = {}) => d.clubLogoSrc ? (
+    <div style={{ display: 'flex', background: '#ffffff', borderRadius: u(16), padding: u(10), ...extra }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={d.clubLogoSrc} width={u(size)} height={u(size)} alt="" style={{ objectFit: 'contain' }} />
+    </div>
+  ) : null
+  // Team logo and event logo side by side ("club × event").
+  const lockup = (lw: number, lh: number, extra: CSSProperties = {}) => (
+    <div style={{ display: 'flex', alignItems: 'center', ...extra }}>
+      {teamLogo(lh, { marginRight: u(16) })}
+      {logo(lw, lh)}
+    </div>
+  )
   const caps = (size: number, color: string, spacing = 0.16, weight = 700): CSSProperties => ({
     fontSize: u(size), fontWeight: weight, letterSpacing: `${spacing}em`, color, display: 'flex',
   })
@@ -108,6 +123,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
         <div style={{ display: 'flex', alignItems: 'center', marginTop: u(36) }}>
           {card(400, { transform: 'rotate(-3deg)' })}
           <div style={{ display: 'flex', flexDirection: 'column', width: u(400), marginLeft: u(56) }}>
+            {teamLogo(110, { alignSelf: 'flex-start', marginBottom: u(18) })}
             <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 400, 110)), lineHeight: 1 }}>{first}</div>
             {lines.map((l, i) => <div key={i} style={{ display: 'flex', fontSize: u(30), fontWeight: 600, color: '#e2e8f0', marginTop: u(i ? 2 : 14) }}>{l}</div>)}
             <div style={{ display: 'flex', width: u(90), height: u(5), background: accent, marginTop: u(22) }} />
@@ -135,7 +151,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
       <div style={{ ...root, backgroundColor: '#070b14', backgroundImage: 'radial-gradient(circle at 50% 38%, #1c2a44 0%, #070b14 62%)', paddingTop: u(52) }}>
         <div style={caps(26, '#cbd5e1', 0.42, 500)}>{cut(`${(d.orgName || 'We').toUpperCase()} PRESENTS`, 44)}</div>
         <div style={{ ...caps(24, '#94a3b8', 0.3, 500), marginTop: u(10) }}>{cut(`A ${event.toUpperCase()} PRODUCTION`, 48)}</div>
-        <div style={{ display: 'flex', marginTop: u(36) }}>{card(380, { boxShadow: `0 0 0 ${u(3)}px ${gold}, 0 ${u(40)}px ${u(120)}px rgba(0,0,0,0.8)` })}</div>
+        <div style={{ display: 'flex', marginTop: u(36) }}>{card(340, { boxShadow: `0 0 0 ${u(3)}px ${gold}, 0 ${u(40)}px ${u(120)}px rgba(0,0,0,0.8)` })}</div>
         <div style={{ ...caps(30, gold, 0.5, 500), marginTop: u(40) }}>STARRING</div>
         <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 940, 150)), lineHeight: 1, letterSpacing: '0.04em', marginTop: u(4) }}>{first}</div>
         <div style={{ display: 'flex', fontSize: u(34), fontStyle: 'italic', fontWeight: 500, color: '#e2e8f0', marginTop: u(12) }}>One weekend. One field. No second takes.</div>
@@ -143,6 +159,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
           <div style={caps(34, gold, 0.2)}>PREMIERES ON THE FIELD</div>
           {d.startShort && <div style={{ ...caps(34, '#ffffff', 0.2), marginLeft: u(20) }}>{d.startShort.toUpperCase()}</div>}
         </div>
+        {lockup(170, 72, { marginTop: u(24) })}
         <div style={{ position: 'absolute', left: u(70), bottom: u(40), width: u(940), display: 'flex', justifyContent: 'center', textAlign: 'center', fontSize: u(19), lineHeight: 1.45, letterSpacing: '0.08em', color: '#94a3b8' }}>{credits}</div>
       </div>
     )
@@ -174,7 +191,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', marginTop: u(28) }}>{logo(220, 110)}</div>
+            {lockup(200, 100, { marginTop: u(28) })}
           </div>
         </div>
         <div style={{ position: 'absolute', left: u(84), bottom: u(56), width: u(924), display: 'flex', justifyContent: 'space-between' }}>
@@ -203,9 +220,12 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
             <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(200), lineHeight: 0.95 }}>COMMITTED</div>
             <div style={{ display: 'flex', width: u(952), height: u(8), background: accent, marginTop: u(6) }} />
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: u(28) }}>
-              <div style={{ display: 'flex', flexDirection: 'column', width: u(600) }}>
-                <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 600, 120)), lineHeight: 1 }}>{first}</div>
-                <div style={{ ...caps(28, '#e2e8f0', 0.12, 600), marginTop: u(10) }}>{cut(statLine, 44)}</div>
+              <div style={{ display: 'flex', alignItems: 'center', width: u(640) }}>
+                {teamLogo(110, { marginRight: u(22) })}
+                <div style={{ display: 'flex', flexDirection: 'column', width: u(d.clubLogoSrc ? 488 : 640) }}>
+                  <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, d.clubLogoSrc ? 488 : 600, 120)), lineHeight: 1 }}>{first}</div>
+                  <div style={{ ...caps(26, '#e2e8f0', 0.12, 600), marginTop: u(10) }}>{cut(statLine, 64)}</div>
+                </div>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                 <div style={{ ...caps(24, '#94a3b8', 0.2), marginBottom: u(10) }}>COMMITTED TO</div>
@@ -246,7 +266,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', marginTop: u(32) }}>{logo(220, 110)}</div>
+            {lockup(200, 100, { marginTop: u(32) })}
           </div>
           <div style={{ position: 'absolute', left: u(70), bottom: u(56), display: 'flex', flexDirection: 'column' }}>
             <div style={caps(26, '#cbd5e1', 0.16)}>{(d.dates || where).toUpperCase()}</div>
@@ -264,7 +284,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
         <div style={{ position: 'absolute', left: 0, top: 0, display: 'flex' }}>{photo(POST_W, POST_H)}</div>
         <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(POST_H), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 20%, rgba(0,0,0,0) 42%, rgba(10,10,10,0.88) 66%, #0a0a0a 100%)' }} />
         <div style={{ display: 'flex', width: u(936), justifyContent: 'space-between', alignItems: 'center', marginTop: u(52) }}>
-          {logo(190, 90)}
+          {lockup(190, 90)}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
             <div style={caps(28, '#ffffff', 0.16)}>{(d.dates || '').toUpperCase()}</div>
             <div style={caps(28, '#e2e8f0', 0.16)}>{where.toUpperCase()}</div>
@@ -295,7 +315,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
   return (
     <div style={{ ...root, background: '#0a0a0a' }}>
       <div style={{ display: 'flex', width: u(936), justifyContent: 'space-between', alignItems: 'center', marginTop: u(52) }}>
-        {logo(190, 90)}
+        {lockup(190, 90)}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <div style={caps(28, '#ffffff', 0.16)}>{(d.dates || '').toUpperCase()}</div>
           <div style={caps(28, '#94a3b8', 0.16)}>{where.toUpperCase()}</div>

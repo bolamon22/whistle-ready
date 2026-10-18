@@ -27,9 +27,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const tid = pass.submission.tournamentId
   // The photo looks draw the family's own photo; without one they fall back to the card.
   const photoSrc = usesPhoto(style) ? await imageForSatori(pass.card.photoUrl, base) : ''
-  const [cardSrc, logoSrc, fonts, start] = await Promise.all([
+  const [cardSrc, logoSrc, clubLogoSrc, fonts, start] = await Promise.all([
     photoSrc ? Promise.resolve('') : passCardDataUrl(pass, base),
     imageForSatori(pass.card.tournamentLogoUrl, base),
+    imageForSatori(pass.card.clubLogoUrl, base),
     loadPostFonts().catch(() => undefined),
     tid ? prisma.$queryRawUnsafe<any[]>('SELECT startDate FROM "Tournament" WHERE id = ?', tid).then((r: any[]) => String(r?.[0]?.startDate || '')).catch(() => '') : Promise.resolve(''),
   ])
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const daysOut = daysParam != null && /^\d{1,3}$/.test(daysParam) ? Number(daysParam) : facts.daysOut
   const c = pass.card
   const d = {
-    cardSrc, logoSrc, photoSrc,
+    cardSrc, logoSrc, photoSrc, clubLogoSrc,
     first: firstName(c.playerName),
     club: c.clubName, team: c.teamName, division: c.division, jersey: c.jersey, position: c.position,
     tournamentName: c.tournamentName, dates: c.tournamentDates, location: c.location, orgName: c.orgName,
