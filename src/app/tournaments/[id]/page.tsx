@@ -185,6 +185,13 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [clearFields,setClearFields]=useState<Set<string>>(new Set()) // empty = all fields
   const [clearName,setClearName]=useState('')
   const [clearSaving,setClearSaving]=useState(false)
+  // Clear one person's games by name (Bo, Oct 17 2026: "a scorekeeper said she
+  // can't work the entire weekend, so now I can just look her up by name").
+  const [clearMode,setClearMode]=useState<'group'|'person'>('group')
+  const [clearWho,setClearWho]=useState('')
+  const [clearWhoQ,setClearWhoQ]=useState('')
+  const [clearScope,setClearScope]=useState<'event'|'day'>('event')
+  const [clearMarkOut,setClearMarkOut]=useState(true)
   const [clearCategories,setClearCategories]=useState<Set<string>>(new Set())
 
   // View mode
@@ -346,7 +353,21 @@ export default function GridPage({ params }: { params:{id:string} }) {
     setAutoAssigning(false)
   }
 
-  function resetClear(){setShowClear(false);setClearArmed(false);setClearName('');setClearCategories(new Set());setClearFields(new Set())}
+  function resetClear(){setShowClear(false);setClearArmed(false);setClearName('');setClearCategories(new Set());setClearFields(new Set());setClearMode('group');setClearWho('');setClearWhoQ('');setClearScope('event');setClearMarkOut(true)}
+  // Everyone on a game at this event, with their games, for the Clear box's name search.
+  function assignedPeople(){
+    const by=new Map<string,{id:string;name:string;slots:{g:Game;a:Assignment}[]}>()
+    for(const g of games){
+      if(g.isCanceled)continue
+      for(const a of g.assignments){
+        const name=String(a.worker?.name??workerMap.get(a.workerId)?.name??'')
+        const p=by.get(a.workerId)||{id:a.workerId,name,slots:[]}
+        p.slots.push({g,a});by.set(a.workerId,p)
+      }
+    }
+    for(const p of Array.from(by.values()))p.slots.sort((x,y)=>(x.g.date+x.g.startTime).localeCompare(y.g.date+y.g.startTime))
+    return Array.from(by.values()).sort((x,y)=>x.name.localeCompare(y.name))
+  }
   // Mirrors the clear-assignments route: same kinds, same field filter, same gender rule.
   function clearTargets(kinds:Set<string>,fields:Set<string>){
     let n=0
@@ -362,7 +383,30 @@ export default function GridPage({ params }: { params:{id:string} }) {
     return n
   }
 
+  async function clearPerson(){
+    const who=assignedPeople().find(p=>p.id===clearWho)
+    if(!clearArmed||!clearName.trim()||!who)return
+    const day=clearScope==='day'?activeDay:''
+    const outDays=clearScope==='day'?[activeDay]:dates
+    setClearSaving(true)
+    try{
+      const res=await fetch(`/api/tournaments/${params.id}/clear-assignments`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({deletedBy:clearName.trim(),workerId:who.id,date:day})})
+      const data=await res.json().catch(()=>({}))
+      if(!res.ok){toast.error(data.error||'Failed to clear');setClearArmed(false);setClearSaving(false);return}
+      let note=''
+      if(clearMarkOut&&outDays.length){
+        // So Auto-assign and the availability counts stop counting on them.
+        const r=await fetch('/api/availability/answers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tournamentId:params.id,dates:outDays,answer:'no',workerId:who.id})})
+        note=r.ok?` and marked can't work`:` (couldn't mark them can't work. Set it on Availability)`
+      }
+      toast.success(`Took ${who.name} off ${data.deleted} game${data.deleted===1?'':'s'}${note}`)
+      await load();resetClear()
+    }catch{toast.error('Failed to clear');setClearArmed(false)}
+    setClearSaving(false)
+  }
+
   async function clearAssignments(){
+    if(clearMode==='person')return clearPerson()
     if(!clearArmed||!clearName.trim()||clearCategories.size===0)return
     setClearSaving(true)
     try{
@@ -811,14 +855,79 @@ export default function GridPage({ params }: { params:{id:string} }) {
         const kindNames=KIND_OPTS.filter(k=>clearCategories.has(k.val)).map(k=>k.short)
         const whereText=clearFields.size===0?'all fields':Array.from(clearFields).join(', ')
         const change=(fn:()=>void)=>{fn();setClearArmed(false)}
+        // One person: everyone on a game here, searched by name.
+        const people=clearMode==='person'?assignedPeople():[]
+        const who=people.find(p=>p.id===clearWho)
+        const whoSlots=who?who.slots.filter(x=>clearScope==='event'||x.g.date===activeDay):[]
+        const whoDays=who?Array.from(new Set(who.slots.map(x=>x.g.date))).sort():[]
+        const q=clearWhoQ.trim().toLowerCase()
+        const matches=q?people.filter(p=>p.name.toLowerCase().includes(q)).slice(0,8):[]
+        const first=(who?.name||'').split(' ')[0]||'them'
+        const roleWord=(r:string)=>r==='scorekeeper'?'SK':r.replace(/^ref/,'R')
+        const outDays=clearScope==='day'?[activeDay]:dates
+        const n=clearMode==='person'?whoSlots.length:total
         return(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={()=>!clearSaving&&resetClear()}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e=>e.stopPropagation()}>
             <div className="px-6 py-5 border-b border-red-100 bg-red-50 rounded-t-2xl">
               <h2 className="text-lg font-bold text-red-800">Clear Assignments</h2>
-              <p className="text-sm text-red-600 mt-1">For <strong>{formatDate(activeDay)}</strong>. This cannot be undone.</p>
+              <p className="text-sm text-red-600 mt-1">{clearMode==='group'?<>For <strong>{formatDate(activeDay)}</strong>. </>:null}This cannot be undone.</p>
             </div>
             <div className="px-6 py-5 space-y-4">
+              <div className="flex gap-0.5 bg-slate-100 rounded-lg p-1" role="tablist" aria-label="Clear by">
+                {([['group','By group'],['person','One person']] as const).map(([v,l])=>(
+                  <button key={v} type="button" role="tab" aria-selected={clearMode===v} onClick={()=>change(()=>setClearMode(v))}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors ${clearMode===v?'bg-white text-slate-800 shadow-sm':'text-slate-500 hover:text-slate-800'}`}>{l}</button>
+                ))}
+              </div>
+              {clearMode==='person'&&(
+                <div className="space-y-3">
+                  {!who?(
+                    <div className="space-y-2">
+                      <label className="label" htmlFor="clear-who">Who can&apos;t work?</label>
+                      <input id="clear-who" className="input" autoFocus placeholder="Start typing a name" value={clearWhoQ} onChange={e=>setClearWhoQ(e.target.value)}/>
+                      {q&&!matches.length&&<p className="text-xs text-slate-500">Nobody by that name is on a game at this event.</p>}
+                      {matches.length>0&&(
+                        <div className="rounded-xl border border-slate-200 divide-y divide-slate-100 overflow-hidden">
+                          {matches.map(p=>(
+                            <button key={p.id} type="button" onClick={()=>change(()=>{setClearWho(p.id);setClearWhoQ('')})}
+                              className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2">
+                              <span className="text-sm font-semibold text-slate-800 flex-1">{p.name}</span>
+                              <span className="text-xs text-slate-500">{p.slots.length} game{p.slots.length===1?'':'s'} · {Array.from(new Set(p.slots.map(x=>formatDate(x.g.date).split(',')[0]))).join(', ')}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ):(
+                    <>
+                      <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2">
+                        <span className="text-sm font-bold text-slate-800 flex-1">{who.name}</span>
+                        <button type="button" onClick={()=>change(()=>setClearWho(''))} className="text-xs font-semibold text-slate-500 hover:text-slate-800 underline">Change</button>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="flex items-center gap-2 text-sm"><input type="radio" name="clear-scope" className="accent-red-600" checked={clearScope==='event'} onChange={()=>change(()=>setClearScope('event'))}/> The whole event <span className="text-slate-400">({who.slots.length} game{who.slots.length===1?'':'s'})</span></label>
+                        <label className="flex items-center gap-2 text-sm"><input type="radio" name="clear-scope" className="accent-red-600" checked={clearScope==='day'} onChange={()=>change(()=>setClearScope('day'))}/> Just {formatDate(activeDay)} <span className="text-slate-400">({who.slots.filter(x=>x.g.date===activeDay).length})</span></label>
+                      </div>
+                      {whoSlots.length>0&&(
+                        <ul className="rounded-xl border border-slate-200 divide-y divide-slate-100 max-h-48 overflow-y-auto text-xs">
+                          {whoSlots.map(({g,a})=>(
+                            <li key={a.id} className="px-3 py-1.5 flex gap-2">
+                              <span className="w-24 flex-shrink-0 text-slate-500">{formatDate(g.date).split(',')[0]} {formatTime(g.startTime)}</span>
+                              <span className="flex-1 min-w-0 truncate text-slate-700">#{g.gameNumber} {divisionAbbr(g.division)} · {(g.location||'').split(' - ').pop()}</span>
+                              <span className="font-semibold text-slate-600">{roleWord(a.role)}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                      <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="accent-red-600 mt-0.5" checked={clearMarkOut} onChange={e=>change(()=>setClearMarkOut(e.target.checked))}/>
+                        <span>Also mark {first} as <b>can&apos;t work</b> {clearScope==='day'?`on ${formatDate(activeDay)}`:whoDays.length?'all weekend':'every day'}<span className="block text-xs text-slate-500">So Auto-assign won&apos;t put {first} back on, and Availability shows it.</span></span>
+                      </label>
+                    </>
+                  )}
+                </div>
+              )}
+              {clearMode==='group'&&<>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-slate-700">What do you want to clear?</p>
                 {KIND_OPTS.map(k=>{
@@ -850,6 +959,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                   </div>
                 </div>
               )}
+              </>}
               <div>
                 <label className="label">Your name (for the audit log)</label>
                 <input className="input" placeholder="e.g. John Smith" value={clearName} onChange={e=>setClearName(e.target.value)}/>
@@ -860,13 +970,15 @@ export default function GridPage({ params }: { params:{id:string} }) {
                   <button
                     className="flex-1 px-4 py-2 rounded-xl font-semibold text-sm transition-colors bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed"
                     onClick={()=>setClearArmed(true)}
-                    disabled={!clearName.trim()||clearCategories.size===0||total===0}
-                  >{clearCategories.size===0?'Pick what to clear':total===0?'Nothing to clear':`Clear ${total} assignment${total===1?'':'s'}…`}</button>
+                    disabled={!clearName.trim()||(clearMode==='person'?!who||n===0:clearCategories.size===0||total===0)}
+                  >{clearMode==='person'?(!who?'Pick a person':n===0?'Nothing to clear':`Take ${first} off ${n} game${n===1?'':'s'}…`):clearCategories.size===0?'Pick what to clear':total===0?'Nothing to clear':`Clear ${total} assignment${total===1?'':'s'}…`}</button>
                 </div>
               ):(
                 <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-3">
                   <p className="text-sm text-red-800">
-                    Are you sure? This removes <strong>{total}</strong> {kindNames.join(' + ')} assignment{total===1?'':'s'} on <strong>{whereText}</strong> for {formatDate(activeDay)}.
+                    {clearMode==='person'&&who
+                      ?<>Are you sure? This takes <strong>{who.name}</strong> off <strong>{n}</strong> game{n===1?'':'s'} {clearScope==='day'?<>on {formatDate(activeDay)}</>:<>for the whole event</>}{clearMarkOut?<> and marks {first} can&apos;t work {clearScope==='day'?'that day':`on ${outDays.length} day${outDays.length===1?'':'s'}`}</>:null}. Their slots go back to open.</>
+                      :<>Are you sure? This removes <strong>{total}</strong> {kindNames.join(' + ')} assignment{total===1?'':'s'} on <strong>{whereText}</strong> for {formatDate(activeDay)}.</>}
                   </p>
                   <div className="flex gap-3">
                     <button className="btn-secondary flex-1" onClick={()=>setClearArmed(false)} disabled={clearSaving}>Go back</button>

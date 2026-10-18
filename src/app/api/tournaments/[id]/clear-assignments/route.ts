@@ -12,6 +12,10 @@ import { eventSideOf } from '@/lib/eventTeamsStore'
 // division match used Prisma's case-insensitive mode, which this database doesn't
 // support. Kinds are now required, and games are sorted boys / girls / both by
 // lib/gameGender (a coed game's refs go with either refs kind).
+//
+// One person (Bo, Oct 17 2026: a scorekeeper said she can't work the whole
+// weekend): { workerId, date? } clears just their games, for the whole event or
+// one day, with no kinds or fields. The Assigner's Clear box looks them up by name.
 const KINDS = ['girls-refs', 'boys-refs', 'scorekeepers'] as const
 type Kind = typeof KINDS[number]
 const REF_ROLES = new Set(['ref1', 'ref2', 'ref3'])
@@ -28,6 +32,27 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   const kinds = new Set(raw.filter((k): k is Kind => (KINDS as readonly string[]).includes(String(k))))
   const fields: string[] = Array.isArray(body.fields) ? body.fields.filter((f: unknown) => typeof f === 'string') : []
   if (!deletedBy) return NextResponse.json({ error: 'Your name is required for the audit log' }, { status: 400 })
+
+  const workerId = typeof body.workerId === 'string' ? body.workerId : ''
+  if (workerId) {
+    const worker = await prisma.worker.findUnique({ where: { id: workerId }, select: { name: true } })
+    if (!worker) return NextResponse.json({ error: 'That person isn’t in the Staff Pool' }, { status: 404 })
+    const mine = await prisma.assignment.findMany({
+      where: { workerId, game: { tournamentId: params.id, ...(date ? { date } : {}) } },
+      select: { id: true },
+    })
+    const gone = mine.length ? await prisma.assignment.deleteMany({ where: { id: { in: mine.map(a => a.id) } } }) : { count: 0 }
+    await prisma.auditLog.create({
+      data: {
+        tournamentId: params.id,
+        action: 'CLEAR_ASSIGNMENTS',
+        deletedBy,
+        detail: `Cleared ${gone.count} assignments for ${worker.name}${date ? ` on ${date}` : ' (whole event)'}`,
+      },
+    })
+    return NextResponse.json({ deleted: gone.count })
+  }
+
   if (!date) return NextResponse.json({ error: 'Pick a day' }, { status: 400 })
   if (kinds.size === 0) return NextResponse.json({ error: 'Pick what to clear' }, { status: 400 })
 

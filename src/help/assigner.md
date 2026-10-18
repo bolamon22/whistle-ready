@@ -29,6 +29,13 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **What staff can see (Staff portal):** the **Staff portal** tab of the staffing panel (open **Staffing**, then **Staff portal**) shows, for **Boys officials**, **Girls officials** and **Scorekeepers**, whether they can see their games yet. Until a group is shown, its games are only on this board: they aren't on the officials' staff home or My games, and nobody is told. Build and fix the schedule first, then click **Show to staff** (this emails nobody) or send **Notify officials**, which shows that group's games as it sends. **Hide** takes them off the staff portal again; nothing on the board changes. A new event starts with every group hidden.
 
+**Someone can't work (take one person off):**
+1. Click **⋯** (More actions), then **Clear assignments…**, then **One person**.
+2. Start typing their name and pick them. You see every game they're on.
+3. Choose **The whole event** or **Just** the day you're on.
+4. Keep **Also mark them as can't work** ticked so Auto-assign doesn't put them back on and Availability shows it.
+5. Type your name for the audit log, click **Take … off N games…**, then **Yes, clear them**. Their slots go back to open.
+
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
 2. Under **Who**, tick **Boys officials**, **Girls officials** or **Scorekeepers** (any mix; nobody is ticked until you pick). Each group's own assigner can send to just their group. A group that is still hidden is shown on the staff portal when you send.
