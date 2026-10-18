@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw, Volume2 } from 'lucide-react'
+import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 
 // Turns one social post (lib/socialPosts, /pass/<token>/post/<style>.png) into an
@@ -12,22 +13,13 @@ import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages
 // intro that fits the look (a slam for Committed, a card flip for Rookie Card, a
 // curtain for Now Showing, a count-down for Countdown...), a slow push-in, a light
 // sweep, and the event's name above. MediaRecorder captures the canvas plus the
-// music (public/reel-beat.mp3, our own track, so no rights issues) to MP4 where the
+// music (any track in lib/reelSongs, all ours, or the staff member's own MP3) to MP4 where the
 // browser can (Chrome, Safari), else WebM. Nothing is uploaded: the file is saved
 // on the staff member's computer.
 
 const W = 1080, H = 1920, DUR = 8
 
-// Music to pick from (Bo: "can I choose different songs?"). All made from scratch for
-// Whistle Ready, so Instagram won't mute them. public/reel-beat.mp3 is the original.
-export const REEL_SONGS = [
-  { id: 'trap', label: 'Trap Hype (original)', url: '/reel-beat.mp3' },
-  { id: 'electro', label: 'Electro Drive', url: '/reel-music/electro.mp3' },
-  { id: 'stadium', label: 'Stadium Stomp', url: '/reel-music/stadium.mp3' },
-  { id: 'drumline', label: 'Drumline', url: '/reel-music/drumline.mp3' },
-  { id: 'cinematic', label: 'Cinematic Rise', url: '/reel-music/cinematic.mp3' },
-  { id: 'none', label: 'No music', url: '' },
-]
+
 const PY = 285                      // where the 1080×1350 post sits
 const clamp = (v: number) => Math.max(0, Math.min(1, v))
 const easeOut = (p: number) => 1 - Math.pow(1 - clamp(p), 3)
@@ -176,8 +168,10 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const [state, setState] = useState<'loading' | 'preview' | 'recording' | 'done' | 'error'>('loading')
   const [out, setOut] = useState<{ url: string; ext: string } | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [song, setSong] = useState(REEL_SONGS[0].id)
-  const songUrl = REEL_SONGS.find(x => x.id === song)?.url || ''
+  const [song, setSong] = useState('trap-hype')         // a lib/reelSongs id | 'own' | 'none'
+  const [ownFile, setOwnFile] = useState<File | null>(null)
+  const ownUrl = useRef('')
+  const songUrl = song === 'none' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
 
@@ -327,8 +321,18 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
               <span className="font-semibold shrink-0">Song</span>
               <select value={song} onChange={e => setSong(e.target.value)} disabled={playing}
                 className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
-                {REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+                {REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}
+                {ownFile && <option value="own">{ownFile.name} (your file)</option>}
+                <option value="none">No music</option>
               </select>
+            </label>
+          )}
+          {state !== 'recording' && state !== 'loading' && state !== 'error' && (
+            <label className="text-xs text-teal-700 font-semibold cursor-pointer self-start">
+              Use your own MP3…
+              <input type="file" accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/wav,audio/x-m4a" className="sr-only"
+                onChange={e => { const f = e.target.files?.[0]; if (f) { if (ownUrl.current) URL.revokeObjectURL(ownUrl.current); ownUrl.current = URL.createObjectURL(f); setOwnFile(f); setSong('own') } e.target.value = '' }} />
+              <span className="text-slate-500 font-normal"> (only music you have the rights to)</span>
             </label>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (

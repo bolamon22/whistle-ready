@@ -16,14 +16,10 @@ import toast from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
 import { X, Play, Pause, Upload, Film, Music, ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import type { IdeaEvent } from '@/lib/socialIdeas'
+import { REEL_SONGS } from '@/lib/reelSongs'
 
-export const REEL_TRACKS = [
-  { id: 'game-day', title: 'Game Day', mood: 'Driving, upbeat', bpm: 128 },
-  { id: 'big-stage', title: 'Big Stage', mood: 'Hype, hard-hitting', bpm: 140 },
-  { id: 'warm-up', title: 'Warm-Up', mood: 'Relaxed, feel-good', bpm: 96 },
-  { id: 'spooky-stomp', title: 'Spooky Stomp', mood: 'Halloween, playful-creepy', bpm: 118 },
-  { id: 'holiday-rush', title: 'Holiday Rush', mood: 'Festive, bright', bpm: 132 },
-] as const
+// The track list is shared with the player-post Reels (lib/reelSongs).
+export const REEL_TRACKS = REEL_SONGS
 
 const W = 1080, H = 1920, END = 2.6
 const clamp = (v: number) => Math.max(0, Math.min(1, v))
