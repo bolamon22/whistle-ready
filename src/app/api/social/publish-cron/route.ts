@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
+import { archivedOrgIds } from '@/lib/orgArchive'
 import { publishScheduledPost, finishPendingContainers, recoverStuckPosts, type PublishOutcome } from '@/lib/socialPublish'
 
 export const maxDuration = 60
@@ -28,8 +29,16 @@ export async function GET(req: NextRequest) {
   results.push(...await recoverStuckPosts())
   results.push(...await finishPendingContainers(10_000))
 
+  // An archived organization's posts don't go out (lib/orgArchive). One that comes due
+  // while it's archived is marked failed with the reason, as its club letters are, so
+  // Restore doesn't publish weeks of stale posts at once.
+  const closed = Array.from(await archivedOrgIds())
+  if (closed.length) await prisma.scheduledPost.updateMany({
+    where: { status: 'scheduled', scheduledFor: { lte: new Date() }, orgId: { in: closed } },
+    data: { status: 'failed', lastError: 'Not posted: the organization was archived.' },
+  }).catch(() => { /* they're left out below either way */ })
   const due = await prisma.scheduledPost.findMany({
-    where: { status: 'scheduled', scheduledFor: { lte: new Date() } },
+    where: { status: 'scheduled', scheduledFor: { lte: new Date() }, ...(closed.length ? { orgId: { notIn: closed } } : {}) },
     orderBy: { scheduledFor: 'asc' }, take: 10, select: { id: true },
   })
   let deferred = 0

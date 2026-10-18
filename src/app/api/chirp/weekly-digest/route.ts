@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { roleLabel } from '@/lib/chirp'
+import { archivedOrgIds } from '@/lib/orgArchive'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -34,8 +35,10 @@ export async function GET(req: NextRequest) {
   const since = Date.now() - days * 86400000
   const orgs: any[] = await prisma.$queryRawUnsafe('SELECT id, name, slug, contactEmail FROM "Organization"').catch(() => [])
   const sent: string[] = []
+  const closed = await archivedOrgIds()   // archived organizations get no digest (lib/orgArchive)
 
   for (const org of orgs) {
+    if (closed.has(String(org.id))) continue
     const to = String(org.contactEmail || '').trim()
     if (!to) continue
     const tournaments: any[] = await prisma.$queryRawUnsafe('SELECT id, name FROM "Tournament" WHERE orgId = ?', org.id).catch(() => [])

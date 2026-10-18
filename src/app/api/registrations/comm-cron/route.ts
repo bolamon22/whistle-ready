@@ -3,6 +3,8 @@ import { claimDue, finishScheduled } from '@/lib/commSchedule'
 import { runCommSend } from '@/lib/commSend'
 import { runReturningInvite, type InviteClub } from '@/lib/returningInvite'
 import { sendEmail, OFFICE_CC } from '@/lib/email'
+import { isOrgArchived } from '@/lib/orgArchive'
+import { tournamentOrgId } from '@/lib/org'
 
 // Vercel cron (vercel.json, every 15 min): send anything that came due. Rows are
 // claimed one at a time before sending, so an overlapping run can't double-send.
@@ -19,6 +21,12 @@ export async function GET(req: NextRequest) {
   for (let i = 0; i < 5; i++) {
     const job = await claimDue(new Date().toISOString())
     if (!job) break
+    // An archived organization's letters don't go (lib/orgArchive).
+    if (await isOrgArchived(await tournamentOrgId(job.tournamentId))) {
+      await finishScheduled(job.id, 'failed', [])
+      ran.push({ id: job.id, kind: job.kind, clubs: job.regIds.length, sent: 0, status: 'skipped: organization archived' })
+      continue
+    }
     // The office gets a receipt for every scheduled run — Bo isn't watching a
     // toast at 8am, so this is how he knows it actually went (Sep 10).
     const res = job.type === 'returning'

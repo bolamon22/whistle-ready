@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { housingSettings, sendHousingReport } from '@/lib/housing'
+import { archivedOrgIds } from '@/lib/orgArchive'
 
 // POST = Send report now (org side). GET = the Vercel cron (vercel.json fires it
 // Mon + Thu 12:00 UTC ≈ 8am ET): every org with a housing contact gets its report
@@ -28,9 +29,11 @@ export async function GET(req: Request) {
   const day = new Date().getUTCDay() // cron fires Mon(1) + Thu(4)
   const rows = await prisma.appSetting.findMany({ where: { key: { startsWith: 'housing:' } } })
   const results: { orgId: string; sent: boolean; reason?: string }[] = []
+  const closed = await archivedOrgIds()
   for (const row of rows) {
     const orgId = row.key.slice('housing:'.length)
     if (!orgId || orgId.includes(':')) continue
+    if (closed.has(orgId)) { results.push({ orgId, sent: false, reason: 'archived' }); continue }
     const s = await housingSettings(orgId)
     if (!s.contactEmail) { results.push({ orgId, sent: false, reason: 'no contact' }); continue }
     if (s.cadence === 'manual') { results.push({ orgId, sent: false, reason: 'manual' }); continue }
