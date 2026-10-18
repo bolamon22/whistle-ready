@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save, Music } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { MUSIC_CATEGORIES, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
@@ -285,6 +285,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const [using, setUsing] = useState(false)
   const [ownFile, setOwnFile] = useState<File | null>(null)
   const ownUrl = useRef('')
+  const fileInput = useRef<HTMLInputElement>(null)
   // 'ig' (scheduler only): record without music; the post adds an Instagram song when it publishes.
   // The org's own music list (lib/reelMusic), next to the built-ins.
   const music = useOrgMusic()
@@ -561,7 +562,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <span className="font-semibold shrink-0">Song</span>
-              <select value={song} onChange={e => setSong(e.target.value)} disabled={playing}
+              <select value={song} onChange={e => { if (e.target.value === '__add') { fileInput.current?.click(); return } setSong(e.target.value) }} disabled={playing}
                 className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
                 {onUse && <option value="ig">Instagram trending song (pick it on the post)</option>}
                 {groupTracks(music.tracks).map(g => (
@@ -570,15 +571,17 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
                 <optgroup label="Built-in">{REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.title} · {x.mood}</option>)}</optgroup>
                 {ownFile && <option value="own">{ownFile.name} (your file)</option>}
                 <option value="none">No music</option>
+                <option value="__add">＋ Add music from your computer…</option>
               </select>
             </label>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
-            <label className="text-xs text-teal-700 font-semibold cursor-pointer self-start">
-              Add music (MP3)…
-              <input type="file" accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/wav,audio/x-m4a" className="sr-only"
+            // Bo, Oct 18 2026: "I don't see where to add the music" (it was a small text link).
+            <label className="w-full rounded-lg border border-dashed border-teal-400 bg-teal-50/40 hover:bg-teal-50 text-teal-800 text-sm font-semibold py-2 px-3 cursor-pointer inline-flex items-center justify-center gap-2 flex-wrap text-center">
+              <Music size={15} /> Add music to your list (MP3)
+              <input ref={fileInput} type="file" accept="audio/mpeg,audio/mp3,audio/mp4,audio/aac,audio/wav,audio/x-m4a" className="sr-only"
                 onChange={e => { const f = e.target.files?.[0]; if (f) { if (ownUrl.current) URL.revokeObjectURL(ownUrl.current); ownUrl.current = URL.createObjectURL(f); setOwnFile(f); setSong('own'); setSaveTitle(titleFromFile(f.name)) } e.target.value = '' }} />
-              <span className="text-slate-500 font-normal"> (only music you have the rights to, e.g. Pixabay Music)</span>
+              <span className="text-slate-500 font-normal text-xs w-full">Download a track (e.g. from Pixabay Music), pick it here, then Save it under a category</span>
             </label>
           )}
           {song === 'own' && ownFile && state !== 'recording' && (
