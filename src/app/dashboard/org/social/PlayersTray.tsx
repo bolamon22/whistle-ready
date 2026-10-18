@@ -7,7 +7,7 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users } from 'lucide-react'
-import { POST_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, FAVORITE_STYLES } from '@/lib/socialPosts'
 import { lookFor, teamLabel, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
 
@@ -25,7 +25,9 @@ export function planList(players: ClearedPlayer[]): { posts: ClearedPlayer[]; ro
   return { posts, rollcalls }
 }
 
-const LOOKS = POST_STYLES.filter(s => !/-photo$/.test(s.id))
+// Bo's favorites first, then the rest.
+const FAVS = FAVORITE_STYLES.map(id => POST_STYLES.find(s => s.id === id)).filter((s): s is (typeof POST_STYLES)[number] => !!s)
+const MORE = POST_STYLES.filter(s => !FAVORITE_STYLES.includes(s.id))
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', publishing: 'Publishing', published: 'Posted', failed: 'Failed' }
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
@@ -93,7 +95,8 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
                 <div className="text-[11px] font-semibold text-teal-700 truncate" title={handles.join(' · ')}>{handles.length ? `Collab ${handles.join(' · ')}` : 'No Instagram given'}</div>
                 <div className="text-[11px] text-slate-500 truncate">{p.posts.length ? `${KIND[last.kind] || 'Post'} · ${STATUS[last.status] || ''} ${fmtDay(last.scheduledFor)}${p.posts.length > 1 ? ` · +${p.posts.length - 1}` : ''}` : 'Not posted yet'}</div>
                 <select value={look} onChange={e => setLooks({ ...looks, [p.id]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700" aria-label="Look">
-                  {LOOKS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  <optgroup label="Favorites">{FAVS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
+                  <optgroup label="More looks">{MORE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
                 </select>
               </div>
               <div className="grid grid-cols-3 gap-1 px-2.5 pb-2.5 mt-auto">

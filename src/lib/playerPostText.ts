@@ -55,11 +55,11 @@ export function teamLabel(p: Pick<ClearedPlayer, 'club' | 'team'>): string {
 /** Base look of a style id ("countdown-photo" → "countdown"). */
 export const baseLook = (style: string) => style.replace(/(-to)?-photo$/, '')
 
-// Which look to lead with. The last week before an event is Countdown's; earlier
-// it's Committed. A batch rotates through the rest so a run of posts doesn't all
-// look the same.
-const NEAR = ['countdown', 'rookie', 'main-event', 'committed', 'draft', 'premiere', 'jersey', 'cover', 'scout']
-const FAR = ['committed', 'rookie', 'premiere', 'draft', 'main-event', 'jersey', 'cover', 'scout']
+// Which look to lead with: Bo's favorites (lib/socialPosts FAVORITE_STYLES), all photo
+// looks. The last week before an event is Countdown's; earlier it's Committed. A batch
+// rotates through the rest so a run of posts doesn't all look the same.
+const NEAR = ['countdown-photo', 'rookie', 'main-event', 'committed-photo', 'draft-photo', 'cover', 'scout']
+const FAR = ['committed-photo', 'rookie', 'draft-photo', 'main-event', 'cover', 'scout']
 export function lookFor(daysOut: number | null, i = 0): string {
   const list = daysOut != null && daysOut <= 7 ? NEAR : FAR
   return list[((i % list.length) + list.length) % list.length]

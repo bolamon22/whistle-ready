@@ -334,9 +334,9 @@ function SocialInner() {
         const when = pickDay(p0, 'late')
         if (!when) { skipped++; continue }
         const n = daysAt(p0, when)
-        const blobs = await Promise.all(group.map(p => feedJpeg(p.token, 'jersey', n)))
-        const urls = await Promise.all(blobs.map((b, i) => uploadJpeg(b, `${fileSlug(group[i], 'jersey')}.jpg`)))
-        await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: ids, caption: rollCallCaption(group, site), mediaUrls: urls, mediaType: 'carousel', placements: ['feed'], scheduledFor: when.toISOString(), player: { submissionIds: group.map(p => p.id), tournamentId: p0.tournamentId, style: 'jersey', kind: 'rollcall', days: n } }) })
+        const blobs = await Promise.all(group.map(p => feedJpeg(p.token, 'rookie', n)))
+        const urls = await Promise.all(blobs.map((b, i) => uploadJpeg(b, `${fileSlug(group[i], 'rookie')}.jpg`)))
+        await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: ids, caption: rollCallCaption(group, site), mediaUrls: urls, mediaType: 'carousel', placements: ['feed'], scheduledFor: when.toISOString(), player: { submissionIds: group.map(p => p.id), tournamentId: p0.tournamentId, style: 'rookie', kind: 'rollcall', days: n } }) })
         made++
       } catch { skipped++ }
     }

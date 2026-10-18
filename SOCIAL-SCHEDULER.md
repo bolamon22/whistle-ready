@@ -279,7 +279,7 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   `POST /api/social/posts`. Countdown graphics are made for the scheduled day (`days=`
   on the post PNG and on `/pass/<token>/reel`), and Compose warns if the date moves.
   **Plan all cleared players** makes one draft per player with nothing scheduled, each
-  on its own open day, plus a Roll Call carousel (Name on the Back slides) per event
+  on its own open day, plus a Roll Call carousel (Rookie Card slides) per event
   with 3+ cleared players. Everything is a draft until approved.
   Records (AppSetting, no migration): `postPlayer:<postId>` (which players a post
   features, so the tray shows Posted) and `postCollab:<postId>` (usernames, max 3).

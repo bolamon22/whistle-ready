@@ -22,7 +22,7 @@ export const POST_H = 1350
 // "· photo" ones and draw the card in the photo's place when there's no photo.
 export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
   | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey'
-export const POST_STYLES: { id: PostStyle; label: string }[] = [
+const ALL_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
   { id: 'draft', label: 'Draft Day' },
@@ -39,12 +39,20 @@ export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'main-event', label: 'Main Event' },
   { id: 'jersey', label: 'Name on the Back' },
 ]
+// Name on the Back is retired from every picker (Bo, Oct 18 2026: "that one's not very
+// good. I'll probably never use it"). It still renders, so emails already sent with it
+// keep their pictures.
+const RETIRED = new Set<PostStyle>(['jersey'])
+/** The looks staff can pick, in the standard order. */
+export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id))
+/** Bo's favorites (Oct 18 2026), offered first on the social scheduler. */
+export const FAVORITE_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo', 'cover', 'rookie', 'scout', 'main-event']
 /** The looks that use the player's photo rather than the card. */
 const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey'])
 export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s)
 /** What the Ask dialog starts with ticked. */
 export const DEFAULT_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo']
-export const isPostStyle = (s: string): s is PostStyle => POST_STYLES.some(p => p.id === s)
+export const isPostStyle = (s: string): s is PostStyle => ALL_STYLES.some(p => p.id === s)
 /** Valid styles from an array or a comma list, in the standard order. [] when none. */
 export function pickStyles(v: unknown): PostStyle[] {
   const want = new Set((Array.isArray(v) ? v : String(v || '').split(',')).map(x => String(x).trim()))
