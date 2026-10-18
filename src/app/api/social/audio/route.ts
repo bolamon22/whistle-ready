@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireStaff } from '@/lib/apiAuth'
 import { prisma } from '@/lib/db'
-import { searchInstagramAudio } from '@/lib/social'
+import { searchInstagramAudio, getInstagramAudio } from '@/lib/social'
 import { loadOrgUserToken } from '@/lib/socialAudio'
 
 // Instagram music for scheduled Reels: GET /api/social/audio?q=&type=music|original_sound
@@ -20,6 +20,15 @@ export async function GET(req: NextRequest) {
   const account = await prisma.socialAccount.findFirst({ where: { orgId: gate.orgId, platform: 'instagram', status: 'active' } })
   if (!account) return NextResponse.json({ error: 'Connect an Instagram account first' }, { status: 400 })
   const userToken = await loadOrgUserToken(gate.orgId).catch(() => null)
+  // ?id=<audioId>: one song, fresh, for "Play with song" on a scheduled Reel (the
+  // track's link from Meta expires, so it isn't stored with the post).
+  const id = (url.searchParams.get('id') || '').trim()
+  if (id) {
+    if (!/^\d{5,30}$/.test(id)) return NextResponse.json({ error: 'Not a song id' }, { status: 400 })
+    const one = await getInstagramAudio(account, id, userToken)
+    if (!one.ok) return NextResponse.json({ error: one.error }, { status: 502 })
+    return NextResponse.json({ audio: [one.data] })
+  }
   const r = await searchInstagramAudio(account, { query: q, type, userToken })
   if (!r.ok) {
     // Most likely: a token that predates music support. Reconnecting stores the

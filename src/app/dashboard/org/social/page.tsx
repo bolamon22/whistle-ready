@@ -572,8 +572,36 @@ function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, media
   const poster = cur ? cur.thumbnailUrl : firstPoster
   const isVideo = mediaType === 'video'
   const frame = isStory || (ig && isVideo) ? 'aspect-[9/16] max-h-[420px] mx-auto' : ig ? 'aspect-square' : isVideo ? 'aspect-square' : 'aspect-[1.91/1]'
+  // "Play with song" (Bo: "Am I able to preview this with the music?"): Instagram only
+  // mixes its song in when it publishes, so this plays the Reel and the song together
+  // here, at the volumes set on the post. Instagram may start the song elsewhere.
+  const vid = useRef<HTMLVideoElement | null>(null)
+  const songEl = useRef<HTMLAudioElement | null>(null)
+  const [mix, setMix] = useState<'' | 'loading' | 'playing'>('')
+  const canMix = ig && isVideo && !isStory && !deck && !!song && !!imgSrc
+  const stopMix = () => { songEl.current?.pause(); vid.current?.pause(); setMix('') }
+  useEffect(() => () => { songEl.current?.pause() }, [])
+  async function playMix() {
+    if (!song || !vid.current) return
+    if (mix === 'playing') { stopMix(); return }
+    setMix('loading')
+    try {
+      const d = await api(`/api/social/audio?id=${encodeURIComponent(song.audioId)}`)
+      const url = d.audio?.[0]?.previewUrl
+      if (!url) throw new Error("Instagram didn't send this song's audio")
+      songEl.current?.pause()
+      const a = new Audio(url); songEl.current = a
+      a.volume = Math.max(0, Math.min(1, song.audioVolume / 100))
+      const v = vid.current
+      v.currentTime = 0; v.volume = Math.max(0, Math.min(1, song.videoVolume / 100)); v.muted = song.videoVolume === 0
+      v.onended = () => { a.pause(); setMix('') }
+      v.onpause = () => { if (!v.ended) { a.pause(); setMix('') } }
+      await Promise.all([a.play(), v.play()])
+      setMix('playing')
+    } catch (e: any) { toast.error(e.message || "Couldn't play the song"); setMix('') }
+  }
   const mediaEl = !imgSrc ? <span>{isVideo ? 'NO VIDEO YET' : 'NO PHOTO YET'}</span>
-    : isVideo ? <video src={imgSrc} poster={poster || undefined} controls playsInline className="w-full h-full object-contain bg-black" />
+    : isVideo ? <video ref={vid} src={imgSrc} poster={poster || undefined} controls playsInline className="w-full h-full object-contain bg-black" />
     : <img src={imgSrc} alt="" className="w-full h-full object-cover" />
   if (isStory) {
     return (
@@ -595,6 +623,7 @@ function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, media
           {at < deck.length - 1 && <button type="button" onClick={() => setAt(at + 1)} className="absolute right-2 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-white/90 shadow grid place-items-center text-slate-700" aria-label="Next slide"><ChevronRight size={15} /></button>}
         </>}
       </div>
+      {canMix && <div className="px-3 pt-2.5 flex items-center gap-2 flex-wrap"><button type="button" onClick={playMix} disabled={mix === 'loading'} className="inline-flex items-center gap-1.5 rounded-lg bg-pink-600 hover:bg-pink-700 text-white text-xs font-bold px-3 py-1.5 disabled:opacity-50">{mix === 'playing' ? <Pause size={12} /> : <Play size={12} fill="currentColor" />}{mix === 'playing' ? 'Stop' : mix === 'loading' ? 'Loading song…' : 'Play with song'}</button><span className="text-[11px] text-slate-500">A preview: Instagram adds the song when it publishes and may start it at a different spot.</span></div>}
       {deck && deck.length > 1 && ig && <div className="flex justify-center gap-1 pt-2">{deck.map((_, i) => <span key={i} className={`w-1.5 h-1.5 rounded-full ${i === Math.min(at, deck.length - 1) ? 'bg-sky-500' : 'bg-slate-300'}`} />)}</div>}
       {ig ? <><div className="flex gap-3.5 px-3 pt-2.5 text-slate-700"><Heart size={20} /><MessageCircle size={20} /><Send size={20} /></div><div className="px-3 pt-1.5 pb-3 text-sm whitespace-pre-wrap leading-snug"><b>{handle}</b> {caption}</div></>
         : <div className="flex justify-around px-3 py-2 border-t border-slate-200 text-xs font-bold text-slate-500"><span>Like</span><span>Comment</span><span>Share</span></div>}
@@ -919,7 +948,7 @@ function PostDrawer({ reelEvents, reelSite, post, metrics, siblings, queue, mode
           ? <div className="grid grid-cols-4 gap-2">{[['Reached', metrics.reach], ['Likes', metrics.likes], ['Comments', metrics.comments], [a.platform === 'instagram' ? 'Saves' : 'Shares', a.platform === 'instagram' ? metrics.saves : metrics.shares]].map(([l, v]) => <div key={String(l)} className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2"><div className="text-lg font-extrabold tabular-nums">{fmtNum(Number(v))}</div><div className="text-[10px] uppercase tracking-wide text-slate-500 font-bold">{l}</div></div>)}<div className="col-span-4 text-[11px] text-slate-500">Insights as of {fmtDate(new Date(metrics.fetchedAt))} {fmtTime(new Date(metrics.fetchedAt))} · refreshes every 4 hours</div></div>
           : <div className="text-xs text-slate-500">No insights yet — the next snapshot runs within 4 hours.</div>)}
         {mode === 'preview' && post.firstComment && <div className="text-xs text-slate-400"><span className="font-bold text-slate-500 uppercase tracking-wide text-[10px] mr-1.5">First comment</span>{post.firstComment}</div>}
-        {siblings.length > 0 && <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 flex flex-wrap items-center gap-2"><span className="font-bold text-slate-700">Also going to</span>{siblings.map(s => <span key={s.id} className="inline-flex items-center gap-1"><PlatformBadge platform={s.socialAccount?.platform || ''} size={12} />{s.socialAccount?.label} <span className={STATUS_TEXT[s.status]}>· {STATUS_LABEL[s.status]}</span></span>)}</div>}
+        {siblings.length > 0 && <div className="rounded-xl bg-slate-50 border border-slate-200 px-3 py-2.5 text-xs text-slate-600 flex flex-wrap items-center gap-2"><span className="font-bold text-slate-700">Also going to</span>{siblings.map(s => <span key={s.id} className="inline-flex items-center gap-1"><PlatformBadge platform={s.socialAccount?.platform || ''} size={12} />{s.socialAccount?.label}{s.placement === 'story' ? ' Story' : ''} <span className={STATUS_TEXT[s.status]}>· {STATUS_LABEL[s.status]}</span></span>)}</div>}
         {!img && editable && <div className="text-xs text-slate-500">A photo or video is required — Instagram won’t accept a text-only post, and the automation will mark this failed without one.</div>}
         {post.status === 'publishing' && <div className="text-xs text-slate-500">{a.platform === 'instagram' && post.mediaType === 'video' ? 'Instagram usually finishes a video in 1–2 minutes and this updates on its own. ' : ''}If it's been more than a few minutes, <b>Check now</b> looks on the account and settles it — Published if it's live, safe-to-retry if it never went out.</div>}
       </div>
