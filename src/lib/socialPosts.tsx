@@ -17,7 +17,11 @@ export const POST_H = 1350
 
 // The "· photo" looks (Bo, Oct 18 2026, after seeing the email: "versions that just
 // show the image they posted") put the family's own photo full-bleed instead of the card.
+// The five "Fall Classic" looks (Bo, Oct 18 2026: "five more ... variety and consistency";
+// "add them all ... I'll use them for the Fall Classic too") are photo-first like the
+// "· photo" ones and draw the card in the photo's place when there's no photo.
 export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
+  | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey'
 export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
@@ -29,9 +33,15 @@ export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed-to-photo', label: 'Committed To · photo' },
   { id: 'draft-photo', label: 'Draft Day · photo' },
   { id: 'countdown-photo', label: 'Countdown · photo' },
+  { id: 'cover', label: 'Magazine Cover' },
+  { id: 'rookie', label: 'Rookie Card' },
+  { id: 'scout', label: 'Scouting Report' },
+  { id: 'main-event', label: 'Main Event' },
+  { id: 'jersey', label: 'Name on the Back' },
 ]
 /** The looks that use the player's photo rather than the card. */
-export const usesPhoto = (s: PostStyle) => s.endsWith('-photo')
+const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey'])
+export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s)
 /** What the Ask dialog starts with ticked. */
 export const DEFAULT_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo']
 export const isPostStyle = (s: string): s is PostStyle => POST_STYLES.some(p => p.id === s)
@@ -64,6 +74,7 @@ export type PostData = {
 const CARD_RATIO = 1140 / 720
 const ANTON = 'Anton'
 const BARLOW = 'Barlow Condensed'
+const MONO = 'Courier Prime'
 
 /** A font size that keeps `text` within `maxW` at Anton's rough character width. */
 const fit = (text: string, maxW: number, max: number) => Math.min(max, Math.floor(maxW / (Math.max(1, text.length) * 0.5)))
@@ -81,6 +92,11 @@ const MARK_AT: Record<PostStyle, CSSProperties> = {
   'committed-to-photo': { right: 28, top: 24 },
   'draft-photo': { right: 28, top: 28 },
   'countdown-photo': { right: 28, bottom: 24 },
+  cover: { right: 56, bottom: 40 },
+  rookie: { right: 56, bottom: 46 },
+  scout: { right: 36, bottom: 34 },
+  'main-event': { right: 30, bottom: 26 },
+  jersey: { left: 450, bottom: 24 },
 }
 
 export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
@@ -143,6 +159,230 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
   const caps = (size: number, color: string, spacing = 0.16, weight = 700): CSSProperties => ({
     fontSize: u(size), fontWeight: weight, letterSpacing: `${spacing}em`, color, display: 'flex',
   })
+
+  // ── the five photo-first looks ─────────────────────────────────────────────
+  if (HERO_LOOKS.has(style)) {
+    const NAVY = '#13294b', ORANGE = '#f26b2a', CREAM = '#f6ead6', RED = '#b93a26', GOLD = '#f8d27a'
+    const heroSrc = d.photoSrc || d.cardSrc
+    const hero = (w: number, h: number, extra: CSSProperties = {}) => (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={heroSrc} width={u(w)} height={u(h)} alt=""
+        style={{ objectFit: d.photoSrc ? 'cover' : 'contain', objectPosition: 'center top', background: '#0a1222', ...extra }} />
+    )
+    // The event's own logo, no tile (the Fall Classic badge is round).
+    const badge = (size: number) => d.logoSrc ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={d.logoSrc} width={u(size)} height={u(size)} alt="" style={{ objectFit: 'contain' }} />
+    ) : null
+    const dateShort = (d.dates || '').replace(/,\s*\d{4}$/, '').toUpperCase()
+    const whereCaps = where.toUpperCase()
+    const eventCapsPlain = event.toUpperCase()
+    const num = d.jersey ? cut(d.jersey, 3) : ''
+    const tag = [num ? `#${num}` : '', d.position].filter(Boolean).join(' · ').toUpperCase()
+    const row = (k2: string, v: string, size = 26) => (
+      <div key={k2} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: `${u(2)}px solid #e2e8f0`, padding: `${u(12)}px 0` }}>
+        <div style={caps(20, '#64748b', 0.14)}>{k2.toUpperCase()}</div>
+        <div style={{ display: 'flex', fontSize: u(size), fontWeight: 700, color: NAVY, maxWidth: u(200), textAlign: 'right' }}>{v}</div>
+      </div>
+    )
+
+    if (style === 'cover') {
+      // Masthead: the event's name on two lines, as big as fits.
+      const words = eventCapsPlain.split(/\s+/)
+      let best = [eventCapsPlain, '']
+      for (let i = 1; i < words.length; i++) {
+        const a = words.slice(0, i).join(' '), b = words.slice(i).join(' ')
+        if (Math.max(a.length, b.length) < Math.max(best[0].length, best[1].length)) best = [a, b]
+      }
+      const longest = best[0].length >= best[1].length ? best[0] : best[1]
+      const mast = fit(longest, 720, 190)
+      return (
+        <div style={{ ...root, background: NAVY }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, display: 'flex' }}>{hero(POST_W, POST_H)}</div>
+          <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(POST_H), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(19,41,75,0.88) 0%, rgba(19,41,75,0) 28%, rgba(19,41,75,0) 55%, rgba(10,18,34,0.92) 82%, #0a1222 100%)' }} />
+          <div style={{ position: 'absolute', left: u(56), top: u(40), width: u(968), display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', fontFamily: ANTON, fontSize: u(mast), lineHeight: 0.84, color: ORANGE }}>
+              <div style={{ display: 'flex' }}>{best[0]}</div>
+              {best[1] && <div style={{ display: 'flex' }}>{best[1]}</div>}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingTop: u(12) }}>
+              {d.year && <div style={caps(26, '#ffffff', 0.22)}>{`ISSUE ${d.year}`}</div>}
+              {dateShort && <div style={{ ...caps(26, CREAM, 0.22), marginTop: u(8) }}>{dateShort}</div>}
+              <div style={{ display: 'flex', marginTop: u(14) }}>{badge(150)}</div>
+            </div>
+          </div>
+          <div style={{ position: 'absolute', left: u(40), top: u(490), width: u(340), display: 'flex', flexDirection: 'column', background: 'rgba(10,18,34,0.72)', borderRadius: u(14), padding: `${u(18)}px ${u(16)}px` }}>
+            <div style={{ display: 'flex', flexDirection: 'column', borderLeft: `${u(6)}px solid ${ORANGE}`, paddingLeft: u(16) }}>
+              <div style={caps(24, ORANGE, 0.16)}>COVER STORY</div>
+              <div style={{ display: 'flex', fontSize: u(34), fontWeight: 700, lineHeight: 1.05 }}>{`One weekend in ${cut(d.location || 'Florida', 26)}`}</div>
+            </div>
+            {club && (
+              <div style={{ display: 'flex', flexDirection: 'column', borderLeft: `${u(6)}px solid ${CREAM}`, paddingLeft: u(16), marginTop: u(22) }}>
+                <div style={caps(24, CREAM, 0.16)}>CLUB SPOTLIGHT</div>
+                <div style={{ display: 'flex', fontSize: u(34), fontWeight: 700, lineHeight: 1.05 }}>{club}</div>
+              </div>
+            )}
+          </div>
+          <div style={{ position: 'absolute', left: u(56), bottom: u(56), width: u(780), display: 'flex', flexDirection: 'column' }}>
+            {(tag || club) && <div style={caps(30, CREAM, 0.2)}>{cut([tag, club.toUpperCase()].filter(Boolean).join(' · '), 44)}</div>}
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 760, 170)), lineHeight: 0.95 }}>{first}</div>
+          </div>
+          <div style={{ position: 'absolute', right: u(56), bottom: u(104), display: 'flex' }}>{teamLogo(110)}</div>
+        </div>
+      )
+    }
+
+    if (style === 'rookie') {
+      return (
+        <div style={{ ...root, background: CREAM, color: NAVY }}>
+          <div style={{ position: 'absolute', left: u(-200), top: u(380), width: u(1480), height: u(520), background: NAVY, transform: 'rotate(-8deg)', display: 'flex' }} />
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: u(54) }}>
+            {badge(110)}
+            <div style={{ display: 'flex', flexDirection: 'column', marginLeft: u(20) }}>
+              <div style={caps(28, ORANGE, 0.24)}>{cut(eventCapsPlain, 34)}</div>
+              <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(96), lineHeight: 0.95 }}>ROOKIE CARD</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: u(40) }}>
+            <div style={{ display: 'flex', width: u(470), height: u(690), borderRadius: u(26), padding: u(18), backgroundImage: `linear-gradient(135deg, ${GOLD} 0%, ${ORANGE} 45%, ${RED} 100%)`, transform: 'rotate(-4deg)', boxShadow: `0 ${u(30)}px ${u(70)}px rgba(0,0,0,0.45)` }}>
+              <div style={{ display: 'flex', position: 'relative', width: u(434), height: u(654), borderRadius: u(16), overflow: 'hidden', background: '#0a1222' }}>
+                {hero(434, 654)}
+                {d.year && <div style={{ position: 'absolute', right: u(14), top: u(14), display: 'flex', background: GOLD, color: NAVY, borderRadius: u(999), padding: `${u(6)}px ${u(14)}px`, fontSize: u(22), fontWeight: 800, letterSpacing: '0.1em' }}>{`RC · ${d.year}`}</div>}
+                <div style={{ position: 'absolute', left: 0, bottom: 0, width: u(434), background: NAVY, padding: `${u(14)}px ${u(18)}px`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 300, 44)), lineHeight: 1, color: '#ffffff' }}>{first}</div>
+                    <div style={caps(20, GOLD, 0.12)}>{cut([club, d.position].filter(Boolean).join(' · ').toUpperCase(), 28)}</div>
+                  </div>
+                  {num && <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(60), color: ORANGE }}>{num}</div>}
+                </div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', width: u(360), background: '#ffffff', borderRadius: u(20), padding: `${u(26)}px ${u(28)}px`, marginLeft: u(48), boxShadow: `0 ${u(20)}px ${u(50)}px rgba(0,0,0,0.3)`, transform: 'rotate(2deg)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: u(10) }}>
+                <div style={caps(24, RED, 0.16, 800)}>CARD BACK</div>
+                {teamLogo(56)}
+              </div>
+              {d.position && row('Position', d.position)}
+              {club && row('Club', club)}
+              {team && team !== club && row('Team', team)}
+              {d.division && row('Division', d.division)}
+              {d.startShort && row('Debut', `${d.startShort}${d.year ? `, ${d.year}` : ''}`)}
+            </div>
+          </div>
+          <div style={{ position: 'absolute', left: u(56), bottom: u(52), display: 'flex' }}>
+            <div style={caps(30, NAVY, 0.18)}>{[dateShort, whereCaps].filter(Boolean).join(' · ')}</div>
+          </div>
+        </div>
+      )
+    }
+
+    if (style === 'scout') {
+      const BROWN = '#7c5a22'
+      const field = (k2: string, v: string) => (
+        <div key={k2} style={{ display: 'flex', fontFamily: MONO, fontSize: u(28), color: '#1f2937', marginBottom: u(14) }}>
+          <div style={{ display: 'flex', color: BROWN, marginRight: u(12) }}>{`${k2}:`}</div>
+          <div style={{ display: 'flex', maxWidth: u(300) }}>{v.toUpperCase()}</div>
+        </div>
+      )
+      return (
+        <div style={{ ...root, background: NAVY }}>
+          <div style={{ position: 'absolute', left: u(70), top: u(50), width: u(260), height: u(80), background: '#e9d6ae', borderRadius: u(10), transform: 'rotate(-1.5deg)', display: 'flex' }} />
+          <div style={{ position: 'absolute', left: u(70), top: u(90), width: u(940), height: u(1110), background: '#e9d6ae', borderRadius: u(10), transform: 'rotate(-1.5deg)', boxShadow: `0 ${u(30)}px ${u(80)}px rgba(0,0,0,0.5)`, display: 'flex' }} />
+          <div style={{ position: 'absolute', left: u(110), top: u(130), width: u(860), display: 'flex', flexDirection: 'column', transform: 'rotate(-1.5deg)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <div style={caps(26, BROWN, 0.22)}>{cut(`${eventCapsPlain}${num ? ` · FILE ${num}` : ''}`, 40)}</div>
+                <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(104), lineHeight: 0.95, color: NAVY }}>SCOUTING REPORT</div>
+              </div>
+              {badge(130)}
+            </div>
+            <div style={{ display: 'flex', height: u(4), background: NAVY, marginTop: u(18), marginBottom: u(34) }} />
+            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#ffffff', padding: `${u(16)}px ${u(16)}px ${u(12)}px`, transform: 'rotate(3deg)', boxShadow: `0 ${u(14)}px ${u(30)}px rgba(0,0,0,0.35)` }}>
+                {hero(360, 440)}
+                <div style={{ display: 'flex', fontFamily: MONO, fontSize: u(26), fontWeight: 700, color: NAVY, marginTop: u(10) }}>{[num ? `#${num}` : '', first].filter(Boolean).join(' ')}</div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', marginLeft: u(44), paddingTop: u(6) }}>
+                {field('PLAYER', d.first || 'Player')}
+                {d.position && field('POSITION', d.position)}
+                {club && field('CLUB', club)}
+                {team && team !== club && field('TEAM', team)}
+                {d.division && field('DIVISION', d.division)}
+                <div style={{ display: 'flex', marginTop: u(8) }}>{teamLogo(84)}</div>
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: u(64) }}>
+              <div style={{ display: 'flex', flexDirection: 'column', fontFamily: MONO, fontSize: u(28), color: '#1f2937', lineHeight: 1.4 }}>
+                <div style={{ display: 'flex' }}>REPORT TO THE FIELD:</div>
+                <div style={{ display: 'flex' }}>{[dateShort, whereCaps].filter(Boolean).join(' · ')}</div>
+              </div>
+              <div style={{ display: 'flex', border: `${u(6)}px solid ${RED}`, color: RED, borderRadius: u(12), padding: `${u(8)}px ${u(22)}px`, fontFamily: ANTON, fontSize: u(64), lineHeight: 1, transform: 'rotate(-9deg)' }}>CLEARED TO PLAY</div>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (style === 'main-event') {
+      return (
+        <div style={{ ...root, background: '#0a0a0a' }}>
+          <div style={{ display: 'flex', width: u(POST_W), justifyContent: 'center', background: RED, padding: `${u(18)}px 0` }}>
+            <div style={caps(30, '#ffffff', 0.3, 800)}>{[dateShort, whereCaps].filter(Boolean).join('  ·  ') || eventCapsPlain}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: u(24) }}>
+            {badge(100)}
+            <div style={{ ...caps(Math.min(30, Math.floor(860 / (`THE ${eventCapsPlain} PRESENTS`.length * 0.8))), GOLD, 0.3), marginLeft: u(18) }}>{`THE ${eventCapsPlain} PRESENTS`}</div>
+          </div>
+          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(200), lineHeight: 0.9, marginTop: u(12) }}>MAIN EVENT</div>
+          <div style={{ display: 'flex', position: 'relative', width: u(POST_W), height: u(640), marginTop: u(18) }}>
+            {hero(POST_W, 640)}
+            <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(640), display: 'flex', backgroundImage: 'linear-gradient(90deg, rgba(10,10,10,0.9) 0%, rgba(10,10,10,0) 40%, rgba(10,10,10,0) 60%, rgba(10,10,10,0.9) 100%)' }} />
+            <div style={{ position: 'absolute', left: u(50), bottom: u(40), display: 'flex', flexDirection: 'column' }}>
+              {teamLogo(100, { alignSelf: 'flex-start', marginBottom: u(10) })}
+              {club && <div style={{ ...caps(22, GOLD, 0.16), maxWidth: u(560) }}>{`IN THE ${cut(club.toUpperCase(), 22)} CORNER`}</div>}
+            </div>
+            {tag && <div style={{ position: 'absolute', right: u(50), bottom: u(40), display: 'flex' }}><div style={caps(26, '#cbd5e1', 0.18)}>{tag}</div></div>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: u(26) }}>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 440, 120)), lineHeight: 1 }}>{first}</div>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(60), color: RED, margin: `0 ${u(26)}px` }}>VS</div>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(120), lineHeight: 1, color: '#94a3b8' }}>THE FIELD</div>
+          </div>
+        </div>
+      )
+    }
+
+    // jersey: the name and number on the back of a jersey
+    const JERSEY = '#1e3a6e'
+    const big = num || (first[0] || '')
+    return (
+      <div style={{ ...root, background: '#0a1222' }}>
+        <div style={{ display: 'flex', alignItems: 'center', marginTop: u(50) }}>
+          {badge(96)}
+          <div style={{ ...caps(Math.min(34, Math.floor(860 / (`SUITED UP FOR THE ${eventCapsPlain}`.length * 0.78))), CREAM, 0.26, 800), marginLeft: u(18) }}>{`SUITED UP FOR THE ${eventCapsPlain}`}</div>
+        </div>
+        <div style={{ display: 'flex', position: 'relative', width: u(760), height: u(860), marginTop: u(30) }}>
+          <div style={{ position: 'absolute', left: 0, top: u(70), width: u(160), height: u(300), background: JERSEY, borderRadius: `${u(30)}px 0 0 ${u(30)}px`, transform: 'skewY(18deg)', display: 'flex' }} />
+          <div style={{ position: 'absolute', right: 0, top: u(70), width: u(160), height: u(300), background: JERSEY, borderRadius: `0 ${u(30)}px ${u(30)}px 0`, transform: 'skewY(-18deg)', display: 'flex' }} />
+          <div style={{ position: 'absolute', left: u(110), top: u(30), width: u(540), height: u(830), background: JERSEY, borderRadius: `${u(40)}px ${u(40)}px ${u(24)}px ${u(24)}px`, boxShadow: `0 ${u(40)}px ${u(90)}px rgba(0,0,0,0.6)`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', width: u(200), height: u(56), background: '#0a1222', borderRadius: `0 0 ${u(100)}px ${u(100)}px` }} />
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, 480, 96)), letterSpacing: '0.1em', marginTop: u(40) }}>{first}</div>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(big, 480, 440)), lineHeight: 0.9, color: ORANGE, WebkitTextStroke: `${u(10)}px #ffffff` } as CSSProperties}>{big}</div>
+            {club && <div style={{ ...caps(26, 'rgba(255,255,255,0.7)', 0.24), marginTop: u(16) }}>{cut(club.toUpperCase(), 30)}</div>}
+          </div>
+        </div>
+        <div style={{ position: 'absolute', left: u(40), bottom: u(36), display: 'flex', flexDirection: 'column', alignItems: 'center', background: '#ffffff', padding: `${u(12)}px ${u(12)}px ${u(8)}px`, transform: 'rotate(-5deg)', boxShadow: `0 ${u(16)}px ${u(36)}px rgba(0,0,0,0.5)` }}>
+          {hero(190, 215)}
+          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(26), color: NAVY, marginTop: u(6) }}>{tag || first}</div>
+        </div>
+        <div style={{ position: 'absolute', right: u(40), bottom: u(36), display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+          {teamLogo(96, { marginBottom: u(12) })}
+          {dateShort && <div style={caps(28, '#ffffff', 0.16)}>{dateShort}</div>}
+          {whereCaps && <div style={caps(28, '#94a3b8', 0.16)}>{cut(whereCaps, 24)}</div>}
+        </div>
+      </div>
+    )
+  }
 
   if (style === 'committed') {
     const accent = '#9f1d20'
@@ -446,6 +686,7 @@ export function loadPostFonts(): Promise<SatoriFont[]> {
         googleFont('Anton', ANTON, [400]),
         googleFont('Barlow+Condensed', BARLOW, [500, 600, 700, 800]),
         googleFont('Barlow+Condensed', BARLOW, [500], 'italic'),
+        googleFont('Courier+Prime', MONO, [400, 700]).catch(() => [] as SatoriFont[]),
       ])
       const all = sets.flat()
       if (!all.some(f => f.name === ANTON)) throw new Error('no fonts')
