@@ -605,7 +605,7 @@ function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, media
     : <img src={imgSrc} alt="" className="w-full h-full object-cover" />
   if (isStory) {
     return (
-      <div className="rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 text-white">
+      <div className="flex-none rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 text-white">
         <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full ring-2 ring-pink-500 bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-300">Story · {ig ? 'Instagram' : 'Facebook'} · gone after 24 h</div></div></div>
         <div className={`${frame} bg-black grid place-items-center text-slate-400 text-xs tracking-widest w-full`}>{mediaEl}</div>
         <div className="px-3 py-2 text-[11px] text-slate-400">Stories don't carry a caption — the video is the whole post.</div>
@@ -613,7 +613,10 @@ function NativePreview({ platform, label, caption, imgSrc: firstSrc, when, media
     )
   }
   return (
-    <div className="rounded-2xl overflow-hidden border border-slate-200 bg-white">
+    // flex-none: the drawer body is a flex column, and without it a tall Reel preview was
+    // squeezed to fit the window and its overflow clipped, hiding "Play with song" and
+    // the caption on shorter screens (Bo, Oct 18 2026).
+    <div className="flex-none rounded-2xl overflow-hidden border border-slate-200 bg-white">
       <div className="flex items-center gap-2.5 px-3 py-2.5"><div className="w-8 h-8 rounded-full bg-gradient-to-br from-teal-400 to-indigo-500" /><div><div className="text-sm font-extrabold">{handle}</div><div className="text-[11px] text-slate-500">{ig ? (deck ? `Instagram carousel · ${deck.length} slides` : isVideo ? (song ? <span className="inline-flex items-center gap-1"><Music size={10} />{song.title}{song.artist ? ` · ${song.artist}` : ''}</span> : 'Instagram Reel · also shows in the feed') : 'Instagram post') : `${fmtDate(when)} · Public${deck ? ` · ${deck.length} photos` : ''}`}</div></div></div>
       {!ig && <div className="px-3 pb-2.5 text-sm whitespace-pre-wrap leading-snug">{caption || <span className="text-slate-500">No caption yet</span>}</div>}
       <div className={`${frame} relative bg-slate-200 grid place-items-center text-slate-500 text-xs tracking-widest`}>{mediaEl}
