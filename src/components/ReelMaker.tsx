@@ -280,9 +280,20 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const songUrl = song === 'none' || song === 'ig' ? '' : song === 'own' ? ownUrl.current : trackUrl(song)
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
+  // The Reel's cover (Bo, Oct 18 2026: "pick the cover photo ourselves ... it kind of just
+  // defaults to the last one"). One moment per part (player or look), plus the end card,
+  // or for a one-look Reel three moments through it. Defaults to the first part.
+  const lookName = (id: string) => POST_STYLES.find(x => x.id === id)?.label || id
+  const covers: { t: number; label: string }[] = slots.length === 1 && !endDur
+    ? [0.3, 0.6, 0.9].map((f, i) => ({ t: segDur * f, label: ['Start', 'Middle', 'End'][i] }))
+    : [...slots.map((x, i) => ({ t: i * segDur + segDur * 0.65, label: x.who || lookName(x.style) })),
+       ...(endDur ? [{ t: slots.length * segDur + endDur * 0.6, label: 'End card' }] : [])]
+  const [coverIdx, setCoverIdx] = useState(0)
+  const [thumbs, setThumbs] = useState<string[]>([])
 
   // Load every part's post (and the fonts), then loop the preview. Runs again when a
   // look or the length changes.
+  useEffect(() => { setCoverIdx(i => Math.min(i, Math.max(0, covers.length - 1))); setThumbs([]) }, [slotsKey])  // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     let alive = true
     const link = document.createElement('link')
@@ -311,10 +322,21 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
       if (!alive) return
       imgsRef.current = imgs.map(x => x || first)
       imgRef.current = first; setState('preview'); loop()
+      if (onUse) setThumbs(coverThumbs(first))
     })()
     return () => { alive = false; cancelAnimationFrame(raf.current); link.remove() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slotsKey])
+
+  /** Small JPEG of each cover moment, painted off screen. */
+  function coverThumbs(img: HTMLImageElement): string[] {
+    try {
+      const big = document.createElement('canvas'); big.width = W; big.height = H
+      const small = document.createElement('canvas'); small.width = 144; small.height = 256
+      const bctx = big.getContext('2d')!, sctx = small.getContext('2d')!
+      return covers.map(c => { paint(bctx, img, c.t); sctx.drawImage(big, 0, 0, 144, 256); return small.toDataURL('image/jpeg', 0.7) })
+    } catch { return [] }
+  }
 
   function loop() {
     cancelAnimationFrame(raf.current)
@@ -428,7 +450,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
       let poster: Blob | null = null
       if (c && img) {
         cancelAnimationFrame(raf.current)
-        paint(c.getContext('2d')!, img, Math.min(dur - 1, dur * 0.7))
+        paint(c.getContext('2d')!, img, Math.min(dur - 0.05, (covers[coverIdx] || covers[0])?.t ?? dur * 0.7))
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
@@ -527,6 +549,20 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
             : <button type="button" onClick={record} disabled={state === 'loading' || state === 'error' || playing} className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
                 {state === 'done' ? <><RotateCcw size={16} /> Record again</> : <><Film size={16} /> Make the Reel (with music)</>}
               </button>}
+          {onUse && thumbs.length > 1 && state !== 'recording' && state !== 'loading' && state !== 'error' && (
+            <div className="text-sm text-slate-700">
+              <span className="font-semibold">Cover</span><span className="text-xs text-slate-500"> · the still people see in the grid before they tap play</span>
+              <div className="mt-1.5 flex gap-2 overflow-x-auto pb-1">
+                {covers.map((c, i) => (
+                  <button key={i} type="button" onClick={() => setCoverIdx(i)} disabled={using} aria-pressed={coverIdx === i} title={`Use ${c.label} as the cover`}
+                    className={`flex-none w-16 rounded-lg overflow-hidden border-2 text-[10px] font-bold ${coverIdx === i ? 'border-teal-500 ring-2 ring-teal-200 text-teal-800' : 'border-transparent text-slate-500 hover:border-slate-300'}`}>
+                    {thumbs[i] ? <img src={thumbs[i]} alt="" className="w-full aspect-[9/16] object-cover block bg-slate-900" /> : <span className="block w-full aspect-[9/16] bg-slate-200" />}
+                    <span className="block truncate px-0.5 py-0.5">{c.label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {out && state !== 'recording' && onUse && (
             <button type="button" onClick={useInPost} disabled={using} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
               <Check size={16} /> {using ? 'Uploading the Reel…' : 'Use this Reel in the post'}
