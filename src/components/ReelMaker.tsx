@@ -54,6 +54,9 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
    *  too"), and the settings a saved draft reopens with. */
   onSaveSetup?: (setup: ReelSetup) => Promise<void>
   initialSetup?: Partial<ReelSetup>
+  /** Shown when a saved draft was reopened, with a way to throw it away and start fresh. */
+  draftNote?: string
+  onStartOver?: () => void
   /** Scheduler: the event's first day and the day the post is planned for (YYYY-MM-DD).
    *  With both, a Countdown look gets a "Posts on" day picker so its number matches the
    *  day it goes out (Bo, Oct 18 2026: a Reel made for Thursday said "2 days out" when
@@ -227,7 +230,7 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
   return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay, onSaveSetup, initialSetup }: Props) {
+export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay, onSaveSetup, initialSetup, draftNote, onStartOver }: Props) {
   const today = dayKey(new Date())
   // Starts on today (Bo, Oct 18 2026: the first open day was Thursday, so a Reel he
   // wanted out now said "2 days out"). Pick another day here before making the Reel.
@@ -516,6 +519,12 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
         {state === 'loading' && <p className="text-sm text-slate-500 text-center mt-3">Building the post…</p>}
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
+          {draftNote && state !== 'recording' && (
+            <div className="flex items-center gap-2 rounded-lg bg-pink-50 border border-pink-200 px-2.5 py-1.5 text-xs text-pink-900">
+              <Save size={13} className="shrink-0" /><span className="font-semibold flex-1 min-w-0">{draftNote}</span>
+              {onStartOver && <button type="button" onClick={onStartOver} disabled={using} className="font-bold hover:underline shrink-0">Start over</button>}
+            </div>
+          )}
           {eventStart && state !== 'recording' && (
             <div className={`flex items-center gap-2 text-sm flex-wrap rounded-lg px-2.5 py-2 ${hasCountdown ? 'bg-orange-50 text-orange-900' : 'text-slate-700'}`}>
               <span className="font-semibold shrink-0">Posts on</span>

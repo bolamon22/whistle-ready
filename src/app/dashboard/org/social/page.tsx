@@ -282,8 +282,14 @@ function SocialInner() {
       }
     } catch (e: any) { toast.error(e.message) } finally { setPlayerBusy('') }
   }
-  function reelPlayer(p: ClearedPlayer, look: string) {
+  // A saved Reel draft for exactly these players (Bo, Oct 18 2026: "when I save a draft,
+  // it doesn't seem to keep the draft saved when I come back to it": he came back through
+  // the player's Reel button, which started fresh). Reel and Squad Reel now pick it up.
+  const draftFor = (ids: string[]) => reelDrafts.find(d => d.playerIds.length === ids.length && ids.every(id => d.playerIds.includes(id)))
+  function reelPlayer(p: ClearedPlayer, look: string, fresh = false) {
     if (!liveAccounts.length) { toast.error('Connect an account first'); return }
+    const d = fresh ? undefined : draftFor([p.id])
+    if (d) { openReelDraft(d); return }
     const when = whenFor(p); setReel({ p, look, when, days: daysAt(p, when) })
   }
   /** Squad Reel: 2–4 cleared players from one event, each in the look picked in the tray. */
@@ -291,6 +297,8 @@ function SocialInner() {
     if (!liveAccounts.length) { toast.error('Connect an account first'); return }
     if (list.length < 2 || list.length > 4) { toast.error('Pick 2 to 4 players'); return }
     if (new Set(list.map(p => p.tournamentId)).size > 1) { toast.error('Pick players from the same event'); return }
+    const d = draftFor(list.map(p => p.id))
+    if (d) { openReelDraft(d); return }
     const when = whenFor(list[0]); setReel({ p: list[0], look: looks[0], when, days: daysAt(list[0], when), squad: list, looks })
   }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
@@ -361,6 +369,15 @@ function SocialInner() {
     if (!liveAccounts.length) { toast.error('Connect an account first'); return }
     const when = whenFor(players[0])
     setReel({ p: players[0], look: d.look || d.looks?.[0] || 'countdown-photo', when, days: daysAt(players[0], when), ...(players.length > 1 ? { squad: players, looks: d.looks || players.map(() => d.look) } : {}), setup: d.setup as Partial<ReelSetup>, draftId: d.id })
+  }
+  /** "Start over" on a reopened draft: drop it and open a fresh Reel maker for the same players. */
+  async function startReelOver() {
+    if (!reel?.draftId) return
+    const { p, look, squad, looks, draftId } = reel
+    setReel(null)
+    await deleteReelDraft(draftId, true)
+    const when = whenFor(p)
+    setTimeout(() => setReel({ p, look, when, days: daysAt(p, when), ...(squad ? { squad, looks } : {}) }), 0)
   }
   async function deleteReelDraft(id: string, quiet = false) {
     try { const r = await api(`/api/social/reel-drafts?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); setReelDrafts(r.drafts || []) }
@@ -606,7 +623,9 @@ function SocialInner() {
         event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={reel.squad ? `squad-${reel.squad.map(x => firstOf(x.playerName)).join('-')}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') : fileSlug(reel.p, reel.look)} token={reel.p.token}
         squad={reel.squad?.map((x, i) => ({ token: x.token, first: firstOf(x.playerName), style: reel.looks?.[i] || reel.look }))}
         eventStart={reel.p.event.start} postDay={localDayKey(reel.when)}
-        initialSong="ig" onUse={useReel} onSaveSetup={saveReelSetup} initialSetup={reel.setup} onClose={() => setReel(null)} />}
+        initialSong="ig" onUse={useReel} onSaveSetup={saveReelSetup} initialSetup={reel.setup}
+        draftNote={reel.draftId ? (() => { const d = reelDrafts.find(x => x.id === reel.draftId); return d ? `Your saved draft from ${new Date(d.savedAt).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : 'Your saved draft' })() : undefined}
+        onStartOver={reel.draftId ? startReelOver : undefined} onClose={() => setReel(null)} />}
     </div>
   )
 }

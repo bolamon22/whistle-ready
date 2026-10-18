@@ -70,7 +70,8 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   const [sel, setSel] = useState<string[]>([])   // ticked for a Squad Reel, in the order ticked
   const [f, setF] = useState<Filters>(NO_FILTERS)
   const [full, setFull] = useState(false)
-  const [logOpen, setLogOpen] = useState<string | null>(null)   // the card whose usage log is open
+  const [logOpen, setLogOpen] = useState<string | null>(null)
+  const draftIds = useMemo(() => new Set(drafts.flatMap(d => d.playerIds)), [drafts])   // the card whose usage log is open
   const set = (patch: Partial<Filters>) => setF(x => ({ ...x, ...patch }))
   const { players, waiting } = data
 
@@ -140,6 +141,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
           <div className="text-[11px] text-slate-500 truncate" title={teamLabel(p)}>{teamLabel(p)}</div>
           {(p.division || p.gender) && <div className="text-[11px] text-slate-500 truncate">{[p.division, !p.division && p.gender ? (p.gender === 'girls' ? 'Girls' : 'Boys') : ''].filter(Boolean).join(' · ')}</div>}
           <div className="text-[11px] font-semibold text-teal-700 truncate" title={handles.join(' · ')}>{handles.length ? `Collab ${handles.join(' · ')}` : 'No Instagram given'}</div>
+          {draftIds.has(p.id) && <div className="text-[11px] font-bold text-pink-700 truncate inline-flex items-center gap-1"><Film size={11} />Reel draft saved · Reel opens it</div>}
           {p.posts.length ? (
             <button type="button" onClick={() => setLogOpen(o => o === p.id ? null : p.id)} aria-expanded={logOpen === p.id} title="Every post this player is in"
               className="text-left text-[11px] font-semibold text-slate-700 hover:text-teal-700 inline-flex items-center gap-1 min-w-0">
