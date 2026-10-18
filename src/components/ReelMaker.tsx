@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw } from 'lucide-react'
+import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
 
 // Turns one social post (lib/socialPosts, /pass/<token>/post/<style>.png) into an
 // 8-second vertical Instagram Reel with music, right in the browser (Bo, Oct 18 2026:
@@ -21,7 +22,14 @@ const clamp = (v: number) => Math.max(0, Math.min(1, v))
 const easeOut = (p: number) => 1 - Math.pow(1 - clamp(p), 3)
 const easeBack = (p: number) => { const c = 1.6, x = clamp(p) - 1; return 1 + (c + 1) * x * x * x + c * x * x }
 
-type Props = { src: string; style: string; label: string; event: string; sub: string; days?: number | null; fileName: string; onClose: () => void }
+type Props = { src: string; style: string; label: string; event: string; sub: string; days?: number | null; fileName: string; onClose: () => void
+  /** The player's pass token: lets Rookie Card and Countdown use their hand-built Reels (components/reelCustom). */
+  token?: string }
+
+const loadImg = (url: string) => new Promise<HTMLImageElement | null>(res => {
+  if (!url) return res(null)
+  const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url
+})
 
 function draw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, style: string, t: number, event: string, sub: string, days: number | null) {
   ctx.save()
@@ -142,7 +150,15 @@ function pickMime(): { mime: string; ext: string } {
   return { mime: '', ext: 'webm' }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose }: Props) {
+export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token }: Props) {
+  const isCustom = !!token && style in CUSTOM_REELS
+  const dur = isCustom ? CUSTOM_REELS[style] : DUR
+  const custom = useRef<{ data: ReelData; imgs: ReelImages } | null>(null)
+  const paint = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => {
+    const c = custom.current
+    if (c) (style === 'rookie' ? drawRookie : drawCountdown)(ctx, t, c.data, { ...c.imgs, post: img })
+    else draw(ctx, img, style, t, event, sub, days)
+  }
   const canvas = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const raf = useRef(0)
@@ -160,6 +176,16 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     img.onload = async () => {
       try { await Promise.all([document.fonts.load('68px Anton'), document.fonts.load('600 34px "Barlow Condensed"')]) } catch {}
       if (!alive) return
+      if (isCustom) {
+        try {
+          const data = await fetch(`/pass/${token}/reel`).then(r => r.ok ? r.json() : null)
+          if (data) {
+            const [photo, clubLogo, eventLogo] = await Promise.all([loadImg(data.photo), loadImg(data.clubLogo), loadImg(data.eventLogo)])
+            custom.current = { data, imgs: { photo, clubLogo, eventLogo } }
+          }
+        } catch { /* fall back to the generic Reel */ }
+      }
+      if (!alive) return
       imgRef.current = img; setState('preview'); loop()
     }
     img.onerror = () => { if (alive) { setErr('Could not load the post image.'); setState('error') } }
@@ -175,8 +201,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     const ctx = c.getContext('2d')!
     const t0 = performance.now()
     const tick = () => {
-      const t = ((performance.now() - t0) / 1000) % (DUR + 0.6)
-      draw(ctx, img, style, Math.min(t, DUR), event, sub, days)
+      const t = ((performance.now() - t0) / 1000) % (dur + 0.6)
+      paint(ctx, img, Math.min(t, dur))
       raf.current = requestAnimationFrame(tick)
     }
     tick()
@@ -189,7 +215,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     cancelAnimationFrame(raf.current)
     setState('recording'); setErr('')
     const ctx = c.getContext('2d')!
-    draw(ctx, img, style, 0, event, sub, days)
+    paint(ctx, img, 0)
     const video = (c as any).captureStream(30) as MediaStream
     let audioCtx: AudioContext | null = null
     const tracks = [...video.getVideoTracks()]
@@ -199,8 +225,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       const srcNode = audioCtx.createBufferSource(); srcNode.buffer = buf
       const gain = audioCtx.createGain()
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
-      gain.gain.setValueAtTime(0.9, audioCtx.currentTime + DUR - 0.8)
-      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + DUR)
+      gain.gain.setValueAtTime(0.9, audioCtx.currentTime + dur - 0.8)
+      gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + dur)
       const dest = audioCtx.createMediaStreamDestination()
       srcNode.connect(gain).connect(dest)
       tracks.push(...dest.stream.getAudioTracks())
@@ -221,8 +247,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     const t0 = performance.now()
     const tick = () => {
       const t = (performance.now() - t0) / 1000
-      draw(ctx, img, style, Math.min(t, DUR), event, sub, days)
-      if (t < DUR) raf.current = requestAnimationFrame(tick)
+      paint(ctx, img, Math.min(t, dur))
+      if (t < dur) raf.current = requestAnimationFrame(tick)
       else rec.stop()
     }
     tick()
@@ -243,7 +269,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
           {state === 'recording'
-            ? <p className="text-sm text-slate-600 text-center">Recording with music… keep this tab open (8 seconds).</p>
+            ? <p className="text-sm text-slate-600 text-center">Recording with music… keep this tab open ({dur} seconds).</p>
             : <button type="button" onClick={record} disabled={state === 'loading' || state === 'error'} className="w-full rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-40">
                 {state === 'done' ? <><RotateCcw size={16} /> Record again</> : <><Film size={16} /> Make the Reel (with music)</>}
               </button>}

@@ -49,7 +49,7 @@ export default function SocialPhotos() {
   const [tick, setTick] = useState(0)
   const [preview, setPreview] = useState<string | null>(null)
   const [event, setEvent] = useState<{ name: string; dates: string; location: string; daysOut: number | null }>({ name: '', dates: '', location: '', daysOut: null })
-  const [reel, setReel] = useState<{ src: string; style: string; label: string; fileName: string } | null>(null)   // player id whose posts are open full size
+  const [reel, setReel] = useState<{ src: string; style: string; label: string; fileName: string; token?: string } | null>(null)   // player id whose posts are open full size
   const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(DEFAULT_STYLES))   // example posts the email shows
   const styleList = POST_STYLES.filter(s => styles.has(s.id)).map(s => s.id)
   const toggleStyle = (s: PostStyle) => setStyles(cur => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n })
@@ -269,7 +269,7 @@ export default function SocialPhotos() {
                           <span className="truncate">{ps.label}</span>
                         </label>
                         <span className="inline-flex items-center gap-2.5 shrink-0">
-                          <button type="button" onClick={() => setReel({ src, style: ps.id, label: ps.label, fileName: `${p.playerName.split(' ')[0] || 'player'}-${ps.id}-reel`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} className="inline-flex items-center gap-1 text-teal-700 font-semibold"><Film size={12} /> Reel</button>
+                          <button type="button" onClick={() => setReel({ src, style: ps.id, label: ps.label, token: /\/pass\/([^/]+)\/card\.png/.exec(p.cardUrl)?.[1], fileName: `${p.playerName.split(' ')[0] || 'player'}-${ps.id}-reel`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') })} className="inline-flex items-center gap-1 text-teal-700 font-semibold"><Film size={12} /> Reel</button>
                           <a href={`${src}?dl=1`} className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Save</a>
                         </span>
                       </figcaption>
@@ -284,7 +284,7 @@ export default function SocialPhotos() {
       })()}
 
       {reel && (
-        <ReelMaker src={reel.src} style={reel.style} label={reel.label} fileName={reel.fileName}
+        <ReelMaker src={reel.src} style={reel.style} label={reel.label} fileName={reel.fileName} token={reel.token}
           event={event.name || 'Game day'} sub={[event.dates, event.location].filter(Boolean).join(' · ')} days={event.daysOut}
           onClose={() => setReel(null)} />
       )}
