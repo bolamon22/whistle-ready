@@ -1,10 +1,10 @@
-import type { CSSProperties, ReactNode } from 'react'
+import type { CSSProperties } from 'react'
 
 // Instagram posts built around a player's card (Bo, Oct 18 2026: "include their
 // player in all the pictures and say it's going to be a post similar to this").
 // The same four looks as the "Monster Mash Player Post Templates" design canvas:
 // Committed (a college-commitment graphic), Now Showing (a movie poster), Draft Day
-// and Who's Next (a countdown). Rendered by /pass/<token>/post/<style>.png with
+// and Countdown ("6 days out · Andrew is Whistle Ready"). Rendered by /pass/<token>/post/<style>.png with
 // next/og, so this file is Satori-safe: every element with more than one child is
 // display:flex, and nothing relies on CSS Satori can't draw.
 //
@@ -22,10 +22,10 @@ export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
   { id: 'draft', label: 'Draft Day' },
-  { id: 'countdown', label: "Who's Next" },
+  { id: 'countdown', label: 'Countdown' },
   { id: 'committed-photo', label: 'Committed · photo' },
   { id: 'draft-photo', label: 'Draft Day · photo' },
-  { id: 'countdown-photo', label: "Who's Next · photo" },
+  { id: 'countdown-photo', label: 'Countdown · photo' },
 ]
 /** The looks that use the player's photo rather than the card. */
 export const usesPhoto = (s: PostStyle) => s.endsWith('-photo')
@@ -281,20 +281,17 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
           )}
           <div style={{ display: 'flex', marginTop: u(26) }}>
             <div style={caps(44, '#ffffff', 0.06)}>{first}</div>
-            <div style={{ ...caps(44, '#94a3b8', 0.06), marginLeft: u(14) }}>IS IN.</div>
+            <div style={{ ...caps(44, '#94a3b8', 0.06), marginLeft: u(14) }}>IS</div>
           </div>
-          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(130), lineHeight: 1, color: hot, marginTop: u(4) }}>WHO&apos;S NEXT?</div>
+          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(130), lineHeight: 1, color: hot, marginTop: u(4) }}>WHISTLE READY.</div>
         </div>
       </div>
     )
   }
 
-  // countdown
+  // countdown (Bo, Oct 18 2026: not "Who's Next?", which read as a challenge; "<Name> is Whistle Ready." ties in the campaign)
   const hot = '#f97316'
   const n = d.daysOut
-  const ghost = (rot: string): ReactNode => (
-    <div style={{ width: u(200), height: u(316), borderRadius: u(16), background: '#1e293b', opacity: 0.45, transform: `rotate(${rot})`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: ANTON, fontSize: u(120), color: '#64748b' }}>?</div>
-  )
   return (
     <div style={{ ...root, background: '#0a0a0a' }}>
       <div style={{ display: 'flex', width: u(936), justifyContent: 'space-between', alignItems: 'center', marginTop: u(52) }}>
@@ -316,15 +313,13 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
         <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(230), lineHeight: 0.95, color: hot, marginTop: u(36) }}>GAME DAY</div>
       )}
       <div style={{ display: 'flex', alignItems: 'flex-end', marginTop: u(34) }}>
-        {ghost('-6deg')}
-        <div style={{ display: 'flex', margin: `0 ${u(26)}px` }}>{card(340, { boxShadow: `0 0 0 ${u(4)}px ${hot}, 0 ${u(30)}px ${u(80)}px rgba(0,0,0,0.7)` })}</div>
-        {ghost('6deg')}
+        <div style={{ display: 'flex' }}>{card(360, { boxShadow: `0 0 0 ${u(4)}px ${hot}, 0 ${u(30)}px ${u(80)}px rgba(0,0,0,0.7)` })}</div>
       </div>
       <div style={{ display: 'flex', marginTop: u(34) }}>
         <div style={caps(40, '#ffffff', 0.06)}>{first}</div>
-        <div style={{ ...caps(40, '#94a3b8', 0.06), marginLeft: u(12) }}>IS IN.</div>
+        <div style={{ ...caps(40, '#94a3b8', 0.06), marginLeft: u(12) }}>IS</div>
       </div>
-      <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(104), lineHeight: 1, color: hot, marginTop: u(6) }}>WHO&apos;S NEXT?</div>
+      <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(104), lineHeight: 1, color: hot, marginTop: u(6) }}>WHISTLE READY.</div>
     </div>
   )
 }

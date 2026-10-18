@@ -14,7 +14,7 @@ export const dynamic = 'force-dynamic'
 // the authorization, and the post shows nothing the card doesn't (first name only).
 // The photo-permission email shows these at w=540 so families see what we'd post;
 // staff download the full 1080×1350 once a family says yes. days= overrides the
-// countdown number (Who's Next) when posting ahead of time.
+// countdown number (Countdown) when posting ahead of time.
 export async function GET(req: NextRequest, { params }: { params: { token: string; style: string } }) {
   const style = String(params.style || '').replace(/\.png$/i, '')
   if (!isPostStyle(style)) return new NextResponse('Not found', { status: 404 })
