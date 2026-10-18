@@ -17,13 +17,16 @@ export const POST_H = 1350
 
 // The "· photo" looks (Bo, Oct 18 2026, after seeing the email: "versions that just
 // show the image they posted") put the family's own photo full-bleed instead of the card.
-export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'draft-photo' | 'countdown-photo'
+export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
 export const POST_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
   { id: 'draft', label: 'Draft Day' },
   { id: 'countdown', label: 'Countdown' },
   { id: 'committed-photo', label: 'Committed · photo' },
+  // Same photo look with "COMMITTED TO" and a big event logo up top. Bo kept both: the
+  // first is subtler, this one is unmistakable; he picks per send.
+  { id: 'committed-to-photo', label: 'Committed To · photo' },
   { id: 'draft-photo', label: 'Draft Day · photo' },
   { id: 'countdown-photo', label: 'Countdown · photo' },
 ]
@@ -75,12 +78,13 @@ const MARK_AT: Record<PostStyle, CSSProperties> = {
   draft: { right: 28, top: 28 },
   countdown: { right: 28, top: 16 },
   'committed-photo': { right: 28, top: 24 },
+  'committed-to-photo': { right: 28, top: 24 },
   'draft-photo': { right: 28, top: 28 },
   'countdown-photo': { right: 28, bottom: 24 },
 }
 
 export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
-  const look: PostStyle = usesPhoto(style) && !d.photoSrc ? style.replace('-photo', '') as PostStyle : style
+  const look: PostStyle = usesPhoto(style) && !d.photoSrc ? style.replace(/(-to)?-photo$/, '') as PostStyle : style
   const k = width / POST_W
   const at = Object.fromEntries(Object.entries(MARK_AT[look]).map(([key, v]) => [key, Math.round(Number(v) * k)]))
   return (
@@ -95,7 +99,7 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
 }
 
 function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
-  if (usesPhoto(style) && !d.photoSrc) style = style.replace('-photo', '') as PostStyle   // no photo on file: the card version
+  if (usesPhoto(style) && !d.photoSrc) style = style.replace(/(-to)?-photo$/, '') as PostStyle   // no photo on file: the card version
   const k = width / POST_W
   const u = (n: number) => Math.round(n * k * 10) / 10
   const first = (d.first || 'Player').toUpperCase()
@@ -239,6 +243,37 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
     const statLine = [d.jersey ? `#${d.jersey}` : '', d.position, club].filter(Boolean).join('  ·  ').toUpperCase()
 
     if (style === 'committed-photo') {
+      const accent = '#9f1d20'
+      return (
+        <div style={{ ...root, background: '#0a0a0a' }}>
+          <div style={{ position: 'absolute', left: 0, top: 0, display: 'flex' }}>{photo(POST_W, 1240)}</div>
+          <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(1240), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0) 22%, rgba(0,0,0,0) 40%, rgba(10,10,10,0.9) 68%, #0a0a0a 100%)' }} />
+          <div style={{ ...caps(30, '#ffffff', 0.32), marginTop: u(52) }}>OFFICIAL ANNOUNCEMENT</div>
+          <div style={{ position: 'absolute', left: u(64), bottom: u(140), width: u(952), display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(200), lineHeight: 0.95 }}>COMMITTED</div>
+            <div style={{ display: 'flex', width: u(952), height: u(8), background: accent, marginTop: u(6) }} />
+            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: u(28) }}>
+              <div style={{ display: 'flex', alignItems: 'center', width: u(640) }}>
+                {teamLogo(110, { marginRight: u(22) })}
+                <div style={{ display: 'flex', flexDirection: 'column', width: u(d.clubLogoSrc ? 488 : 640) }}>
+                  <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(first, d.clubLogoSrc ? 488 : 600, 120)), lineHeight: 1 }}>{first}</div>
+                  <div style={{ ...caps(26, '#e2e8f0', 0.12, 600), marginTop: u(10) }}>{cut(statLine, 64)}</div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                <div style={{ ...caps(24, '#94a3b8', 0.2), marginBottom: u(10) }}>COMMITTED TO</div>
+                {logo(240, 110)}
+              </div>
+            </div>
+          </div>
+          <div style={{ position: 'absolute', left: 0, bottom: 0, width: u(POST_W), height: u(110), background: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={caps(32, '#ffffff', 0.14)}>{[d.dates, where].filter(Boolean).join('   /   ').toUpperCase() || event.toUpperCase()}</div>
+          </div>
+        </div>
+      )
+    }
+
+    if (style === 'committed-to-photo') {
       const accent = '#9f1d20'
       return (
         <div style={{ ...root, background: '#0a0a0a' }}>
