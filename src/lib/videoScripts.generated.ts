@@ -18,7 +18,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Tap the phone to call them, or the message button to send a text. It makes finding your partner easy.",
       "Games that are already over move to Show past games, at the bottom."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "ref-find": {
     "title": "Find your name\non the schedule",
@@ -32,7 +32,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Working more than one event? Pick the event from the list.",
       "Tap My games to go back to just your games."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "ref-gameday": {
     "title": "Game day as a ref",
@@ -46,7 +46,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Rules has the tournament rules. Incidents is where you log an injury or a problem, so the tournament director can follow up.",
       "For any emergency, call 9 1 1 first. Then let the tournament director know."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sign-up": {
     "title": "Sign up and get\nthe app on your phone",
@@ -61,7 +61,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Tap Join the Staff. You're in, and you'll get a welcome email with your sign-in link.",
       "Last step: put Whistle Ready on your home screen. On an iPhone, open it in Safari, tap Share, then Add to Home Screen. On Android, tap the menu, then Install app."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "home": {
     "title": "Your staff home page",
@@ -77,7 +77,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Scroll down for every game you are on. As a scorekeeper, tap Open scorer to start keeping score.",
       "Tap All games to see the whole schedule for the event."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "staff-id": {
     "title": "Your staff ID",
@@ -89,7 +89,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Or tap Print my ID. It prints at real badge size. Cut along the edge and punch the hole for a lanyard.",
       "The codes on the back let the site lead check you in and confirm you are on staff. Keep it with you."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "keep-score": {
     "title": "Keep score live",
@@ -103,7 +103,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "At halftime, tap the plus next to Half to move to the second half, and reset the clock.",
       "Tap Save at the top any time. If your phone dies or you leave the page, the score is safe."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "penalties": {
     "title": "Penalty time",
@@ -117,7 +117,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Off by a few seconds from the referee? Tap minus or plus fifteen seconds to match.",
       "When the time is up, the phone beeps and a red banner shows. Tell the player they can go back on, then tap OK."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "scorer-settings": {
     "title": "Scorer settings",
@@ -131,7 +131,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "The rest, like no ties, the game format, and notes, are set for the whole tournament. Leave those alone unless the site lead asks.",
       "To change the length of a period, tap Set time under the clock, pick the minutes, and tap Set time."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "post-final": {
     "title": "End the game and\npost the final",
@@ -144,7 +144,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "The final posts right away to standings, brackets, and every family following either team.",
       "Posted the wrong score, or it's a forfeit? Don't post a guess. Send a field request or call the site lead, and they'll fix it."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "field-request": {
     "title": "Send and answer a field request",
@@ -159,7 +159,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Back on your scorer, you'll see who's on the way. Keep the game going.",
       "No answer in a few minutes? Don't wait. Open Staff contacts, and text or call Field Ops or the trainer straight from your phone."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "incidents": {
     "title": "Log an incident",
@@ -172,7 +172,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Complaints from a coach or a parent work the same way. Stay calm, don't argue the call, bring in the site lead, and log it here.",
       "Once it is handled, the site lead taps Resolve, and it moves to the resolved list."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "checklist": {
     "title": "The setup checklist",
@@ -184,7 +184,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Tapped the wrong one? Tap it again to uncheck it.",
       "The bar at the top shows how close setup is. The site lead checks it before the first game."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "directory": {
     "title": "Find and call\nany staff member",
@@ -196,7 +196,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Tap the green phone to call them, or the message button to send a text.",
       "For anything a group needs to see, like a trainer or more balls, send a field request instead. It reaches the right people at once."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "injury-report": {
     "title": "Log an injury",
@@ -214,7 +214,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Later, tap Follow-up to add what happened next, like a doctor visit, and update the outcome.",
       "At the end of the day, tap Injury log to download every injury for the event."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "trainer-call": {
     "title": "Answer a trainer call",
@@ -230,7 +230,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "If your alerts are off, the request comes by email instead, but alerts are much faster.",
       "Once the player is cared for, open Incidents and log the injury. There is a video for that too."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "game-day-prep": {
     "title": "Game day prep\nfor scorekeepers",
@@ -249,7 +249,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Pack rain gear, sunscreen, a hat, and sunglasses.",
       "And keep an eye on the weather leading up to the event, so you show up with the right gear. Thanks for helping run a great event."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "availability": {
     "title": "Set your availability",
@@ -263,7 +263,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Only free part of a day? Once the schedule is posted, tap Pick your times, tick the times you're free, then Save. The assigner still decides which games you work.",
       "When every day has an answer, the card says You're all set. You can change a day until 48 hours before it starts. After that, call or text the assigner."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-home": {
     "title": "Your assigner home",
@@ -276,7 +276,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "And Staff pay totals what each official earned, so you can mark them paid.",
       "Your other events are listed below, with the same buttons. Use Find a tournament to search, or switch to past events."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-crew": {
     "title": "Build your crew",
@@ -290,7 +290,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Recruiting link copies a sign-up link you can post or text. New officials fill it out and land right in your pool.",
       "Invite letter has a ready-made letter for assigners to forward to their officials. Edit it if you like, then copy it or send it."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-roster": {
     "title": "Your tournament roster",
@@ -304,7 +304,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Invite Staff emails someone a link to join. Copy signup link gives you a link to share yourself.",
       "Exhibit A lists every official’s background check date for the county, and flags any older than twelve months."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-out": {
     "title": "Who can work, and\nwho hasn’t answered",
@@ -317,7 +317,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "To chase the rest, click Remind on a row, or email everyone who hasn’t answered. Untick anyone to skip, check the preview, and send.",
       "Their email has a button that opens their days. Auto-assign only puts people on games they said they can work, and anyone who hasn’t answered is still treated as available."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-board": {
     "title": "Tour the Assigner board",
@@ -332,7 +332,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Other views: List shows one game per row. Division groups games by division. And Staff shows one person’s whole day.",
       "Games are the scheduler’s job, so the board doesn’t let you move or edit them. If a game needs to change, ask the scheduler."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-manual": {
     "title": "Assign officials manually",
@@ -348,7 +348,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Need three referees on a game, or just one? Hover the game and use the plus and minus.",
       "Colors show each game at a glance. Green is a full crew, amber has an open slot, and red means nobody is on it, or someone is double-booked."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-auto": {
     "title": "Auto-assign and Clear",
@@ -363,7 +363,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "To start a day over, click Clear. Pick boys referees, girls referees, or scorekeepers, and optionally which fields.",
       "Type your name for the record, and confirm. Clearing can’t be undone, so use it carefully."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-notify": {
     "title": "Notify your officials",
@@ -377,7 +377,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Made changes since? Open it again. Only officials whose games changed is ticked for you, so everyone else isn’t emailed twice.",
       "Officials always see their latest games under My games in Whistle Ready."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-check": {
     "title": "Check your work",
@@ -389,7 +389,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Switch to By staff to see each person’s games and what they will earn. It is a quick way to spot anyone with too many games.",
       "The x on a name removes them from that game right away. To put someone else on, go back to the Assigner board."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-swaps": {
     "title": "Game-day swaps",
@@ -402,7 +402,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "When the board is the way you want it, tick Lock editing. That stops accidental drags on your computer until you untick it.",
       "Then use Notify officials, with only changed officials ticked, so just the people you moved hear about it."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-refneeded": {
     "title": "Ref needed alerts",
@@ -413,7 +413,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Send someone, then tap Respond, so the person who asked knows help is on the way.",
       "Turn on phone alerts in Whistle Ready, and choose the Assigners and Refs groups, so you hear about these right away."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-pay": {
     "title": "Paying your officials",
@@ -426,7 +426,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Made a mistake? Unpay reverses it.",
       "CSV downloads the whole list for your records."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "asg-send": {
     "title": "Send training videos to your refs",
@@ -442,7 +442,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Check who it is going to, then click Send. You will see every name once more before it goes.",
       "Afterward, open Who’s watched. You can see who finished, who is in progress, and remind anyone who has not started."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-create": {
     "title": "Create a tournament",
@@ -459,7 +459,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Running an event again next year? Click Copy on last year's tournament, and give it a new name and dates.",
       "The copy brings its fields, divisions, pay rates, staff roster, and registration settings. The schedule and registrations start fresh."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-setup": {
     "title": "Tournament setup:\nthe basics",
@@ -476,7 +476,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Game Timing and Format sets the schedule increment, game length, and break. The period format and halftime show on the scorekeeper app.",
       "Click Next to move through the sections, and Save Changes when you are done."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-money": {
     "title": "Tournament setup:\nfees, pay and standings",
@@ -493,7 +493,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Standings tiebreakers decides how tied teams are ranked, and how teams advance to the bracket.",
       "Click Save Changes when you are done."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-divisions": {
     "title": "Divisions, pools\nand brackets",
@@ -508,7 +508,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Running a lot of divisions? Bulk Generate builds the pools, games, and brackets for all of them at once, from your Smart defaults.",
       "When the pools are final, turn on Teams and pools to show them on your public page. The schedule gets published from the Scheduler."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-schedule": {
     "title": "Build and publish\nthe schedule",
@@ -526,7 +526,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "The schedule stays a draft until you click Publish. That puts it on your public page, and can alert the phones of parents who follow those teams.",
       "Change something later? Publish again. Only the teams whose games moved get an alert."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "dir-registrations": {
     "title": "Team registrations\nand payments",
@@ -541,7 +541,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Email clubs sends a letter to every club, or just the ones you pick, like a payment reminder. Send yourself a test first, or schedule it for later.",
       "Add entry adds a club by hand, Import teams brings them in from a spreadsheet, and Public form opens the page clubs register on."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sch-home": {
     "title": "Your scheduler home",
@@ -553,7 +553,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Under Live, Post scores enters results. Scores drive the standings, and the standings set the bracket seeds.",
       "The next videos take each part in turn: tiebreakers, pools and brackets, building the schedule, and game-day changes."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sch-timing": {
     "title": "Game timing and\ntiebreakers",
@@ -566,7 +566,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Then set the order. Record gives three points for a win and one for a tie. Head to head, goal difference and goals scored break the ties that are left.",
       "Divisions get their own list, used to rank teams across pools. Save as default carries your order into every new tournament. Then click Save Changes."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sch-brackets": {
     "title": "Brackets and seeding",
@@ -581,7 +581,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "A big division? Split into flights makes two brackets, each with its own champion. Set the cutoff, pick each flight’s format, and click Split.",
       "Switch between the flights at the top. When pool play ends on game day, come back, click Seed from standings again, and save. The public bracket updates."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sch-fixes": {
     "title": "Bracket games\nand fixes",
@@ -595,7 +595,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "For an exact time, click the game, then Time. Type the day, the start time, and the field.",
       "Drag a game back to the Unscheduled list to take it off the board. Undo reverses your last change."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "sch-weather": {
     "title": "Weather delays and\nfield closures",
@@ -609,7 +609,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Nothing new can go in a closed window. Games already there show in Issues, so you can move them to an open slot.",
       "Then click Publish. It lists every game that moved, and only the teams whose games changed get an alert."
     ],
-    "outro": "Get Whistle Ready. Game day, run from the palm of your hand."
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },
   "waiver": {
     "title": "Your player's waiver\nand parent account",
