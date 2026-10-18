@@ -127,19 +127,31 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
   // deleted post simply has no row any more).
   const posts = await prisma.scheduledPost.findMany({
     where: { orgId, status: { not: 'canceled' }, createdAt: { gte: new Date(Date.now() - 200 * 864e5) } },
-    select: { id: true, status: true, scheduledFor: true, placement: true, mediaType: true, groupId: true },
-  }).catch(() => [])
+    select: { id: true, status: true, scheduledFor: true, publishedAt: true, placement: true, mediaType: true, groupId: true, permalink: true, socialAccount: { select: { platform: true } } },
+  }).catch(() => [] as any[])
   const links = await getPostPlayersMany(posts.map(p => p.id)).catch(() => ({} as Record<string, PostPlayerLink>))
-  const byPlayer: Record<string, ClearedPlayer['posts']> = {}
-  const seenGroup = new Set<string>()
+  // One compose to IG + FB (feed + Story) is one "use" of the player. Roll each group
+  // up first: its furthest-along status, every platform it went to, and the live link
+  // (Bo, Oct 18 2026: "know who's already been used in a post ... a log and a count").
+  const RANK: Record<string, number> = { published: 5, publishing: 4, scheduled: 3, failed: 2, draft: 1 }
+  type Use = ClearedPlayer['posts'][number] & { ids: string[] }
+  const groups = new Map<string, Use>()
   for (const p of posts) {
     const l = links[p.id]; if (!l) continue
-    // One compose to IG + FB (feed + Story) is one "post" for the tray.
     const g = p.groupId || p.id
-    for (const sid of l.submissionIds) {
-      const k = `${sid}|${g}`; if (seenGroup.has(k)) continue; seenGroup.add(k)
-      ;(byPlayer[sid] ||= []).push({ postId: p.id, status: p.status, kind: l.kind, style: l.style, scheduledFor: p.scheduledFor.toISOString() })
-    }
+    const plat = String(p.socialAccount?.platform || '')
+    const at = (p.status === 'published' && p.publishedAt ? p.publishedAt : p.scheduledFor).toISOString()
+    const u = groups.get(g)
+    if (!u) { groups.set(g, { postId: p.id, status: p.status, kind: l.kind, style: l.style, scheduledFor: at, platforms: plat ? [plat] : [], story: p.placement === 'story', permalink: p.permalink || '', ids: l.submissionIds }); continue }
+    if (plat && !u.platforms!.includes(plat)) u.platforms!.push(plat)
+    if (p.placement === 'story') u.story = true
+    if ((RANK[p.status] || 0) > (RANK[u.status] || 0)) { u.status = p.status; u.postId = p.id; u.scheduledFor = at }
+    // Prefer the Instagram link: that's the one families see.
+    if (p.permalink && (!u.permalink || plat === 'instagram')) u.permalink = p.permalink
+  }
+  const byPlayer: Record<string, ClearedPlayer['posts']> = {}
+  for (const { ids, ...u } of Array.from(groups.values())) {
+    for (const sid of Array.from(new Set(ids))) (byPlayer[sid] ||= []).push({ ...u, platforms: u.platforms!.slice().sort().reverse() })
   }
 
   const players: ClearedPlayer[] = []

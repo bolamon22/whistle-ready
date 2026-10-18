@@ -32,7 +32,9 @@ export type ClearedPlayer = {
   instagram: string
   clubInstagram: string
   clubFacebook: string
-  posts: { postId: string; status: string; kind: string; style: string; scheduledFor: string }[]
+  /** Every post this player is in (one entry per compose: IG + FB, feed + Story count
+   *  once), oldest first. `platforms`/`permalink` feed the card's usage log. */
+  posts: { postId: string; status: string; kind: string; style: string; scheduledFor: string; platforms?: string[]; story?: boolean; permalink?: string }[]
 }
 
 /** Instagram usernames: no @, valid characters, no repeats, at most `max`. */

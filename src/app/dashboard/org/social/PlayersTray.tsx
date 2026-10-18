@@ -12,7 +12,7 @@
 // are shared between the strip and the full view.
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X, Search, Maximize2 } from 'lucide-react'
+import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X, Search, Maximize2, ChevronDown, ExternalLink } from 'lucide-react'
 import { POST_STYLES, FAVORITE_STYLES } from '@/lib/socialPosts'
 import { lookFor, teamLabel, firstOf, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
@@ -38,6 +38,10 @@ const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { we
 const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', publishing: 'Publishing', published: 'Posted', failed: 'Failed' }
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
 const STRIP = 12
+const shortDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+const LOOK_LABEL: Record<string, string> = Object.fromEntries(POST_STYLES.map(s => [s.id, s.label]))
+const PLAT: Record<string, string> = { instagram: 'IG', facebook: 'FB' }
+const posted = (p: ClearedPlayer) => p.posts.filter(x => x.status === 'published').length
 
 type GroupBy = 'none' | 'club' | 'division' | 'team' | 'gender'
 type Filters = { q: string; event: string; gender: '' | 'boys' | 'girls'; division: string; club: string; status: '' | 'todo' | 'done'; ig: boolean; groupBy: GroupBy }
@@ -62,6 +66,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   const [sel, setSel] = useState<string[]>([])   // ticked for a Squad Reel, in the order ticked
   const [f, setF] = useState<Filters>(NO_FILTERS)
   const [full, setFull] = useState(false)
+  const [logOpen, setLogOpen] = useState<string | null>(null)   // the card whose usage log is open
   const set = (patch: Partial<Filters>) => setF(x => ({ ...x, ...patch }))
   const { players, waiting } = data
 
@@ -79,8 +84,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
       && (!f.status || (f.status === 'todo' ? !p.posts.length : p.posts.length > 0))
       && (!f.ig || !!p.instagram)
       && (!q || `${p.playerName} ${p.club} ${p.team} ${p.division} ${p.jersey} ${p.instagram}`.toLowerCase().includes(q)))
-      // Not-yet-posted first, so the next one to feature is always at the front.
-      .sort((a, b) => (a.posts.length ? 1 : 0) - (b.posts.length ? 1 : 0))
+      // Least used first (never used at the front), so the next one to feature leads
+      // and nobody gets featured twice while others wait.
+      .sort((a, b) => a.posts.length - b.posts.length || posted(a) - posted(b))
   }, [scope, f])
   const groups = useMemo(() => {
     if (f.groupBy === 'none') return [{ key: '', list: shown }]
@@ -118,7 +124,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
         <div className="relative aspect-[4/5] bg-slate-900">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={postPngUrl(p.token, look, null, 360)} alt={`${p.playerName}, ${look} post`} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />
-          {p.posts.length > 0 && <span className="absolute top-2 left-2 rounded-md bg-white/90 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1"><Check size={10} />{STATUS[last.status] || 'Planned'}</span>}
+          {p.posts.length > 0 && (posted(p) > 0
+            ? <span className="absolute top-2 left-2 rounded-md bg-emerald-600 text-white text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1" title={`Went out ${posted(p)} time${posted(p) === 1 ? '' : 's'}`}><Check size={10} />Posted {posted(p)}×</span>
+            : <span className="absolute top-2 left-2 rounded-md bg-white/90 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1"><Check size={10} />{STATUS[last.status] || 'Planned'}</span>)}
           <label className="absolute top-2 right-2 rounded-md bg-white/90 text-slate-800 text-[10px] font-extrabold px-1.5 py-0.5 inline-flex items-center gap-1 cursor-pointer" title="Add to a Squad Reel">
             <input type="checkbox" checked={sel.includes(p.id)} onChange={e => toggle(p.id, e.target.checked)} className="accent-pink-600" /> Squad
           </label>
@@ -128,7 +136,28 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
           <div className="text-[11px] text-slate-500 truncate" title={teamLabel(p)}>{teamLabel(p)}</div>
           {(p.division || p.gender) && <div className="text-[11px] text-slate-500 truncate">{[p.division, !p.division && p.gender ? (p.gender === 'girls' ? 'Girls' : 'Boys') : ''].filter(Boolean).join(' · ')}</div>}
           <div className="text-[11px] font-semibold text-teal-700 truncate" title={handles.join(' · ')}>{handles.length ? `Collab ${handles.join(' · ')}` : 'No Instagram given'}</div>
-          <div className="text-[11px] text-slate-500 truncate">{p.posts.length ? `${KIND[last.kind] || 'Post'} · ${STATUS[last.status] || ''} ${fmtDay(last.scheduledFor)}${p.posts.length > 1 ? ` · +${p.posts.length - 1}` : ''}` : 'Not posted yet'}</div>
+          {p.posts.length ? (
+            <button type="button" onClick={() => setLogOpen(o => o === p.id ? null : p.id)} aria-expanded={logOpen === p.id} title="Every post this player is in"
+              className="text-left text-[11px] font-semibold text-slate-700 hover:text-teal-700 inline-flex items-center gap-1 min-w-0">
+              <span className="truncate">Used {p.posts.length}×{posted(p) && posted(p) < p.posts.length ? ` · ${posted(p)} posted` : ` · ${shortDay(last.scheduledFor)}`}</span>
+              <ChevronDown size={12} className={`shrink-0 transition-transform ${logOpen === p.id ? 'rotate-180' : ''}`} />
+            </button>
+          ) : <div className="text-[11px] text-slate-500 truncate">Not used yet</div>}
+          {logOpen === p.id && p.posts.length > 0 && (
+            // The usage log, newest first: what it was, which look, where it went, when.
+            <ol className="mt-1 mb-0.5 rounded-lg bg-white border border-slate-200 divide-y divide-slate-100 max-h-40 overflow-y-auto">
+              {p.posts.slice().reverse().map(x => (
+                <li key={x.postId} className="px-2 py-1.5 text-[11px] leading-tight">
+                  <div className="font-bold text-slate-800 truncate">{KIND[x.kind] || 'Post'}{x.story && x.kind !== 'story' ? ' + Story' : ''} · {LOOK_LABEL[x.style] || x.style}</div>
+                  <div className="text-slate-500 flex items-center gap-1">
+                    <span className={x.status === 'published' ? 'text-emerald-700 font-semibold' : x.status === 'failed' ? 'text-rose-700 font-semibold' : ''}>{STATUS[x.status] || x.status}</span>
+                    <span className="truncate">{shortDay(x.scheduledFor)}{x.platforms?.length ? ` · ${x.platforms.map(k => PLAT[k] || k).join(' + ')}` : ''}</span>
+                    {x.permalink && <a href={x.permalink} target="_blank" rel="noreferrer" className="ml-auto shrink-0 text-teal-700 hover:underline inline-flex items-center gap-0.5">View<ExternalLink size={10} /></a>}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
           <select value={look} onChange={e => setLooks({ ...looks, [p.id]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700" aria-label="Look">
             <optgroup label="Favorites">{FAVS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
             <optgroup label="More looks">{MORE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
@@ -150,7 +179,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
       {hasGender && (['', 'boys', 'girls'] as const).map(g => <button key={g || 'all'} type="button" onClick={() => set({ gender: g, division: '' })} className={chip(f.gender === g)}>{g === '' ? 'Boys & girls' : g === 'boys' ? 'Boys' : 'Girls'}</button>)}
       {divisions.length > 0 && <select value={f.division} onChange={e => set({ division: e.target.value })} className={sel_} aria-label="Division"><option value="">All divisions</option>{divisions.map(d => <option key={d} value={d}>{d}</option>)}</select>}
       {clubs.length > 1 && <select value={f.club} onChange={e => set({ club: e.target.value })} className={sel_} aria-label="Club"><option value="">All clubs</option>{clubs.map(c => <option key={c} value={c}>{c}</option>)}</select>}
-      <select value={f.status} onChange={e => set({ status: e.target.value as Filters['status'] })} className={sel_} aria-label="Posted"><option value="">Posted or not</option><option value="todo">Not posted yet</option><option value="done">Already posted</option></select>
+      <select value={f.status} onChange={e => set({ status: e.target.value as Filters['status'] })} className={sel_} aria-label="Posted"><option value="">Used or not</option><option value="todo">Not used yet</option><option value="done">Already used</option></select>
       <button type="button" onClick={() => set({ ig: !f.ig })} className={chip(f.ig)}>Has Instagram</button>
       <span className="text-[10px] font-extrabold uppercase tracking-wide text-slate-400 ml-1">Group</span>
       <select value={f.groupBy} onChange={e => set({ groupBy: e.target.value as GroupBy })} className={sel_} aria-label="Group by"><option value="none">None</option><option value="club">Club</option><option value="team">Team</option><option value="division">Division</option>{hasGender && <option value="gender">Boys / girls</option>}</select>
@@ -181,7 +210,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   const groupHead = (key: string, list: ClearedPlayer[]) => key && (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-sm font-extrabold">{key}</span>
-      <span className="text-xs text-slate-500">{list.length} player{list.length === 1 ? '' : 's'}{list.some(p => !p.posts.length) ? ` · ${list.filter(p => !p.posts.length).length} not posted` : ''}</span>
+      <span className="text-xs text-slate-500">{list.length} player{list.length === 1 ? '' : 's'}{list.some(p => !p.posts.length) ? ` · ${list.filter(p => !p.posts.length).length} not used` : ''}</span>
       {list.length >= 2 && <button type="button" onClick={() => squadFromGroup(list)} className="text-[11px] font-bold text-pink-700 hover:underline">Squad these{list.length > 4 ? ' (first 4)' : ''}</button>}
     </div>
   )
