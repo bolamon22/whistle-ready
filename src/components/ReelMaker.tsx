@@ -17,6 +17,17 @@ import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages
 // on the staff member's computer.
 
 const W = 1080, H = 1920, DUR = 8
+
+// Music to pick from (Bo: "can I choose different songs?"). All made from scratch for
+// Whistle Ready, so Instagram won't mute them. public/reel-beat.mp3 is the original.
+export const REEL_SONGS = [
+  { id: 'trap', label: 'Trap Hype (original)', url: '/reel-beat.mp3' },
+  { id: 'electro', label: 'Electro Drive', url: '/reel-music/electro.mp3' },
+  { id: 'stadium', label: 'Stadium Stomp', url: '/reel-music/stadium.mp3' },
+  { id: 'drumline', label: 'Drumline', url: '/reel-music/drumline.mp3' },
+  { id: 'cinematic', label: 'Cinematic Rise', url: '/reel-music/cinematic.mp3' },
+  { id: 'none', label: 'No music', url: '' },
+]
 const PY = 285                      // where the 1080×1350 post sits
 const clamp = (v: number) => Math.max(0, Math.min(1, v))
 const easeOut = (p: number) => 1 - Math.pow(1 - clamp(p), 3)
@@ -165,6 +176,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
   const [state, setState] = useState<'loading' | 'preview' | 'recording' | 'done' | 'error'>('loading')
   const [out, setOut] = useState<{ url: string; ext: string } | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [song, setSong] = useState(REEL_SONGS[0].id)
+  const songUrl = REEL_SONGS.find(x => x.id === song)?.url || ''
   const [showVideo, setShowVideo] = useState(false)   // after recording: the real video, with sound, instead of the silent loop
   const [err, setErr] = useState('')
 
@@ -221,7 +234,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     let audioCtx: AudioContext | null = null
     try {
       audioCtx = new AudioContext()
-      const buf = await fetch('/reel-beat.mp3').then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
+      if (!songUrl) throw new Error('no music')
+      const buf = await fetch(songUrl).then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
       const node = audioCtx.createBufferSource(); node.buffer = buf
       const gain = audioCtx.createGain()
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
@@ -254,7 +268,8 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     const tracks = [...video.getVideoTracks()]
     try {
       audioCtx = new AudioContext()
-      const buf = await fetch('/reel-beat.mp3').then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
+      if (!songUrl) throw new Error('no music')
+      const buf = await fetch(songUrl).then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
       const srcNode = audioCtx.createBufferSource(); srcNode.buffer = buf
       const gain = audioCtx.createGain()
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
@@ -307,6 +322,15 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
         {state === 'loading' && <p className="text-sm text-slate-500 text-center mt-3">Building the post…</p>}
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
+          {state !== 'recording' && state !== 'loading' && state !== 'error' && (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <span className="font-semibold shrink-0">Song</span>
+              <select value={song} onChange={e => setSong(e.target.value)} disabled={playing}
+                className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm bg-white">
+                {REEL_SONGS.map(x => <option key={x.id} value={x.id}>{x.label}</option>)}
+              </select>
+            </label>
+          )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
             <button type="button" onClick={playWithSound} disabled={playing} className="w-full rounded-lg border border-slate-300 text-slate-700 font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
               <Volume2 size={16} /> {playing ? 'Playing…' : 'Play with sound'}
