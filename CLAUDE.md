@@ -354,6 +354,26 @@ matches: the event's own record (lib/eventClient) is a name, email and phone, an
   its DivisionColor. Copy now needs a director or scheduler of that org (it had no sign-in check) and dropped
   `skipDuplicates`, which SQLite rejects: Copy errored after making the copy for any event with a roster. Tests:
   41 real-Prisma checks (scratch); each change fails one without it.
+- **Archive or delete an organization (Oct 18).** Bo: "I need to be able to delete orgs or archive ones that actually
+  have a history, but these are all just fake." Admin → Organizations → the org → **Close or delete** (admins only;
+  slug `sunshine-events-group` can be neither, `MAIN_ORG_SLUG`). **Archive** (`lib/orgArchive.ts`):
+  `Organization.archivedAt` / `archivedBy` (guarded ALTER, `ensureArchiveCols`), POST `/api/admin/orgs/[id]/archive`
+  `{archived}`; nothing is deleted. `archivedOrgIds()` (30 s cache, never throws; `forgetArchived()` after a change)
+  drops the org from `membershipsOf`, so its people can't open it (a login whose every org is archived gets `orgId`
+  null; other orgs are kept). Middleware rewrites its `/o/<slug>`, custom domain, pretty event URLs and public event
+  pages to `/unavailable` (lists from public GET `/api/archived-orgs`, CDN 30 s, 60 s per isolate, fails open).
+  Whatever comes due while archived never goes, so Restore can't send a stale burst: comm-cron marks the job failed
+  ("skipped: organization archived"), social publish-cron marks due posts failed ("Not posted: the organization was
+  archived."); the Chirp weekly digest and housing report skip it; public tournaments, sitemap and llms.txt leave it
+  out; Platform dashboard and Organizations hide it (`?show=archived` lists them; `orgCount` excludes them).
+  **Delete** (`lib/orgDelete.ts`): GET `/api/admin/orgs/[id]/delete` = `orgImpact` (counts + `blocked`), POST
+  `{confirm}` (its name, case and spaces ignored) = `deleteOrg`. Blocked when its events have any RegistrationPayment,
+  PaymentRecord or TournamentTransaction, or its workers have assignments or pay at other orgs' events ("Archive it
+  instead"). Children are deleted explicitly (the test schema has no foreign keys), each step skipping a missing
+  table, and the Organization row last, so a failed run can be run again. Logins stay (`User.orgId` NULL, admins
+  untouched; its OrgMember rows go); AppSetting keys ending `:<orgId>` or `:<tournamentId>` (or with `:<id>:` inside)
+  go; each delete is logged in AppSetting `orgDeleteLog` (last 200). Tests: 39 checks (scratch octest), each guard
+  mutation-checked. Help: admin-organizations.
 - **Availability: every day gets an answer (Oct 14).** The head assigner said refs and staff had trouble listing
   availability (the staff link opened a page they can't see, fixed Oct 13 a3876ea; then everyone counted as available
   until marked out, so All day saved nothing and nobody could tell who had looked). Bo picked Morning / Afternoon,
