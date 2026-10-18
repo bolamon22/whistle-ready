@@ -7,6 +7,7 @@ import { absUrl } from '@/lib/emailLayout'
 import { orgBaseUrl } from '@/lib/orgDomains'
 import { eventDates } from '@/lib/vendorApproval'
 import { signPhotoToken, photoAskRecipients, photoAskEmail, instagramHandle } from '@/lib/photoConsent'
+import { POST_STYLES } from '@/lib/socialPosts'
 
 // Sending the photo-permission letter (lib/photoConsent). One function for the
 // Send button, the test send and the scheduled send, so a scheduled letter can't
@@ -82,6 +83,7 @@ export async function sendPhotoAsk(ctx: PhotoAskContext, s: FormSubmission, by: 
     parentName: String(d.parentName || ''), playerName: String(d.playerName || ''),
     photoUrl: String(d.photoUrl || ''),
     cardUrl: passToken ? `/pass/${passToken}/card.png` : '',
+    posts: passToken ? POST_STYLES.map(p => ({ label: p.label, url: `${ctx.appBase}/pass/${passToken}/post/${p.id}.png?w=540` })) : [],
     link, base: ctx.appBase,
   })
   const res = await sendEmail({ ...ctx.sender, to, subject: testTo ? `[Test] ${mail.subject}` : mail.subject, html: mail.html, text: mail.text })

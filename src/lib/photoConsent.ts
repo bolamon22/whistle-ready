@@ -73,7 +73,7 @@ export const firstName = (full: unknown) => String(full || '').trim().split(/\s+
 
 /** The words the parent agrees to, shown on the page. */
 export function photoPermissionText(orgName: string, tournamentName: string): string {
-  return `${orgName} may post this player card, with the player's first name and team, on its Instagram and Facebook in the lead-up to ${tournamentName}, and use it to promote future events. You can ask for a post to be taken down at any time.`
+  return `${orgName} may post this player card, in a graphic like the examples shown, with the player's first name and team, on its Instagram and Facebook in the lead-up to ${tournamentName}, and use it to promote future events. You can ask for a post to be taken down at any time.`
 }
 
 /** "@handle" from whatever the website editor holds (a handle or a profile URL), or ''. */
@@ -111,6 +111,8 @@ export function photoAskEmail(a: {
   playerName: string
   photoUrl: string
   cardUrl?: string
+  /** Example posts built around this player's card (lib/socialPosts), absolute URLs. */
+  posts?: { label: string; url: string }[]
   link: string
   base: string
 }): { subject: string; html: string; text: string } {
@@ -121,15 +123,16 @@ export function photoAskEmail(a: {
   const ig = a.instagram ? `Instagram (${a.instagram})` : 'Instagram'
   const when = a.dates ? ` (${a.dates})` : ''
   const subject = `${player} made the cut for ${a.tournamentName}`
+  const posts = (a.posts || []).filter(p => p.url).slice(0, 4)
   const body = `
     <p style="margin:0 0 14px">${esc(hi)}</p>
     <p style="margin:0 0 14px"><strong>${P} made the cut!</strong> Out of every player card for ${esc(a.tournamentName)}, ${P}'s is one of our favorites.</p>
     <p style="margin:0 0 14px">All week we're counting down on ${esc(ig)} by spotlighting players who'll be on the field, and we'd love ${P} to be one of them.</p>
-    ${photo ? `<p style="margin:18px 0"><img src="${photo}" width="220" alt="${P}'s player card" style="display:block;width:220px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0"></p>` : ''}
+    ${posts.length ? postGrid(posts, P) : photo ? `<p style="margin:18px 0"><img src="${photo}" width="220" alt="${P}'s player card" style="display:block;width:220px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0"></p>` : ''}
     <p style="margin:0 0 6px">Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds:</p>
     ${button(a.link, 'Yes or no: answer here')}
     <p style="margin:16px 0 14px">Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!</p>
-    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
+    <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card${posts.length ? ' in a graphic like one of these' : ''}, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
     <p style="margin:18px 0 0">See you on the field!<br>The ${esc(a.orgName)} team</p>
   `
   const html = renderEmail({
@@ -146,6 +149,7 @@ export function photoAskEmail(a: {
     '',
     `All week we're counting down on ${ig} by spotlighting players who'll be on the field, and we'd love ${player} to be one of them.`,
     '',
+    ...(posts.length ? [`Here's the kind of post we're planning, with ${player}'s card: ${posts.map(p => `${p.label}: ${p.url}`).join('  ')}`, ''] : []),
     `Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: ${a.link}`,
     '',
     "Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!",
@@ -156,4 +160,16 @@ export function photoAskEmail(a: {
     `The ${a.orgName} team`,
   ].join('\n')
   return { subject, html, text }
+}
+
+/** Two-by-two grid of example posts. Tables, not flexbox: this is email. */
+function postGrid(posts: { label: string; url: string }[], P: string): string {
+  const cell = (p: { label: string; url: string }) => `<td width="50%" valign="top" style="padding:5px">
+      <a href="${esc(p.url)}" target="_blank" style="text-decoration:none"><img src="${esc(p.url)}" width="262" alt="${esc(p.label)} post with ${P}'s card" style="display:block;width:100%;max-width:262px;height:auto;border-radius:10px;border:0"></a>
+      <div style="font-size:12px;color:#64748b;text-align:center;padding-top:4px">${esc(p.label)}</div>
+    </td>`
+  const rows: string[] = []
+  for (let i = 0; i < posts.length; i += 2) rows.push(`<tr>${cell(posts[i])}${posts[i + 1] ? cell(posts[i + 1]) : '<td width="50%"></td>'}</tr>`)
+  return `<p style="margin:18px 0 6px"><strong>Here's the kind of post we're planning, with ${P}'s real card:</strong></p>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px;border-collapse:collapse">${rows.join('')}</table>`
 }

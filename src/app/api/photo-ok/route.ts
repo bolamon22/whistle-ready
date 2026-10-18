@@ -5,6 +5,7 @@ import { playerPassEnabled } from '@/lib/playerPass'
 import { readPhotoToken, firstName, photoPermissionText, instagramHandle, facebookPage } from '@/lib/photoConsent'
 import { prisma } from '@/lib/db'
 import { sendPushToOrg } from '@/lib/push'
+import { POST_STYLES } from '@/lib/socialPosts'
 
 // Public: a parent answering "may we share this photo on social media?"
 // (lib/photoConsent). No login -- the signed token in the emailed link is the
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
     orgName,
     tournamentName,
     photo: passOn && hit.s.passToken ? `/pass/${hit.s.passToken}/card.png` : String(d.photoUrl || ''),
+    posts: passOn && hit.s.passToken ? POST_STYLES.map(p => ({ label: p.label, url: `/pass/${hit.s.passToken}/post/${p.id}.png?w=540` })) : [],
     answer: String(d.photoOk || ''),
     answeredAt: String(d.photoOkAt || ''),
     instagram: String(d.photoIg || ''),

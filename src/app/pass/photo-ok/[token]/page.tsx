@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 // Lives under /pass so it inherits that path's public passthrough on every
 // domain; the static "photo-ok" segment wins over /pass/[token].
 
-type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; clubInstagram: string; clubFacebook: string; club: string; permission: string; test?: boolean }
+type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; posts?: { label: string; url: string }[]; answer: string; answeredAt: string; instagram: string; clubInstagram: string; clubFacebook: string; club: string; permission: string; test?: boolean }
 
 export default function PhotoPermissionPage() {
   const { token } = useParams() as { token: string }
@@ -73,7 +73,20 @@ export default function PhotoPermissionPage() {
               {info.team && <p className="text-slate-300 text-sm mt-1">{info.team}</p>}
             </div>
 
-            {info.photo && (
+            {info.posts && info.posts.length ? (
+              <>
+                <p className="text-center text-sm text-slate-300 mb-3">Here's the kind of post we're planning:</p>
+                <div className="grid grid-cols-2 gap-3">
+                  {info.posts.map(p => (
+                    <figure key={p.url} className="m-0">
+                      <img src={p.url} alt={`${p.label} post with ${info.player}'s card`} loading="lazy"
+                        className="w-full aspect-[4/5] rounded-xl ring-1 ring-white/10 bg-slate-800 object-cover" />
+                      <figcaption className="text-center text-xs text-slate-400 mt-1">{p.label}</figcaption>
+                    </figure>
+                  ))}
+                </div>
+              </>
+            ) : info.photo && (
               <img src={info.photo} alt={`${info.player}'s player card`}
                 className="w-full max-w-[300px] mx-auto rounded-2xl shadow-2xl shadow-black/50 ring-1 ring-white/10 bg-white" />
             )}

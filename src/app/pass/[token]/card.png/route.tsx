@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { ImageResponse } from 'next/og'
-import { PassCard, PASS_W, PASS_H } from '@/lib/playerPassCard'
-import { appBaseUrl, imageForSatori, loadPlayerPass, loadPassFonts, qrDataUrl } from '@/lib/playerPass'
+import { appBaseUrl, loadPlayerPass } from '@/lib/playerPass'
+import { passCardImage } from '@/lib/passCardImage'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,24 +11,9 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const base = appBaseUrl(req)
   const pass = await loadPlayerPass(params.token, base)
   if (!pass) return new NextResponse('Not found', { status: 404 })
-
-  const [photoUrl, clubLogoUrl, tournamentLogoUrl, orgLogoUrl, qr, qr2, fonts] = await Promise.all([
-    imageForSatori(pass.card.photoUrl, base),
-    imageForSatori(pass.card.clubLogoUrl, base),
-    imageForSatori(pass.card.tournamentLogoUrl, base),
-    imageForSatori(pass.card.orgLogoUrl, base),
-    qrDataUrl(pass.qrUrl),
-    qrDataUrl(pass.qr2Url),
-    loadPassFonts().catch(() => undefined),
-  ])
-  const p = { ...pass.card, photoUrl, clubLogoUrl, tournamentLogoUrl, orgLogoUrl, qrDataUrl: qr, qr2DataUrl: qr2 }
-  return new ImageResponse(<PassCard p={p} theme={pass.theme} />, {
-    width: PASS_W, height: PASS_H,
-    ...(fonts ? { fonts } : {}),
-    headers: {
-      // The URL is unguessable, so caching is fine; keep it short so edits (photo, team) show up.
-      'Cache-Control': 'private, max-age=120',
-      'Content-Disposition': `inline; filename="player-pass-${pass.card.code.replace('-', '')}.png"`,
-    },
+  return passCardImage(pass, base, {
+    // The URL is unguessable, so caching is fine; keep it short so edits (photo, team) show up.
+    'Cache-Control': 'private, max-age=120',
+    'Content-Disposition': `inline; filename="player-pass-${pass.card.code.replace('-', '')}.png"`,
   })
 }

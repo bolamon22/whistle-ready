@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
+import { POST_STYLES } from '@/lib/socialPosts'
 
 // Photos for social: every player at this event who added a photo to their card.
 // Staff pick the good ones and ask the families (lib/photoConsent); the parent
@@ -174,6 +175,14 @@ export default function SocialPhotos() {
                       <a href={p.photoUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-slate-500"><Download size={12} /> Photo only</a>
                     </div>
                   )}
+                  {st === 'yes' && p.cardUrl && (
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px]">
+                      <span className="text-slate-500 w-full">Posts:</span>
+                      {POST_STYLES.map(ps => (
+                        <a key={ps.id} href={p.cardUrl.replace(/\/card\.png$/, `/post/${ps.id}.png?dl=1`)} className="inline-flex items-center gap-1 text-teal-700 font-semibold"><Download size={11} /> {ps.label}</a>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -185,7 +194,7 @@ export default function SocialPhotos() {
         <div className="fixed inset-0 z-20 bg-slate-900/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5">
             <h2 className="text-lg font-bold text-slate-900 inline-flex items-center gap-2"><Mail size={18} /> Ask {pickedList.length} famil{pickedList.length === 1 ? 'y' : 'ies'}</h2>
-            <p className="text-sm text-slate-600 mt-1">Each parent on the waiver gets this email with their player's card and a Yes / No link:</p>
+            <p className="text-sm text-slate-600 mt-1">Each parent on the waiver gets this email with four example posts built from their player's card (Committed, Now Showing, Draft Day, Who's Next) and a Yes / No link:</p>
             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700 space-y-2">
               <p className="font-semibold">Subject: {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut for this tournament</p>
               <p>Hi {pickedList[0]?.parentName.split(' ')[0] || 'there'},</p>
