@@ -1,0 +1,112 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
+import { CheckCircle2, XCircle } from 'lucide-react'
+
+// /pass/photo-ok/<token>: a parent says yes or no to the org sharing their
+// player's card photo on social media (lib/photoConsent, /api/photo-ok).
+// Lives under /pass so it inherits that path's public passthrough on every
+// domain; the static "photo-ok" segment wins over /pass/[token].
+
+type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; permission: string }
+
+export default function PhotoPermissionPage() {
+  const { token } = useParams() as { token: string }
+  const [info, setInfo] = useState<Info | null>(null)
+  const [error, setError] = useState('')
+  const [name, setName] = useState('')
+  const [guardian, setGuardian] = useState(false)
+  const [saving, setSaving] = useState<'' | 'yes' | 'no'>('')
+  const [formError, setFormError] = useState('')
+  const [changing, setChanging] = useState(false)
+
+  useEffect(() => {
+    fetch(`/api/photo-ok?t=${encodeURIComponent(token)}`).then(async r => {
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setError(j.error || 'This link is not valid.'); return }
+      setInfo(j)
+    }).catch(() => setError('Could not load this page. Check your connection and try again.'))
+  }, [token])
+
+  async function answer(a: 'yes' | 'no') {
+    setFormError('')
+    if (a === 'yes' && name.trim().length < 2) { setFormError('Type your name to give permission.'); return }
+    if (a === 'yes' && !guardian) { setFormError("Check the box to confirm you're the player's parent or guardian."); return }
+    setSaving(a)
+    try {
+      const r = await fetch('/api/photo-ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, answer: a, name: name.trim(), guardian }) })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setFormError(j.error || 'Could not save your answer.'); return }
+      setInfo(i => i ? { ...i, answer: a, answeredAt: new Date().toISOString() } : i)
+      setChanging(false)
+    } catch { setFormError('Could not save your answer. Check your connection and try again.') }
+    finally { setSaving('') }
+  }
+
+  const answered = info && (info.answer === 'yes' || info.answer === 'no') && !changing
+
+  return (
+    <div className="min-h-screen bg-[#0b1220] text-white">
+      <div className="max-w-md mx-auto px-5 py-8 sm:py-12">
+        {error && (
+          <div className="text-center mt-16">
+            <h1 className="text-xl font-bold">Link not valid</h1>
+            <p className="text-slate-300 mt-2 text-sm">{error}</p>
+          </div>
+        )}
+        {!error && !info && <p className="text-center text-slate-400 mt-16 text-sm">Loading…</p>}
+        {info && (
+          <>
+            <div className="text-center mb-5">
+              <div className="text-xs uppercase tracking-[0.2em] text-teal-300">{info.tournamentName}</div>
+              <h1 className="text-2xl font-extrabold leading-tight mt-1">Can we share {info.player || 'this'}{info.player ? "'s" : ''} photo?</h1>
+              {info.team && <p className="text-slate-300 text-sm mt-1">{info.team}</p>}
+            </div>
+
+            {info.photo && (
+              <img src={info.photo} alt={`${info.player}'s player card`}
+                className="w-full max-w-[300px] mx-auto rounded-2xl shadow-2xl shadow-black/50 ring-1 ring-white/10 bg-white" />
+            )}
+
+            <div className="mt-6 rounded-xl bg-white/5 ring-1 ring-white/10 p-4 text-sm text-slate-200 leading-relaxed">
+              {info.permission}
+            </div>
+
+            {answered ? (
+              <div className="mt-6 text-center">
+                {info.answer === 'yes'
+                  ? <p className="inline-flex items-center gap-2 text-teal-300 font-semibold"><CheckCircle2 size={20} /> Thanks! You said yes.</p>
+                  : <p className="inline-flex items-center gap-2 text-slate-200 font-semibold"><XCircle size={20} /> Got it. We won't use this photo.</p>}
+                <p className="text-slate-400 text-xs mt-2">Saved {new Date(info.answeredAt).toLocaleDateString()}.</p>
+                <button type="button" onClick={() => { setChanging(true); setFormError('') }} className="mt-4 text-sm text-teal-300 underline underline-offset-4">Change my answer</button>
+              </div>
+            ) : (
+              <form className="mt-6 space-y-4" onSubmit={e => { e.preventDefault(); answer('yes') }}>
+                <div>
+                  <label htmlFor="po-name" className="block text-sm font-medium text-slate-200 mb-1">Your name</label>
+                  <input id="po-name" value={name} onChange={e => setName(e.target.value)} autoComplete="name"
+                    className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                </div>
+                <label htmlFor="po-guardian" className="flex items-start gap-3 text-sm text-slate-200">
+                  <input id="po-guardian" type="checkbox" checked={guardian} onChange={e => setGuardian(e.target.checked)} className="mt-0.5 h-5 w-5 accent-teal-500" />
+                  <span>I'm {info.player || 'the player'}'s parent or legal guardian (or I'm the player and 18 or older).</span>
+                </label>
+                {formError && <p className="text-sm text-amber-300">{formError}</p>}
+                <div className="grid gap-2.5">
+                  <button type="submit" disabled={!!saving} className="w-full rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold py-3 disabled:opacity-60">
+                    {saving === 'yes' ? 'Saving…' : 'Yes, you can share it'}
+                  </button>
+                  <button type="button" disabled={!!saving} onClick={() => answer('no')} className="w-full rounded-xl ring-1 ring-white/20 hover:bg-white/5 text-white font-semibold py-3 disabled:opacity-60">
+                    {saving === 'no' ? 'Saving…' : 'No thanks'}
+                  </button>
+                </div>
+              </form>
+            )}
+            <p className="text-center text-xs text-slate-500 mt-8">{info.orgName}</p>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}

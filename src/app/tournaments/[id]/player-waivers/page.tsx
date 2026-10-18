@@ -19,9 +19,10 @@ const LABELS: Record<string, string> = {
   parentPhone: 'Parent phone', parent2Name: 'Parent 2', parent2Email: 'Parent 2 email', parent2Phone: 'Parent 2 phone',
   emergencyName: 'Emergency contact', emergencyPhone: 'Emergency phone', hotel: 'Hotel / rental', hotelName: 'Where staying',
   newsletter: 'Newsletter', signature: 'Signature', cardLink: 'Card QR link',
+  photoOk: 'OK to post photo', photoOkAt: 'Photo answer on', photoOkName: 'Photo answered by', photoAskAt: 'Photo permission asked',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
-const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl']
+const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl', 'photoAskBy']
 const CSV_COLS = ['playerName', 'playerEmail', 'usLacrosse', 'dob', 'gender', 'grade', 'teamName', 'jerseyNumber', 'position', 'homeCity', 'homeState', 'parentName', 'parentEmail', 'parentPhone', 'parent2Name', 'parent2Email', 'parent2Phone', 'emergencyName', 'emergencyPhone', 'hotel', 'hotelName', 'signature']
 const PAGE = 100
 
@@ -666,6 +667,7 @@ export default function PlayerWaiverEntries() {
               </button>
             )}
             <Link href={`/tournaments/${id}/player-waiver`} target="_blank" className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><ExternalLink size={14} /> Open form</Link>
+            {grandTotal > 0 && <Link href={`/tournaments/${id}/player-waivers/social`} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Share2 size={14} /> Photos for social</Link>}
             {grandTotal > 0 && passOn && <Link href={`/tournaments/${id}/player-waivers/badges${team ? `?team=${encodeURIComponent(team)}` : ''}`} className="text-sm border border-slate-300 rounded-lg px-3 py-2 text-slate-600 hover:bg-slate-50 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Printer size={14} /> Print badges</Link>}
             {grandTotal > 0 && <button onClick={exportCsv} className="text-sm font-semibold bg-teal-600 hover:bg-teal-700 text-white rounded-lg px-3 py-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap"><Download size={14} /> Export{filtering ? ` (${total})` : ' CSV'}</button>}
           </div>
