@@ -11,6 +11,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
+import { normalizeReel } from '@/lib/normalizeReel'
 import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
@@ -688,7 +689,11 @@ async function uploadOne(f: File, setBusy: (s: string) => void): Promise<Media> 
       access: 'public', handleUploadUrl: '/api/social/upload-video',
       onUploadProgress: (p: { percentage: number }) => setBusy(`Uploading video… ${Math.round(p.percentage)}%`),
     })
-    return { url: blob.url, mediaType: 'video', thumbnailUrl, durationSec: info.durationSec, width: info.width, height: info.height }
+    // Re-mux to a progressive, Instagram-ingestible MP4 (MediaRecorder/phone files can be
+    // fragmented MP4, which Instagram rejects with 2207082). Falls back to the original URL.
+    setBusy('Finishing video…')
+    const vurl = await normalizeReel(blob.url)
+    return { url: vurl, mediaType: 'video', thumbnailUrl, durationSec: info.durationSec, width: info.width, height: info.height }
   }
   setBusy('Uploading photo…')
   const url = await uploadImage(f, f.name)

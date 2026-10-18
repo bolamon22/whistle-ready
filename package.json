@@ -10,6 +10,7 @@
     "postinstall": "prisma generate"
   },
   "dependencies": {
+    "ffmpeg-static": "^5.2.0",
     "@ai-sdk/anthropic": "^3.0.81",
     "@anthropic-ai/sdk": "^0.101.0",
     "@libsql/client": "^0.8.0",

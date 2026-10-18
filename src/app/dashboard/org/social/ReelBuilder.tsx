@@ -14,6 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import toast from 'react-hot-toast'
 import { upload as blobUpload } from '@vercel/blob/client'
+import { normalizeReel } from '@/lib/normalizeReel'
 import { X, Play, Pause, Upload, Film, Music, ArrowLeft, ArrowRight, Check } from 'lucide-react'
 import type { IdeaEvent } from '@/lib/socialIdeas'
 import { REEL_SONGS } from '@/lib/reelSongs'
@@ -278,7 +279,11 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
         access: 'public', handleUploadUrl: '/api/social/upload-video',
         onUploadProgress: (p: { percentage: number }) => setProgress(`Uploading Reel… ${Math.round(p.percentage)}%`),
       })
-      onDone({ url: up.url, mediaType: 'video', thumbnailUrl, durationSec: total, width: W, height: H })
+      // MediaRecorder can only emit a fragmented MP4, which Instagram rejects (2207082):
+      // re-mux server-side to a progressive MP4. Falls back to the original URL on failure.
+      setProgress('Finishing video…')
+      const vurl = await normalizeReel(up.url)
+      onDone({ url: vurl, mediaType: 'video', thumbnailUrl, durationSec: total, width: W, height: H })
       toast.success(`Reel ready · ${Math.round(total)}s`)
     } catch (e: any) {
       toast.error(String(e?.message || 'Upload failed'))
