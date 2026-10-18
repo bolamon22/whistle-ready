@@ -4,9 +4,17 @@ import { useEffect, useRef, useState } from 'react'
 import { X, Download, Film, RotateCcw, Volume2, Check } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
+import { FAVORITE_STYLES } from '@/lib/socialPosts'
+
+// Length (Bo, Oct 18 2026: "choose between 8, 15 seconds ... maybe even 30 if we really
+// feel like we have a good one"). Longer Reels don't stretch one graphic: they play the
+// chosen look, then more of the player's looks (Bo's favorites), each with its own intro,
+// dipping to black between them. 8 s = one look, 15 s = two, 30 s = four.
+const LENGTHS = [{ sec: 8, looks: 1 }, { sec: 15, looks: 2 }, { sec: 30, looks: 4 }] as const
+const lookKind = (s: string) => s.replace(/(-to)?-photo$/, '')
 
 // Turns one social post (lib/socialPosts, /pass/<token>/post/<style>.png) into an
-// 8-second vertical Instagram Reel with music, right in the browser (Bo, Oct 18 2026:
+// 8-, 15- or 30-second vertical Instagram Reel with music, right in the browser (Bo, Oct 18 2026:
 // "add some music ... animate them a little bit", then "make all of them").
 //
 // The post is drawn on a 1080×1920 canvas over a blurred copy of itself, with an
@@ -39,22 +47,22 @@ const loadImg = (url: string) => new Promise<HTMLImageElement | null>(res => {
   const i = new Image(); i.onload = () => res(i); i.onerror = () => res(null); i.src = url
 })
 
-function draw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, style: string, t: number, event: string, sub: string, days: number | null) {
+function draw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, style: string, t: number, event: string, sub: string, days: number | null, segDur = DUR) {
   ctx.save()
   ctx.clearRect(0, 0, W, H)
   ctx.fillStyle = '#0a0a0a'; ctx.fillRect(0, 0, W, H)
   // Background: the post itself, blurred and dark, slowly drifting.
   ctx.save()
   ctx.filter = 'blur(40px) brightness(0.42) saturate(1.2)'
-  const bs = 1.5 + 0.06 * t / DUR
-  ctx.drawImage(img, (W - W * bs) / 2, (H - 1350 * bs) / 2 - 40 * t / DUR, W * bs, 1350 * bs)
+  const bs = 1.5 + 0.06 * t / segDur
+  ctx.drawImage(img, (W - W * bs) / 2, (H - 1350 * bs) / 2 - 40 * t / segDur, W * bs, 1350 * bs)
   ctx.restore()
 
   const kind = style.replace(/(-to)?-photo$/, '')
   // Intro: scale / offset / flip for the post, per look.
   let sx = 1, sy = 1, dx = 0, dy = 0, rot = 0, alpha = 1, show = true
   let flash = 0
-  const push = 1 + 0.05 * clamp((t - 1) / (DUR - 1))
+  const push = 1 + 0.05 * clamp((t - 1) / (segDur - 1))
   if (kind === 'committed' || kind === 'main-event') {
     const p = clamp(t / 0.45); const s = 1.7 - 0.7 * easeOut(p)
     sx = sy = s; alpha = clamp(p * 2)
@@ -143,7 +151,7 @@ function draw(ctx: CanvasRenderingContext2D, img: HTMLImageElement, style: strin
   ctx.fillText('SEE YOU ON THE FIELD', W / 2, 1765 + (1 - bot) * 50)
   ctx.restore()
   // Ease out to black at the very end so the loop isn't jarring.
-  if (t > DUR - 0.35) { ctx.fillStyle = `rgba(0,0,0,${clamp((t - (DUR - 0.35)) / 0.35)})`; ctx.fillRect(0, 0, W, H) }
+  if (t > segDur - 0.35) { ctx.fillStyle = `rgba(0,0,0,${clamp((t - (segDur - 0.35)) / 0.35)})`; ctx.fillRect(0, 0, W, H) }
   ctx.restore()
 }
 
@@ -167,13 +175,29 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
 }
 
 export default function ReelMaker({ src, style, label, event, sub, days = null, fileName, onClose, token, initialSong, onUse }: Props) {
-  const isCustom = !!token && style in CUSTOM_REELS
-  const dur = isCustom ? CUSTOM_REELS[style] : DUR
+  const isCustomLook = (s: string) => !!token && s in CUSTOM_REELS
+  const [len, setLen] = useState<number>(8)
+  // The looks this Reel plays, in order. Longer lengths need the pass token to draw the others.
+  const want = (token && LENGTHS.find(l => l.sec === len)?.looks) || 1
+  const seq = [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, want)
+  const segDur = seq.length === 1 ? (isCustomLook(style) ? CUSTOM_REELS[style] : DUR) : len / seq.length
+  const dur = seq.length === 1 ? segDur : len
   const custom = useRef<{ data: ReelData; imgs: ReelImages } | null>(null)
+  const imgsRef = useRef<HTMLImageElement[]>([])
   const paint = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => {
+    const imgs = imgsRef.current.length ? imgsRef.current : [img]
+    const n = Math.min(seq.length, imgs.length)
+    const i = Math.max(0, Math.min(n - 1, Math.floor(t / segDur)))
+    const tl = t - i * segDur, look = seq[i], im = imgs[i] || img
     const c = custom.current
-    if (c) (style === 'rookie' ? drawRookie : drawCountdown)(ctx, t, c.data, { ...c.imgs, post: img })
-    else draw(ctx, img, style, t, event, sub, days)
+    if (c && isCustomLook(look)) (look === 'rookie' ? drawRookie : drawCountdown)(ctx, tl, c.data, { ...c.imgs, post: im })
+    else draw(ctx, im, look, tl, event, sub, days, segDur)
+    if (n > 1) { // a quick dip to black between looks
+      let a = 0
+      if (i < n - 1 && tl > segDur - 0.3) a = clamp((tl - (segDur - 0.3)) / 0.3)
+      if (i > 0 && tl < 0.25) a = Math.max(a, 1 - clamp(tl / 0.25))
+      if (a > 0) { ctx.fillStyle = `rgba(0,0,0,${a})`; ctx.fillRect(0, 0, W, H) }
+    }
   }
   const canvas = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
@@ -197,11 +221,16 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     const link = document.createElement('link')
     link.rel = 'stylesheet'; link.href = 'https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600&display=swap'
     document.head.appendChild(link)
+    setState('loading'); setOut(null); recorded.current = null; setShowVideo(false)
+    cancelAnimationFrame(raf.current)
+    // The other looks of a longer Reel; any that fail to load are simply left out.
+    const extra = Promise.all(seq.slice(1).map(s => loadImg(`/pass/${token}/post/${s}.png${days != null && days >= 0 ? `?days=${days}` : ''}`)))
     const img = new Image()
     img.onload = async () => {
       try { await Promise.all([document.fonts.load('68px Anton'), document.fonts.load('600 34px "Barlow Condensed"')]) } catch {}
       if (!alive) return
-      if (isCustom) {
+      imgsRef.current = [img, ...(await extra).filter((x): x is HTMLImageElement => !!x)]
+      if (seq.some(isCustomLook) && !custom.current) {
         try {
           const data = await fetch(`/pass/${token}/reel${days != null ? `?days=${days}` : ''}`).then(r => r.ok ? r.json() : null)
           if (data) {
@@ -217,7 +246,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
     img.src = src
     return () => { alive = false; cancelAnimationFrame(raf.current); link.remove() }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [src])
+  }, [src, len])
 
   function loop() {
     cancelAnimationFrame(raf.current)
@@ -246,7 +275,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       audioCtx = new AudioContext()
       if (!songUrl) throw new Error('no music')
       const buf = await fetch(songUrl).then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
-      const node = audioCtx.createBufferSource(); node.buffer = buf
+      const node = audioCtx.createBufferSource(); node.buffer = buf; node.loop = buf.duration < dur + 0.5
       const gain = audioCtx.createGain()
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime + dur - 0.8)
@@ -280,7 +309,7 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
       audioCtx = new AudioContext()
       if (!songUrl) throw new Error('no music')
       const buf = await fetch(songUrl).then(r => r.arrayBuffer()).then(b => audioCtx!.decodeAudioData(b))
-      const srcNode = audioCtx.createBufferSource(); srcNode.buffer = buf
+      const srcNode = audioCtx.createBufferSource(); srcNode.buffer = buf; srcNode.loop = buf.duration < dur + 0.5  // some tracks run 25–29 s
       const gain = audioCtx.createGain()
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime)
       gain.gain.setValueAtTime(0.9, audioCtx.currentTime + dur - 0.8)
@@ -357,6 +386,14 @@ export default function ReelMaker({ src, style, label, event, sub, days = null, 
         {state === 'loading' && <p className="text-sm text-slate-500 text-center mt-3">Building the post…</p>}
         {err && <p className="text-sm text-rose-700 text-center mt-3">{err}</p>}
         <div className="mt-4 flex flex-col gap-2">
+          {token && state !== 'recording' && (
+            <div className="flex items-center gap-2 text-sm text-slate-700">
+              <span className="font-semibold shrink-0">Length</span>
+              <div className="flex-1 grid grid-cols-3 gap-1">
+                {LENGTHS.map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
+              </div>
+            </div>
+          )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (
             <label className="flex items-center gap-2 text-sm text-slate-700">
               <span className="font-semibold shrink-0">Song</span>

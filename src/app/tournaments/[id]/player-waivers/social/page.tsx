@@ -277,7 +277,7 @@ export default function SocialPhotos() {
                   )
                 })}
               </div>
-              <p className="text-xs text-slate-500 mt-3">Tick the posts to put in the email, then Ask {p.playerName.split(' ')[0]}&apos;s family. You&apos;ll still choose Send now or Schedule, or send yourself a test, before anything goes out. Click a post to open it full size, or Reel to turn it into an 8-second video with music. Save is for planning only: post it only once the family says Yes.</p>
+              <p className="text-xs text-slate-500 mt-3">Tick the posts to put in the email, then Ask {p.playerName.split(' ')[0]}&apos;s family. You&apos;ll still choose Send now or Schedule, or send yourself a test, before anything goes out. Click a post to open it full size, or Reel to turn it into an 8-, 15- or 30-second video with music. Save is for planning only: post it only once the family says Yes.</p>
             </div>
           </div>
         )

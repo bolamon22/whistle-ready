@@ -101,7 +101,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
               </div>
               <div className="grid grid-cols-3 gap-1 px-2.5 pb-2.5 mt-auto">
                 <button onClick={() => onPost(p, look)} disabled={!canPost || !!busy} title="Feed post + Story, filled in" className="rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-bold py-1.5 inline-flex items-center justify-center gap-1 disabled:opacity-40"><ImageIcon size={12} />Post</button>
-                <button onClick={() => onReel(p, look)} disabled={!canPost || !!busy} title="8-second Reel with music" className="rounded-lg border border-slate-300 bg-white hover:border-teal-400 text-[11px] font-bold py-1.5 inline-flex items-center justify-center gap-1 disabled:opacity-40"><Film size={12} />Reel</button>
+                <button onClick={() => onReel(p, look)} disabled={!canPost || !!busy} title="Reel: 8, 15 or 30 seconds" className="rounded-lg border border-slate-300 bg-white hover:border-teal-400 text-[11px] font-bold py-1.5 inline-flex items-center justify-center gap-1 disabled:opacity-40"><Film size={12} />Reel</button>
                 <button onClick={() => onStory(p, look)} disabled={!canPost || !!busy} title="Story only (9:16)" className="rounded-lg border border-slate-300 bg-white hover:border-teal-400 text-[11px] font-bold py-1.5 inline-flex items-center justify-center gap-1 disabled:opacity-40"><Smartphone size={12} />Story</button>
               </div>
             </div>
