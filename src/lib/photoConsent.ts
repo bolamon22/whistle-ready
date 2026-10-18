@@ -18,10 +18,12 @@ import { renderEmail, button, esc, absUrl } from '@/lib/emailLayout'
 //   photoOkAt      when they answered
 //   photoOkName    the name the parent typed when answering
 //   photoIg        Instagram handle they want tagged / invited as a Collab ('' = none)
+//   photoClubIg    the club's Instagram handle, to tag / invite too ('' = none)
+//   photoClubFb    the club's Facebook page name (facebook.com/<this>) ('' = none)
 // Neither the parent edit whitelist (lib/parentWaiverFields) nor the staff one
 // (EDITABLE in the player-waivers route) includes these, so only this flow sets them.
 
-export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName', 'photoIg'] as const
+export const PHOTO_FIELDS = ['photoAskAt', 'photoAskBy', 'photoOk', 'photoOkAt', 'photoOkName', 'photoIg', 'photoClubIg', 'photoClubFb'] as const
 
 // ── the link ──────────────────────────────────────────────────────────────────
 // An HMAC token naming the waiver and its org, like the parent-account token in
@@ -82,6 +84,15 @@ export function instagramHandle(v: unknown): string {
   return /^[A-Za-z0-9._]{1,30}$/.test(h) ? `@${h}` : ''
 }
 
+/** A Facebook page name from a page URL, "@name" or the bare name, or ''. */
+export function facebookPage(v: unknown): string {
+  const s = String(v || '').trim()
+  if (!s) return ''
+  const m = /facebook\.com\/(?:pg\/)?([A-Za-z0-9.\-]+)/i.exec(s)
+  const n = (m ? m[1] : s).replace(/^@/, '')
+  return /^[A-Za-z0-9.\-]{2,80}$/.test(n) && !/^(profile\.php|people|groups|pages)$/i.test(n) ? n : ''
+}
+
 // ── the letter ────────────────────────────────────────────────────────────────
 // Bo, Oct 18 2026: "letting them know that we really like their picture ... we want
 // to know if we can post their player card on Instagram leading up to the
@@ -116,7 +127,7 @@ export function photoAskEmail(a: {
     ${photo ? `<p style="margin:18px 0"><img src="${photo}" width="220" alt="${P}'s player card" style="display:block;width:220px;max-width:100%;height:auto;border-radius:12px;border:1px solid #e2e8f0"></p>` : ''}
     <p style="margin:0 0 6px">Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds:</p>
     ${button(a.link, 'Yes or no: answer here')}
-    <p style="margin:16px 0 14px">Saying yes? Add your Instagram handle (or your player's) on that page. We'll tag you and send it as a Collab post so it shows up on your page too. Then please like, share and repost it, and help us get everyone hyped for game day!</p>
+    <p style="margin:16px 0 14px">Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!</p>
     <p style="margin:14px 0 0;font-size:13px;color:#64748b">What we'd post: ${P}'s player card, with first name and team, on our Instagram and Facebook before and during ${esc(a.tournamentName)}${esc(when)}. Rather not? Choose No on that page or just ignore this email, and it won't be posted. Change your mind later? Use the same link, or reply to this email.</p>
     <p style="margin:18px 0 0">See you on the field!<br>The ${esc(a.orgName)} team</p>
   `
@@ -136,7 +147,7 @@ export function photoAskEmail(a: {
     '',
     `Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: ${a.link}`,
     '',
-    "Saying yes? Add your Instagram handle (or your player's) on that page. We'll tag you and send it as a Collab post so it shows up on your page too. Then please like, share and repost it, and help us get everyone hyped for game day!",
+    "Saying yes? Add your Instagram handle (or your player's) on that page, plus your club's Instagram and Facebook if you know them. We'll tag you and your club and send it as a Collab post so it shows up on your pages too. Then please like, share and repost it, and help us get everyone hyped for game day!",
     '',
     `What we'd post: ${player}'s player card, with first name and team, on our Instagram and Facebook before and during ${a.tournamentName}${when}. Rather not? Choose No on that page or just ignore this email, and it won't be posted.`,
     '',

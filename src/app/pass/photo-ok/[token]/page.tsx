@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 // Lives under /pass so it inherits that path's public passthrough on every
 // domain; the static "photo-ok" segment wins over /pass/[token].
 
-type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; permission: string }
+type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; clubInstagram: string; clubFacebook: string; club: string; permission: string }
 
 export default function PhotoPermissionPage() {
   const { token } = useParams() as { token: string }
@@ -18,6 +18,8 @@ export default function PhotoPermissionPage() {
   const [name, setName] = useState('')
   const [guardian, setGuardian] = useState(false)
   const [ig, setIg] = useState('')
+  const [clubIg, setClubIg] = useState('')
+  const [clubFb, setClubFb] = useState('')
   const [saving, setSaving] = useState<'' | 'yes' | 'no'>('')
   const [formError, setFormError] = useState('')
   const [changing, setChanging] = useState(false)
@@ -28,6 +30,8 @@ export default function PhotoPermissionPage() {
       if (!r.ok) { setError(j.error || 'This link is not valid.'); return }
       setInfo(j)
       if (j.instagram) setIg(String(j.instagram))
+      if (j.clubInstagram) setClubIg(String(j.clubInstagram))
+      if (j.clubFacebook) setClubFb(String(j.clubFacebook))
     }).catch(() => setError('Could not load this page. Check your connection and try again.'))
   }, [token])
 
@@ -37,7 +41,7 @@ export default function PhotoPermissionPage() {
     if (a === 'yes' && !guardian) { setFormError("Check the box to confirm you're the player's parent or guardian."); return }
     setSaving(a)
     try {
-      const r = await fetch('/api/photo-ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, answer: a, name: name.trim(), guardian, instagram: ig.trim() }) })
+      const r = await fetch('/api/photo-ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, answer: a, name: name.trim(), guardian, instagram: ig.trim(), clubInstagram: clubIg.trim(), clubFacebook: clubFb.trim() }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setFormError(j.error || 'Could not save your answer.'); return }
       setInfo(i => i ? { ...i, answer: a, answeredAt: new Date().toISOString(), instagram: a === 'yes' ? String(j.instagram || '') : '' } : i)
@@ -99,6 +103,19 @@ export default function PhotoPermissionPage() {
                     className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
                   <p className="text-xs text-slate-400 mt-1">Yours or your player's. We'll tag it and send a Collab invite so the post shows on your page too.</p>
                 </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label htmlFor="po-club-ig" className="block text-sm font-medium text-slate-200 mb-1">{info.club || 'Club'} Instagram <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input id="po-club-ig" value={clubIg} onChange={e => setClubIg(e.target.value)} placeholder="@clubname" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                      className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                  </div>
+                  <div>
+                    <label htmlFor="po-club-fb" className="block text-sm font-medium text-slate-200 mb-1">{info.club || 'Club'} Facebook <span className="text-slate-400 font-normal">(optional)</span></label>
+                    <input id="po-club-fb" value={clubFb} onChange={e => setClubFb(e.target.value)} placeholder="facebook.com/clubname" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                      className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                  </div>
+                </div>
+                <p className="text-xs text-slate-400 -mt-2">We'll tag the club too and invite them to collaborate, if they want to.</p>
                 <label htmlFor="po-guardian" className="flex items-start gap-3 text-sm text-slate-200">
                   <input id="po-guardian" type="checkbox" checked={guardian} onChange={e => setGuardian(e.target.checked)} className="mt-0.5 h-5 w-5 accent-teal-500" />
                   <span>I'm {info.player || 'the player'}'s parent or legal guardian (or I'm the player and 18 or older).</span>

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
 import { orgById } from '@/lib/org'
 import { playerPassEnabled } from '@/lib/playerPass'
-import { readPhotoToken, firstName, photoPermissionText, instagramHandle } from '@/lib/photoConsent'
+import { readPhotoToken, firstName, photoPermissionText, instagramHandle, facebookPage } from '@/lib/photoConsent'
 import { prisma } from '@/lib/db'
 
 // Public: a parent answering "may we share this photo on social media?"
@@ -10,7 +10,7 @@ import { prisma } from '@/lib/db'
 // authorization, and it names exactly one waiver.
 //   GET  ?t=<token>  → what the page shows: first name, team, event, the photo, the current answer
 //   POST { t, answer: 'yes'|'no', name, guardian: true, instagram? } → records the answer
-//        (instagram: the handle to tag / invite as a Collab; kept only with a yes)
+//        clubInstagram?, clubFacebook? }  (handles to tag / invite as Collabs; kept only with a yes)
 // Only the player's first name and team go back to the browser: the link can be
 // forwarded, so it must not hand out the waiver's other details.
 
@@ -43,6 +43,9 @@ export async function GET(req: NextRequest) {
     answer: String(d.photoOk || ''),
     answeredAt: String(d.photoOkAt || ''),
     instagram: String(d.photoIg || ''),
+    clubInstagram: String(d.photoClubIg || ''),
+    clubFacebook: String(d.photoClubFb || ''),
+    club: String(d.clubName || ''),
     permission: photoPermissionText(orgName, tournamentName),
   })
 }
@@ -58,12 +61,17 @@ export async function POST(req: NextRequest) {
     if (name.length < 2) return NextResponse.json({ error: 'Type your name to give permission.' }, { status: 400 })
     if (body.guardian !== true) return NextResponse.json({ error: "Please confirm you're the player's parent or guardian." }, { status: 400 })
     if (String(body.instagram || '').trim() && !instagramHandle(body.instagram)) return NextResponse.json({ error: "That doesn't look like an Instagram handle. Try something like @yourname, or leave it blank." }, { status: 400 })
+    if (String(body.clubInstagram || '').trim() && !instagramHandle(body.clubInstagram)) return NextResponse.json({ error: "The club's Instagram doesn't look like a handle. Try something like @clubname, or leave it blank." }, { status: 400 })
   }
   await updateSubmissionData(hit.t.o, hit.s.id, {
     photoOk: answer,
     photoOkAt: new Date().toISOString(),
     photoOkName: name,
     photoIg: answer === 'yes' ? instagramHandle(body.instagram) : '',
+    photoClubIg: answer === 'yes' ? instagramHandle(body.clubInstagram) : '',
+    // A page name or link becomes the page name; anything else (a club name typed
+    // with spaces) is kept as typed so staff can still look it up.
+    photoClubFb: answer === 'yes' ? (facebookPage(body.clubFacebook) || String(body.clubFacebook || '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 80)) : '',
   }, `parent (photo permission): ${name || 'no name given'}`)
   return NextResponse.json({ ok: true, answer, instagram: answer === 'yes' ? instagramHandle(body.instagram) : '' })
 }

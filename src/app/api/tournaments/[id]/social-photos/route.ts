@@ -57,6 +57,8 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           okAt: String(d.photoOkAt || ''),
           okName: String(d.photoOkName || ''),
           instagram: String(d.photoIg || ''),
+          clubInstagram: String(d.photoClubIg || ''),
+          clubFacebook: String(d.photoClubFb || ''),
         }
       })
     return NextResponse.json({ players, emailReady: emailEnabled() })
