@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
+import { ArrowLeft, Send, Check, Download, Mail, Eye, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { POST_STYLES, DEFAULT_STYLES, type PostStyle } from '@/lib/socialPosts'
 
 // Photos for social: every player at this event who added a photo to their card.
@@ -46,6 +46,7 @@ export default function SocialPhotos() {
   const [later, setLater] = useState(true)              // Schedule (default: it's usually late at night) vs Send now
   const [sendAt, setSendAt] = useState(tomorrowMorning)
   const [tick, setTick] = useState(0)
+  const [preview, setPreview] = useState<string | null>(null)   // player id whose posts are open full size
   const [styles, setStyles] = useState<Set<PostStyle>>(() => new Set(DEFAULT_STYLES))   // example posts the email shows
   const styleList = POST_STYLES.filter(s => styles.has(s.id)).map(s => s.id)
   const toggleStyle = (s: PostStyle) => setStyles(cur => { const n = new Set(cur); n.has(s) ? n.delete(s) : n.add(s); return n })
@@ -161,6 +162,7 @@ export default function SocialPhotos() {
                   )}
                 </button>
                 <div className="p-3 flex-1 flex flex-col gap-1.5 min-w-0">
+                  {p.cardUrl && <button type="button" onClick={() => setPreview(p.id)} className="self-start inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900"><Eye size={13} /> Preview posts</button>}
                   <div className="font-semibold text-slate-900 text-sm truncate">{p.playerName}{p.jersey ? ` #${p.jersey}` : ''}</div>
                   <div className="text-xs text-slate-500 truncate">{p.teamName || p.clubName}</div>
                   <span className={`self-start text-[11px] font-semibold rounded-full px-2 py-0.5 ${CHIP[st].cls}`}>
@@ -192,6 +194,59 @@ export default function SocialPhotos() {
           })}
         </div>
       </div>
+
+      {preview && (() => {
+        // Full-size look at one player's posts, like the email shows them (Bo: "let me
+        // preview on the page by just clicking"). Arrows step through the players in view.
+        const list = shown.filter(x => x.cardUrl)
+        const i = list.findIndex(x => x.id === preview)
+        const p = list[i] || players.find(x => x.id === preview)
+        if (!p) return null
+        const go = (n: number) => { const q = list[(i + n + list.length) % list.length]; if (q) setPreview(q.id) }
+        const on = picked.has(p.id)
+        return (
+          <div className="fixed inset-0 z-30 bg-slate-900/70 flex items-center justify-center p-3 sm:p-6" role="dialog" aria-modal="true" aria-label={`Posts for ${p.playerName}`} onClick={() => setPreview(null)}>
+            <div className="bg-white rounded-2xl w-full max-w-5xl max-h-[92vh] overflow-y-auto p-4 sm:p-5" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-3">
+                {list.length > 1 && <button type="button" onClick={() => go(-1)} aria-label="Previous player" className="h-9 w-9 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50"><ChevronLeft size={18} /></button>}
+                <div className="min-w-0">
+                  <h2 className="text-lg font-bold text-slate-900 truncate">{p.playerName}{p.jersey ? ` #${p.jersey}` : ''}</h2>
+                  <p className="text-xs text-slate-500 truncate">{[p.teamName || p.clubName, CHIP[state(p)].label].filter(Boolean).join(' · ')}{list.length > 1 && i >= 0 ? ` · ${i + 1} of ${list.length}` : ''}</p>
+                </div>
+                {list.length > 1 && <button type="button" onClick={() => go(1)} aria-label="Next player" className="h-9 w-9 rounded-lg border border-slate-300 flex items-center justify-center text-slate-600 hover:bg-slate-50"><ChevronRight size={18} /></button>}
+                <div className="ml-auto flex items-center gap-2">
+                  {askable(p) && <button type="button" onClick={() => toggle(p)} className={`hidden sm:inline-flex text-sm font-semibold rounded-lg px-3 py-2 items-center gap-1.5 ${on ? 'bg-slate-900 text-white' : 'border border-slate-300 text-slate-700'}`}><Check size={15} /> {on ? 'Picked' : 'Add to picks'}</button>}
+                  {askable(p) && emailReady && (
+                    // Straight to the Ask dialog for just this family, with the posts ticked here.
+                    <button type="button" disabled={!styleList.length} onClick={() => { setPicked(new Set([p.id])); setPreview(null); setSendAt(tomorrowMorning()); setConfirm(true) }}
+                      className="text-sm font-semibold rounded-lg px-3 py-2 inline-flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-40"><Send size={15} /> Ask {p.playerName.split(' ')[0]}&apos;s family</button>
+                  )}
+                  <button type="button" onClick={() => setPreview(null)} aria-label="Close" className="h-9 w-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100"><X size={20} /></button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {POST_STYLES.map(ps => {
+                  const src = p.cardUrl.replace(/\/card\.png$/, `/post/${ps.id}.png`)
+                  const inEmail = styles.has(ps.id)
+                  return (
+                    <figure key={ps.id} className="m-0">
+                      <a href={src} target="_blank" rel="noreferrer"><img src={`${src}?w=540`} alt={`${ps.label} post for ${p.playerName}`} className={`w-full aspect-[4/5] object-cover rounded-xl bg-slate-100 ring-offset-2 ${inEmail ? 'ring-2 ring-teal-600' : ''}`} loading="lazy" /></a>
+                      <figcaption className="flex items-center justify-between gap-2 text-xs mt-1.5">
+                        <label className="inline-flex items-center gap-1.5 font-semibold text-slate-700 cursor-pointer min-w-0">
+                          <input type="checkbox" checked={inEmail} onChange={() => toggleStyle(ps.id)} className="h-4 w-4 accent-teal-600" />
+                          <span className="truncate">{ps.label}</span>
+                        </label>
+                        <a href={`${src}?dl=1`} className="inline-flex items-center gap-1 text-teal-700"><Download size={12} /> Save</a>
+                      </figcaption>
+                    </figure>
+                  )
+                })}
+              </div>
+              <p className="text-xs text-slate-500 mt-3">Tick the posts to put in the email, then Ask {p.playerName.split(' ')[0]}&apos;s family. You&apos;ll still choose Send now or Schedule, or send yourself a test, before anything goes out. Click a post to open it full size. Save is for planning only: post it only once the family says Yes.</p>
+            </div>
+          </div>
+        )
+      })()}
 
       {confirm && (
         <div className="fixed inset-0 z-20 bg-slate-900/50 flex items-end sm:items-center justify-center p-4" role="dialog" aria-modal="true">
