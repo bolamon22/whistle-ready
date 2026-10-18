@@ -16,6 +16,8 @@ interface OrgRow {
   tournamentCount: number
   workerCount: number
   userCount: number
+  /** lib/orgArchive: set when the organization is archived. */
+  archivedAt?: string | null
 }
 
 interface RecentTournament {
@@ -179,11 +181,11 @@ export default function PlatformDashboard() {
                 <Link href="/admin/orgs" className="text-xs text-sky-600 hover:underline font-medium">Manage all →</Link>
               </div>
 
-              {(stats.orgs ?? []).length === 0 ? (
+              {(stats.orgs ?? []).filter(o => !o.archivedAt).length === 0 ? (
                 <div className="px-6 py-10 text-center text-slate-400 text-sm">No organizations yet. <Link href="/admin/orgs" className="text-sky-600 hover:underline">Create one →</Link></div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {(stats.orgs ?? []).map(org => (
+                  {(stats.orgs ?? []).filter(o => !o.archivedAt).map(org => (
                     <div key={org.id} className="flex items-center gap-4 px-6 py-4 hover:bg-slate-50 transition-colors group">
                       {/* Logo */}
                       <div className="flex-shrink-0">
@@ -251,6 +253,11 @@ export default function PlatformDashboard() {
                   ))}
                 </div>
               )}
+              {(() => { const n = (stats.orgs ?? []).filter(o => o.archivedAt).length; return n ? (
+                <div className="px-6 py-3 border-t border-slate-100 text-xs text-slate-500">
+                  <Link href="/admin/orgs?show=archived" className="font-medium text-sky-600 hover:underline">{n} archived organization{n === 1 ? '' : 's'}</Link>
+                </div>
+              ) : null })()}
             </div>
 
             {/* Recent Tournaments */}

@@ -13,6 +13,15 @@ interface Org {
   achBankName: string; achRoutingNumber: string; achAccountNumber: string
   paypalEmail: string; zelleHandle: string; checkPayableTo: string; checkAddress: string
   subscriptionTier: string; subscriptionStatus: string
+  /** lib/orgArchive */
+  archivedAt?: string | null; archivedBy?: string | null
+}
+
+/** What deleting it would take away (lib/orgDelete). */
+interface Impact {
+  org: { id: string; name: string; slug: string }
+  events: number; games: number; registrations: number; staffPool: number; logins: number; forms: number
+  payments: number; elsewhere: number; blocked: string | null
 }
 
 const STATUSES = ['active', 'inactive', 'suspended']
@@ -37,6 +46,11 @@ export default function OrgEditPage() {
   // Plan and feature switches (lib/orgPlans), saved as soon as they change.
   const [plan, setPlan] = useState<(OrgPlan & { by?: string; at?: string }) | null>(null)
   const [planBusy, setPlanBusy] = useState(false)
+  // Archive and delete (Bo, Oct 18 2026: "I need to be able to delete orgs or archive
+  // ones that actually have a history"). lib/orgArchive, lib/orgDelete.
+  const [closing, setClosing] = useState(false)
+  const [impact, setImpact] = useState<Impact | null>(null)
+  const [confirmName, setConfirmName] = useState('')
   // Roles by this organization's names for them: the director is its plan's owner
   // (Tournament Director, or Head Assigner on the Assigner plan).
   const roleName = (r: string) => r === 'director' ? PLANS[plan?.plan ?? 'tournament'].owner
@@ -89,6 +103,37 @@ export default function OrgEditPage() {
     try { const res = await fetch(`/api/admin/orgs/${id}/users?userId=${encodeURIComponent(userId)}`, { method: 'DELETE' }); if (res.ok) loadTeam(); else toast.error('Failed') } catch { toast.error('Failed') } finally { setTeamBusy(false) }
   }
 
+  async function setArchivedTo(archived: boolean) {
+    if (archived && !window.confirm(`Archive ${form.name}? Its people can't open it and its public pages go offline until you restore it.`)) return
+    setClosing(true)
+    try {
+      const res = await fetch(`/api/admin/orgs/${id}/archive`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ archived }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'That didn’t save. Please try again.'); return }
+      setForm(f => ({ ...f, archivedAt: d.archivedAt ?? null, archivedBy: archived ? String(session?.user?.name || session?.user?.email || '') : null }))
+      toast.success(archived ? 'Archived' : 'Restored')
+    } catch { toast.error('That didn’t save. Please try again.') } finally { setClosing(false) }
+  }
+  async function loadImpact() {
+    setClosing(true)
+    try {
+      const res = await fetch(`/api/admin/orgs/${id}/delete`)
+      const d = await res.json().catch(() => null)
+      if (res.ok && d?.org) setImpact(d); else toast.error(d?.error || 'Couldn’t check what it has. Please try again.')
+    } catch { toast.error('Couldn’t check what it has. Please try again.') } finally { setClosing(false) }
+  }
+  async function deleteIt(e: React.FormEvent) {
+    e.preventDefault()
+    setClosing(true)
+    try {
+      const res = await fetch(`/api/admin/orgs/${id}/delete`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ confirm: confirmName }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { toast.error(d.error || 'It wasn’t deleted. Please try again.'); return }
+      toast.success(`${form.name} deleted`)
+      router.push('/admin/orgs')
+    } catch { toast.error('It wasn’t deleted. Please try again.') } finally { setClosing(false) }
+  }
+
   function set(field: keyof Org, value: string) {
     setForm(prev => ({ ...prev, [field]: value }))
     setDirty(true)
@@ -139,6 +184,13 @@ export default function OrgEditPage() {
             {saving ? 'Saving…' : dirty ? '💾 Save Changes' : '✓ Saved'}
           </button>
         </div>
+
+        {form.archivedAt && (
+          <div role="status" className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+            <span><b>Archived</b> {new Date(form.archivedAt).toLocaleDateString()}{form.archivedBy ? ` by ${form.archivedBy}` : ''}. Its people can’t open it, and its public site and event pages are offline.</span>
+            <button type="button" onClick={() => setArchivedTo(false)} disabled={closing} className="rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 border border-amber-300 hover:bg-amber-100 disabled:opacity-50">Restore</button>
+          </div>
+        )}
 
         <div className="space-y-6">
           {/* Branding */}
@@ -320,6 +372,64 @@ export default function OrgEditPage() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* Close or delete (lib/orgArchive, lib/orgDelete) */}
+          <section className="bg-white border border-gray-200 rounded-xl p-6 shadow-sm" aria-labelledby="close-h">
+            <h2 id="close-h" className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Close or delete</h2>
+            {form.slug === 'sunshine-events-group' ? (
+              <p className="text-sm text-slate-500">Sunshine Events Group can’t be archived or deleted.</p>
+            ) : (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="max-w-lg">
+                    <p className="text-sm font-semibold text-slate-800">{form.archivedAt ? 'Archived' : 'Archive'}</p>
+                    <p className="mt-0.5 text-xs text-slate-500">For an organization with history. Everything is kept, but its people can’t open it, its public site and event pages go offline, and scheduled emails and posts that come due don’t go out. Restore opens it again.</p>
+                  </div>
+                  <button type="button" onClick={() => setArchivedTo(!form.archivedAt)} disabled={closing}
+                    className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">{form.archivedAt ? 'Restore' : 'Archive'}</button>
+                </div>
+                <div className="border-t border-slate-100 pt-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="max-w-lg">
+                      <p className="text-sm font-semibold text-red-700">Delete</p>
+                      <p className="mt-0.5 text-xs text-slate-500">For test organizations. Deletes its events and everything in them, its Staff Pool and its settings. Its logins stay, without this organization. This can’t be undone.</p>
+                    </div>
+                    {!impact && <button type="button" onClick={loadImpact} disabled={closing}
+                      className="rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50">Delete…</button>}
+                  </div>
+                  {impact && (
+                    <div className="mt-3 rounded-xl border border-red-200 bg-red-50 p-4">
+                      <p className="text-sm font-semibold text-red-900">Deleting {impact.org.name} takes away:</p>
+                      <ul className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1 text-sm text-red-900 sm:grid-cols-2">
+                        <li>{impact.events} event{impact.events === 1 ? '' : 's'} and {impact.games} game{impact.games === 1 ? '' : 's'}</li>
+                        <li>{impact.registrations} team registration{impact.registrations === 1 ? '' : 's'}</li>
+                        <li>{impact.staffPool} Staff Pool {impact.staffPool === 1 ? 'person' : 'people'}</li>
+                        <li>{impact.forms} form submission{impact.forms === 1 ? '' : 's'} (waivers, applications)</li>
+                        <li>{impact.logins} login{impact.logins === 1 ? '' : 's'} lose{impact.logins === 1 ? 's' : ''} it (the login{impact.logins === 1 ? '' : 's'} stay)</li>
+                        <li>{impact.payments} payment{impact.payments === 1 ? '' : 's'} on record</li>
+                      </ul>
+                      {impact.blocked ? (
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-red-800">{impact.blocked}</p>
+                          <button type="button" onClick={() => setImpact(null)} className="text-sm text-slate-500 hover:text-slate-800">Close</button>
+                        </div>
+                      ) : (
+                        <form onSubmit={deleteIt} className="mt-3 flex flex-wrap items-end gap-2">
+                          <label className="min-w-[220px] flex-1">
+                            <span className="mb-1 block text-xs font-medium text-red-900">Type <b>{impact.org.name}</b> to delete it</span>
+                            <input value={confirmName} onChange={e => setConfirmName(e.target.value)} autoComplete="off" className={inp} aria-label="Organization name" />
+                          </label>
+                          <button type="submit" disabled={closing || confirmName.trim().replace(/\s+/g, ' ').toLowerCase() !== impact.org.name.trim().replace(/\s+/g, ' ').toLowerCase()}
+                            className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-40">{closing ? 'Deleting…' : 'Delete for good'}</button>
+                          <button type="button" onClick={() => { setImpact(null); setConfirmName('') }} className="px-2 py-2 text-sm text-slate-500 hover:text-slate-800">Cancel</button>
+                        </form>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </section>

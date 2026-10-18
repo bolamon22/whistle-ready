@@ -5,6 +5,7 @@ import { createClient } from '@libsql/client'
 import { addToOrg } from '@/lib/orgMembers'
 import { orgPlans, writeOrgPlan } from '@/lib/orgPlanStore'
 import { isPlanKey, planDefaults, planSummary } from '@/lib/orgPlans'
+import { ensureArchiveCols } from '@/lib/orgArchive'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -16,8 +17,9 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
   const client = db()
+  await ensureArchiveCols()   // archivedAt: lib/orgArchive
   const res = await client.execute(
-    'SELECT id, name, slug, contactEmail, subscriptionTier, subscriptionStatus, createdAt FROM "Organization" ORDER BY createdAt DESC'
+    'SELECT id, name, slug, contactEmail, subscriptionTier, subscriptionStatus, createdAt, archivedAt FROM "Organization" ORDER BY createdAt DESC'
   )
   // Each organization's plan (lib/orgPlans), for the list.
   const plans = await orgPlans(res.rows.map(r => String(r.id)))

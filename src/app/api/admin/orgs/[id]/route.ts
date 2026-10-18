@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
+import { ensureArchiveCols } from '@/lib/orgArchive'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -15,6 +16,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
   const session = await getServerSession(authOptions)
   if (!adminOnly(session)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  await ensureArchiveCols()   // archivedAt / archivedBy on the answer (lib/orgArchive)
   const res = await db().execute({ sql: 'SELECT * FROM "Organization" WHERE id = ?', args: [params.id] })
   if (!res.rows.length) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(res.rows[0])

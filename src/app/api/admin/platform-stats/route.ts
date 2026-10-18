@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { createClient } from '@libsql/client'
+import { ensureArchiveCols } from '@/lib/orgArchive'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -12,11 +13,12 @@ export async function GET() {
   if ((session?.user as any)?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const client = db()
+  await ensureArchiveCols()   // archivedAt: lib/orgArchive
 
   try {
     // Simple separate queries — avoids complex JOIN/GROUP BY issues in libSQL
     const [orgsRes, tournamentsRes, workersRes, usersRes, recentRes] = await Promise.all([
-      client.execute(`SELECT id, name, slug, logoUrl, subscriptionTier, subscriptionStatus, createdAt FROM "Organization" ORDER BY createdAt DESC`),
+      client.execute(`SELECT id, name, slug, logoUrl, subscriptionTier, subscriptionStatus, createdAt, archivedAt FROM "Organization" ORDER BY createdAt DESC`),
       client.execute(`SELECT COUNT(*) as total FROM "Tournament"`),
       client.execute(`SELECT COUNT(*) as total FROM "Worker"`),
       client.execute(`SELECT COUNT(*) as total FROM "User"`),
@@ -60,7 +62,7 @@ export async function GET() {
     }))
 
     return NextResponse.json({
-      orgCount: orgs.length,
+      orgCount: orgs.filter(o => !o.archivedAt).length,   // archived ones aren't customers now
       tournamentTotal: Number(tournamentsRes.rows[0]?.total ?? 0),
       workerTotal: Number(workersRes.rows[0]?.total ?? 0),
       userTotal: Number(usersRes.rows[0]?.total ?? 0),

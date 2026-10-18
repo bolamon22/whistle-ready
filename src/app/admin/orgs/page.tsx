@@ -16,6 +16,8 @@ interface Org {
   /** lib/orgPlans: the plan, and a summary with any switch changed for this org. */
   plan?: PlanKey
   planLabel?: string
+  /** lib/orgArchive: set when the organization is archived. */
+  archivedAt?: string | null
 }
 
 export default function OrgsPage() {
@@ -28,6 +30,11 @@ export default function OrgsPage() {
   const [form, setForm] = useState({ name: '', slug: '', contactEmail: '', plan: 'tournament' as PlanKey, ownerEmail: '' })
   const [notice, setNotice] = useState('')
   const [error, setError] = useState('')
+  // Archived organizations (lib/orgArchive) have their own list; ?show=archived opens it.
+  const [showArchived, setShowArchived] = useState(false)
+  useEffect(() => { try { setShowArchived(new URLSearchParams(location.search).get('show') === 'archived') } catch { /* no window */ } }, [])
+  const archivedCount = orgs.filter(o => o.archivedAt).length
+  const shown = orgs.filter(o => showArchived ? !!o.archivedAt : !o.archivedAt)
 
   useEffect(() => {
     if (status === 'unauthenticated') { router.push('/login'); return }
@@ -183,11 +190,20 @@ export default function OrgsPage() {
 
         {notice && <p role="status" className="mb-4 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2">{notice}</p>}
 
+        {(archivedCount > 0 || showArchived) && (
+          <div className="mb-3 inline-flex rounded-lg bg-gray-100 p-0.5 text-sm" role="group" aria-label="Which organizations">
+            {([[false, `Open (${orgs.length - archivedCount})`], [true, `Archived (${archivedCount})`]] as const).map(([v, label]) => (
+              <button key={String(v)} type="button" onClick={() => setShowArchived(v)} aria-pressed={showArchived === v}
+                className={`rounded-md px-3 py-1 font-medium ${showArchived === v ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'}`}>{label}</button>
+            ))}
+          </div>
+        )}
+
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
           {loading ? (
             <div className="p-8 text-center text-gray-400">Loading organizations...</div>
-          ) : orgs.length === 0 ? (
-            <div className="p-8 text-center text-gray-400">No organizations yet. Create the first one above.</div>
+          ) : shown.length === 0 ? (
+            <div className="p-8 text-center text-gray-400">{showArchived ? 'No archived organizations.' : 'No organizations yet. Create the first one above.'}</div>
           ) : (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 border-b border-gray-200">
@@ -201,7 +217,7 @@ export default function OrgsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
-                {orgs.map(o => (
+                {shown.map(o => (
                   <tr key={o.id} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-medium text-gray-900"><Link href={`/admin/orgs/${o.id}`} className="text-blue-600 hover:text-blue-800 hover:underline">{o.name}</Link></td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{o.slug}</td>
@@ -214,11 +230,13 @@ export default function OrgsPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      {o.archivedAt
+                        ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600">Archived {new Date(o.archivedAt).toLocaleDateString()}</span>
+                        : <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
                         o.subscriptionStatus === 'active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                       }`}>
                         {o.subscriptionStatus}
-                      </span>
+                      </span>}
                     </td>
                     <td className="px-4 py-3 text-gray-400 text-xs">
                       {new Date(o.createdAt).toLocaleDateString()}
