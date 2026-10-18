@@ -304,9 +304,11 @@ export default function RosterPage({ params }: { params:{id:string} }) {
   if (loading) return <div className="text-slate-400 text-center py-12">Loading…</div>
   if (!tournament) return <div className="text-red-500">Not found</div>
 
+  // The app's width, like the other People tabs (Availability, Time entries, Staff pay):
+  // this page alone was held to 1024px with its own padding, narrower than its table,
+  // so Profile / Edit / Remove were cut off (Bo, Oct 18 2026).
   return (
-    <div className="min-h-screen bg-gray-50 p-3 sm:p-6">
-      <div className="max-w-5xl mx-auto">
+    <div>
       {/* ── Invite modal ── */}
       {showInvite && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -560,7 +562,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             })}
           </div>
 
-          <div className="hidden sm:block card overflow-hidden">
+          <div className="hidden sm:block card overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-slate-50 border-b border-slate-200">
                 <tr>
@@ -609,11 +611,11 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                       </td>
                       {showPay&&<td className="px-4 py-2">
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(w.payMethod)}</span>
-                        {w.payHandle && <div className="text-xs text-slate-400 mt-0.5">{w.payHandle}</div>}
+                        {w.payHandle && <div className="text-xs text-slate-400 mt-0.5 max-w-[9rem] truncate" title={w.payHandle}>{w.payHandle}</div>}
                       </td>}
                       <td className="px-4 py-2 text-xs text-slate-500">
-                        {w.phone&&<div>{w.phone}</div>}
-                        {w.email&&<div>{w.email}</div>}
+                        {w.phone&&<div className="whitespace-nowrap">{w.phone}</div>}
+                        {w.email&&<div className="max-w-[14rem] truncate" title={w.email}>{w.email}</div>}
                         {!w.phone&&!w.email&&'—'}
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
@@ -706,7 +708,8 @@ export default function RosterPage({ params }: { params:{id:string} }) {
             {filteredNotOnRoster.length===0 && <div className="px-5 py-8 text-center text-slate-400 text-sm">No staff match these filters.</div>}
           </div>
 
-          <table className="hidden sm:table w-full text-sm">
+          <div className="hidden sm:block overflow-x-auto">
+          <table className="w-full text-sm">
             <tbody className="divide-y divide-slate-100">
               {filteredNotOnRoster.map(w=>{
                 const wRoles=parseRoles(w)
@@ -717,7 +720,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
                     <div className="flex flex-wrap gap-1">{wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}</div>
                   </td>
                   <td className="px-4 py-3">{wRoles.includes('ref')?<div className="flex flex-wrap items-center gap-1"><span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-teal-100 text-teal-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>{showLevels&&<RefLevelPill level={w.refLevel}/>}<span className={`badge ${w.gender==='boys'?'bg-sky-100 text-sky-700':w.gender==='girls'?'bg-pink-100 text-pink-700':'bg-violet-100 text-violet-700'}`}>{w.gender==='boys'?'Boys':w.gender==='girls'?'Girls':'Both'}</span></div>:<span className="text-slate-400">—</span>}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div>{w.phone}</div>}{w.email?<div>{w.email}</div>:<div className="text-slate-400">{w.phone?'No email':'No email or phone'}</div>}</td>
+                  <td className="px-4 py-3 text-xs text-slate-500">{w.phone&&<div className="whitespace-nowrap">{w.phone}</div>}{w.email?<div className="max-w-[14rem] truncate" title={w.email}>{w.email}</div>:<div className="text-slate-400">{w.phone?'No email':'No email or phone'}</div>}</td>
                   <td className="px-4 py-3 text-right">
                     <button onClick={()=>toggleRoster(w.id)} disabled={saving===w.id} className="btn-primary btn-sm">+ Add</button>
                   </td>
@@ -728,6 +731,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
               )}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
@@ -737,7 +741,6 @@ export default function RosterPage({ params }: { params:{id:string} }) {
           <Link href="/staff" className="text-teal-600 hover:underline text-sm mt-1 block">Add staff first →</Link>
         </div>
       )}
-      </div>
     </div>
   )
 }
