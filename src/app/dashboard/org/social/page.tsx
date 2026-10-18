@@ -312,9 +312,9 @@ function SocialInner() {
   /** "Plan all cleared players": one feed post + Story per player with nothing
    *  scheduled, each on its own open day before the event, plus a Roll Call carousel
    *  per event with 3+ cleared players. All drafts: nothing posts until approved. */
-  async function planAll() {
+  async function planAll(only?: ClearedPlayer[]) {
     if (!cleared || !liveAccounts.length) return
-    const { posts: todo, rollcalls } = planList(cleared.players)
+    const { posts: todo, rollcalls } = planList(only || cleared.players)
     const ids = liveAccounts.map(a => a.id); const site = ideaSrc?.site || ''
     const taken = takenKeys(); const perDay: Record<string, number> = {}
     const total = todo.length + rollcalls.length

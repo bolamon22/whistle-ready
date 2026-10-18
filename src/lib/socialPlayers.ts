@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { listSubmissions } from '@/lib/formSubmissions'
-import { playerPassEnabled } from '@/lib/playerPass'
+import { playerPassEnabled, teamOnly } from '@/lib/playerPass'
 import { eventDates } from '@/lib/vendorApproval'
 import { startFacts } from '@/lib/socialPosts'
 import { instagramHandle } from '@/lib/photoConsent'
@@ -97,6 +97,18 @@ export async function getPostCollabMany(postIds: string[]): Promise<Record<strin
 
 // ── the tray ──────────────────────────────────────────────────────────────────
 
+/** Boys or girls: the waiver's gender answer when the form asked, else the division or
+ *  team name ("Girls U14", "Boys 2030"). '' when nothing says. */
+function genderOf(d: any, division: string): 'boys' | 'girls' | '' {
+  const g = String(d?.gender || '').trim().toLowerCase()
+  if (/^(f|female|girl)/.test(g)) return 'girls'
+  if (/^(m|male|boy)/.test(g)) return 'boys'
+  const text = `${division} ${d?.teamName || ''}`.toLowerCase()
+  if (/\b(girls?|women'?s?|womens|lady|ladies)\b/.test(text)) return 'girls'
+  if (/\b(boys?|men'?s?|mens)\b/.test(text)) return 'boys'
+  return ''
+}
+
 /** Every player with a family Yes at the org's upcoming events (still running or
  *  not yet started), with what's already been scheduled for each. Also counts the
  *  families still deciding, so an empty tray can say why. */
@@ -135,6 +147,13 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
   for (const e of events) {
     const subs = await listSubmissions({ orgId, formType: 'player', tournamentId: e.id, sort: 'name', limit: 20000 }).catch(() => [])
     const facts = startFacts(String(e.startDate || ''))
+    // Each registered team's division (the waiver only names the club and team), for the
+    // tray's filters: same lookup the player card uses (lib/playerPass).
+    const divisionOf = new Map<string, string>()
+    try {
+      const rows = await prisma.$queryRawUnsafe<any[]>('SELECT r.clubName AS club, t.teamName AS team, t.division AS division FROM "TeamRegistration" r JOIN "RegisteredTeam" t ON t.registrationId = r.id WHERE r.tournamentId = ? AND r.deletedAt IS NULL', e.id)
+      for (const r of rows || []) divisionOf.set(`${String(r.club || '').trim().toLowerCase()}|${String(r.team || '').trim().toLowerCase()}`, String(r.division || '').trim())
+    } catch {}
     for (const s of subs) {
       const d = s.data || {}
       if (!String(d.photoUrl || '').trim()) continue
@@ -150,6 +169,8 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
         position: String(d.position || ''),
         club: String(d.clubName || ''),
         team: String(d.teamName || ''),
+        division: String(d.division || '').trim() || divisionOf.get(`${String(d.clubName || '').trim().toLowerCase()}|${teamOnly(d).toLowerCase()}`) || '',
+        gender: genderOf(d, divisionOf.get(`${String(d.clubName || '').trim().toLowerCase()}|${teamOnly(d).toLowerCase()}`) || String(d.division || '')),
         token: s.passToken,
         okAt: String(d.photoOkAt || ''),
         instagram: instagramHandle(d.photoIg),

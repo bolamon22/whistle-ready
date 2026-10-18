@@ -297,6 +297,13 @@ not reuse Whistle Ready's Meta app or database. Same pattern, zero shared runtim
   (`userTags` on POST /api/social/posts, stored as `tags` in `postCollab:<postId>`).
   If Instagram refuses the tags, the Reel goes out without them (`droppedTags`), then
   without the Collab invite as a last resort; the post says which.
+- **Filtering cleared players (Oct 18)** — the tray filters by name/team search, event,
+  boys/girls, division, club, posted or not, and has-Instagram, and groups by club, team,
+  division or boys/girls (each group has "Squad these" to tick up to 4). The strip shows
+  12; "See all" opens every match full screen, grouped. "Plan" works on what the filters
+  show. Division comes from the registered team (same lookup as the player card);
+  boys/girls from the waiver's gender answer when the form asked, else the division or
+  team name. Both are '' when nothing says, so those players only show under "all".
 - **Deliberately not built**: a built-in graphics editor (Canva does it better and Bo
   already designs there), "send to mobile", boost/ads.
 - **Still to do**: a connect-account *picker* (every Page the OAuth user manages

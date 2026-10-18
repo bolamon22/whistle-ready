@@ -24,6 +24,9 @@ export type ClearedPlayer = {
   position: string
   club: string
   team: string
+  /** The team's division at this event ("Boys U14 A"), '' when unknown. */
+  division: string
+  gender: 'boys' | 'girls' | ''
   token: string
   okAt: string
   instagram: string
