@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { MUSIC_CATEGORIES, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
@@ -49,13 +49,20 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   squad?: { token: string; first: string; style: string }[]
   /** The social scheduler: hand the finished Reel (MP4) and a cover frame straight to
    *  a post instead of saving the file. Resolves once it's uploaded. */
-  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[] }) => Promise<void>
+  onUse?: (video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[]; saveDraft?: boolean }) => Promise<void>
+  /** Scheduler: save these settings to finish later (Bo, Oct 18 2026: "save a draft here
+   *  too"), and the settings a saved draft reopens with. */
+  onSaveSetup?: (setup: ReelSetup) => Promise<void>
+  initialSetup?: Partial<ReelSetup>
   /** Scheduler: the event's first day and the day the post is planned for (YYYY-MM-DD).
    *  With both, a Countdown look gets a "Posts on" day picker so its number matches the
    *  day it goes out (Bo, Oct 18 2026: a Reel made for Thursday said "2 days out" when
    *  he wanted to post it Sunday). */
   eventStart?: string
   postDay?: string }
+
+/** A Reel maker's settings, saved as a draft to pick up later. */
+export type ReelSetup = { picks: string[]; order: number[]; len: number; song: string; day: string; coverIdx: number }
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 function daysBetween(from: string, to: string): number | null {
@@ -220,26 +227,26 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
   return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay }: Props) {
+export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay, onSaveSetup, initialSetup }: Props) {
   const today = dayKey(new Date())
   // Starts on today (Bo, Oct 18 2026: the first open day was Thursday, so a Reel he
   // wanted out now said "2 days out"). Pick another day here before making the Reel.
-  const [day, setDay] = useState(today)
+  const [day, setDay] = useState(initialSetup?.day && initialSetup.day >= today ? initialSetup.day : today)
   // The countdown number: days from the chosen posting day to the event, when we know both.
   const dayDays = eventStart ? daysBetween(day, eventStart) : null
   const days = eventStart ? (dayDays != null && dayDays >= 0 ? dayDays : null) : daysProp
   const squadMode = !!squad && squad.length > 1
   const isCustomLook = (s: string) => s in CUSTOM_REELS
-  const [len, setLen] = useState<number>(squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
+  const [len, setLen] = useState<number>(initialSetup?.len && LENGTHS.some(l => l.sec === initialSetup.len) ? initialSetup.len : squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
   // The look for each part, picked by staff (Bo: "I'd like to be able to pick the looks").
   // One player: up to 4 parts, starting from the chosen look and Bo's favorites. Squad:
   // one part per player, each starting on the look picked in the tray.
-  const [picks, setPicks] = useState<string[]>(() => squadMode ? squad!.map(p => p.style)
+  const [picks, setPicks] = useState<string[]>(() => initialSetup?.picks?.length ? initialSetup.picks : squadMode ? squad!.map(p => p.style)
     : [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, 4))
   const lookCount = squadMode ? squad!.length : token ? (LENGTHS.find(l => l.sec === len)?.looks || 1) : 1
   // Squad order (Bo: "reorder them ... I might watch the video and say it should be
   // different"): indexes into `squad`; picks stay keyed by the player's original index.
-  const [order, setOrder] = useState<number[]>(() => (squad || []).map((_, i) => i))
+  const [order, setOrder] = useState<number[]>(() => initialSetup?.order?.length === (squad || []).length && (squad || []).length ? initialSetup.order : (squad || []).map((_, i) => i))
   const slots = squadMode ? order.map(i => ({ token: squad![i].token, style: picks[i] || squad![i].style, who: squad![i].first }))
     : picks.slice(0, lookCount).map(s => ({ token: token || '', style: s, who: '' }))
   const endDur = squadMode ? END : 0
@@ -273,7 +280,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const [state, setState] = useState<'loading' | 'preview' | 'recording' | 'done' | 'error'>('loading')
   const [out, setOut] = useState<{ url: string; ext: string } | null>(null)
   const [playing, setPlaying] = useState(false)
-  const [song, setSong] = useState(initialSong || 'trap-hype')         // a lib/reelSongs id | 'own' | 'none'
+  const [song, setSong] = useState(initialSetup?.song || initialSong || 'trap-hype')         // a lib/reelSongs id | 'own' | 'none'
   const recorded = useRef<Blob | null>(null)
   const [using, setUsing] = useState(false)
   const [ownFile, setOwnFile] = useState<File | null>(null)
@@ -310,7 +317,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
     ? [0.3, 0.6, 0.9].map((f, i) => ({ t: segDur * f, label: ['Start', 'Middle', 'End'][i] }))
     : [...slots.map((x, i) => ({ t: i * segDur + segDur * 0.65, label: x.who || lookName(x.style) })),
        ...(endDur ? [{ t: slots.length * segDur + endDur * 0.6, label: 'End card' }] : [])]
-  const [coverIdx, setCoverIdx] = useState(0)
+  const [coverIdx, setCoverIdx] = useState(initialSetup?.coverIdx || 0)
   const [thumbs, setThumbs] = useState<string[]>([])
 
   // Load every part's post (and the fonts), then loop the preview. Runs again when a
@@ -459,10 +466,20 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   useEffect(() => () => { if (out) URL.revokeObjectURL(out.url) }, [out])
 
   // Scheduler: check the file is one Instagram takes, grab a cover frame, hand both over.
-  async function useInPost() {
+  const [usingDraft, setUsingDraft] = useState(false)
+  const [savingSetup, setSavingSetup] = useState(false)
+  async function saveSetup() {
+    if (!onSaveSetup || savingSetup) return
+    setSavingSetup(true); setErr('')
+    // A file picked from the computer can't be kept with the draft; it reopens on the default song.
+    try { await onSaveSetup({ picks, order, len, song: song === 'own' ? (initialSong || 'trap-hype') : song, day, coverIdx }) }
+    catch (e: any) { setErr(String(e?.message || 'Could not save the draft')) }
+    finally { setSavingSetup(false) }
+  }
+  async function useInPost(saveDraft = false) {
     const blob = recorded.current, c = canvas.current, img = imgRef.current
     if (!blob || !onUse || using) return
-    setUsing(true); setErr('')
+    setUsing(true); setUsingDraft(saveDraft); setErr('')
     try {
       const codecs = out?.ext === 'mp4' ? await mp4Codecs(blob) : { h264: false, aac: false }
       if (!codecs.h264 || (song !== 'none' && song !== 'ig' && !codecs.aac)) {
@@ -476,7 +493,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
-      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}), ...(squadMode ? { order } : {}) })
+      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}), ...(squadMode ? { order } : {}), ...(saveDraft ? { saveDraft: true } : {}) })
     } catch (e: any) {
       setErr(String(e?.message || 'Upload failed'))
     } finally { setUsing(false) }
@@ -609,8 +626,19 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
             </div>
           )}
           {out && state !== 'recording' && onUse && (
-            <button type="button" onClick={useInPost} disabled={using} className="w-full rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 inline-flex items-center justify-center gap-2 disabled:opacity-50">
-              <Check size={16} /> {using ? 'Uploading the Reel…' : 'Use this Reel in the post'}
+            <div className="grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => useInPost(false)} disabled={using} className="rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-2 inline-flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm">
+                <Check size={16} /> {using && !usingDraft ? 'Uploading…' : 'Use in a post'}
+              </button>
+              {/* Straight to the calendar as a draft, caption and Collab filled in; approve it later. */}
+              <button type="button" onClick={() => useInPost(true)} disabled={using} className="rounded-lg border border-emerald-600 text-emerald-700 hover:bg-emerald-50 font-semibold py-2.5 px-2 inline-flex items-center justify-center gap-1.5 disabled:opacity-50 text-sm">
+                <Save size={16} /> {using && usingDraft ? 'Saving…' : 'Save as draft post'}
+              </button>
+            </div>
+          )}
+          {onSaveSetup && !out && state !== 'recording' && state !== 'loading' && (
+            <button type="button" onClick={saveSetup} disabled={savingSetup || playing} className="w-full rounded-lg border border-slate-300 text-slate-700 hover:border-teal-400 font-semibold py-2 inline-flex items-center justify-center gap-2 text-sm disabled:opacity-50">
+              <Save size={15} /> {savingSetup ? 'Saving…' : 'Save draft to finish later'}
             </button>
           )}
           {out && state !== 'recording' && (

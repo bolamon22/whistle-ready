@@ -18,6 +18,8 @@ import { lookFor, teamLabel, firstOf, type ClearedPlayer } from '@/lib/playerPos
 import { postPngUrl } from './playerMedia'
 
 export type ClearedData = { players: ClearedPlayer[]; waiting: number; passOn: boolean }
+/** A Reel maker's settings saved to finish later (api/social/reel-drafts). */
+export type ReelDraft = { id: string; label: string; savedAt: string; playerIds: string[]; look: string; looks?: string[]; setup: Record<string, unknown> }
 
 /** What "Plan" would make for these players: one post per cleared player at an upcoming
  *  event who has nothing scheduled yet, and a Roll Call carousel per event with 3+
@@ -51,8 +53,10 @@ const uniq = (xs: string[]) => Array.from(new Set(xs.filter(Boolean))).sort((a, 
 const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-500 hover:text-slate-900'}`
 const sel_ = 'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 max-w-[200px]'
 
-export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll }: {
+export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll, drafts = [], onOpenDraft, onDeleteDraft }: {
   data: ClearedData; canPost: boolean; busy: string
+  /** Reels saved to finish later, reopened in the Reel maker where they left off. */
+  drafts?: ReelDraft[]; onOpenDraft?: (d: ReelDraft) => void; onDeleteDraft?: (id: string) => void
   onPost: (p: ClearedPlayer, look: string) => void
   onReel: (p: ClearedPlayer, look: string) => void
   onStory: (p: ClearedPlayer, look: string) => void
@@ -229,6 +233,18 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
           {planButton}
         </div>
       </div>
+      {drafts.length > 0 && (
+        // Reels saved in the Reel maker to finish later: open one where it left off.
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500 inline-flex items-center gap-1"><Film size={12} /> Saved Reels</span>
+          {drafts.map(d => (
+            <span key={d.id} className="inline-flex items-center rounded-full border border-pink-200 bg-pink-50 text-pink-900 text-xs font-bold">
+              <button type="button" onClick={() => onOpenDraft?.(d)} disabled={!canPost || !!busy} title={`Saved ${new Date(d.savedAt).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · open it in the Reel maker`} className="pl-2.5 pr-1.5 py-1 hover:underline disabled:opacity-50">{d.label}</button>
+              <button type="button" onClick={() => onDeleteDraft?.(d.id)} aria-label={`Delete the saved Reel ${d.label}`} className="pr-2 pl-0.5 py-1 text-pink-400 hover:text-rose-700"><X size={12} /></button>
+            </span>
+          ))}
+        </div>
+      )}
       {filterBar}
       {squadBar}
       {!shown.length ? <div className="text-xs text-slate-500 py-3 text-center">No cleared players match these filters.</div> : f.groupBy === 'none' ? (

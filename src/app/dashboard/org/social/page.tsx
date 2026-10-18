@@ -15,9 +15,9 @@ import { normalizeReel } from '@/lib/normalizeReel'
 import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
-import PlayersTray, { planList, type ClearedData } from './PlayersTray'
+import PlayersTray, { planList, type ClearedData, type ReelDraft } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
-import ReelMaker from '@/components/ReelMaker'
+import ReelMaker, { type ReelSetup } from '@/components/ReelMaker'
 import { POST_STYLES } from '@/lib/socialPosts'
 import { lookFor, daysUntil, playerCaption, rollCallCaption, squadCaption, squadHandles, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
@@ -143,7 +143,8 @@ function SocialInner() {
   const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
   const [cleared, setCleared] = useState<ClearedData | null>(null)
   const [playerBusy, setPlayerBusy] = useState('')
-  const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null; squad?: ClearedPlayer[]; looks?: string[] } | null>(null)
+  const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null; squad?: ClearedPlayer[]; looks?: string[]; setup?: Partial<ReelSetup>; draftId?: string } | null>(null)
+  const [reelDrafts, setReelDrafts] = useState<ReelDraft[]>([])
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -161,12 +162,13 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a, q, ins, ide, cl] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null), api('/api/social/players').catch(() => null)])
+      const [p, a, q, ins, ide, cl, rd] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null), api('/api/social/players').catch(() => null), api('/api/social/reel-drafts').catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
       if (q) setQueue(q)
       if (ins) setInsights(ins)
       if (ide) setIdeaSrc(ide)
       if (cl) setCleared(cl)
+      if (rd) setReelDrafts(rd.drafts || [])
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -291,7 +293,7 @@ function SocialInner() {
     const when = whenFor(list[0]); setReel({ p: list[0], look: looks[0], when, days: daysAt(list[0], when), squad: list, looks })
   }
   /** ReelMaker hands back the recorded MP4: upload it and open Compose with it. */
-  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[] }) {
+  async function useReel(video: Blob, poster: Blob | null, durationSec: number, opts: { igSong: boolean; day?: string; order?: number[]; saveDraft?: boolean }) {
     if (!reel) return
     const { p, look } = reel
     // The squad in the order it was arranged in the Reel maker (caption and Collab follow it).
@@ -312,18 +314,56 @@ function SocialInner() {
     // The browser records a fragmented MP4 with no audio track when there's no built-in
     // song; Instagram rejects that (2207082). Re-mux it server-side into a standard MP4.
     const vurl = await normalizeReel(up.url, why => toast.error(`Couldn't finish the video for Instagram (${why}). Facebook will take it; Instagram may not.`, { duration: 8000 }))
-    setReel(null)
     const media: Media[] = [{ url: vurl, mediaType: 'video', thumbnailUrl, durationSec, width: 1080, height: 1920, builtIn: !opts.igSong }]
-    if (squad && squad.length > 1) {
-      // Collab takes 3: the shared club first, then families; the rest are tagged in the Reel.
-      const h = squadHandles(squad)
-      setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', media, {
-        pickSong: opts.igSong, caption: squadCaption(squad, ideaSrc?.site || ''), collab: h.collab, tags: h.tags,
-        player: { submissionIds: squad.map(x => x.id), tournamentId: p.tournamentId, style: look, kind: 'reel', days },
-        note: `Squad Reel · ${squad.map(x => firstOf(x.playerName)).join(', ')}`, countdown: (reel.looks || []).some(l => baseLook(l) === 'countdown'),
-      }) })
-    } else setDrawer({ kind: 'new', when, seed: seedFor(p, look, when, days, 'reel', media, { pickSong: opts.igSong }) })
+    // Collab takes 3: the shared club first, then families; the rest are tagged in the Reel.
+    const h = squad && squad.length > 1 ? squadHandles(squad) : null
+    const seed = squad && squad.length > 1 && h ? seedFor(p, look, when, days, 'reel', media, {
+      pickSong: opts.igSong, caption: squadCaption(squad, ideaSrc?.site || ''), collab: h.collab, tags: h.tags,
+      player: { submissionIds: squad.map(x => x.id), tournamentId: p.tournamentId, style: look, kind: 'reel', days },
+      note: `Squad Reel · ${squad.map(x => firstOf(x.playerName)).join(', ')}`, countdown: (reel.looks || []).some(l => baseLook(l) === 'countdown'),
+    }) : seedFor(p, look, when, days, 'reel', media, { pickSong: opts.igSong })
+    const draftId = reel.draftId
+    if (opts.saveDraft) {
+      // "Save as draft post": straight onto the calendar as a draft, filled in the way
+      // Compose would be. Throws back to the Reel maker (which shows the error) on failure.
+      if (when.getTime() < Date.now() + 2 * 60000) { when = new Date(Date.now() + 10 * 60000); when.setMinutes(Math.ceil(when.getMinutes() / 5) * 5, 0, 0) }
+      const both = seed.placements.includes('feed') && seed.placements.includes('story')
+      const storyAt = both ? storyTimeFor(seed.storyTiming || { mode: 'same' }, when) : when
+      const toIg = liveAccounts.some(a => a.platform === 'instagram')
+      await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: liveAccounts.map(a => a.id), caption: seed.caption, ...slidesBody(seed.slides), placements: seed.placements, scheduledFor: when.toISOString(),
+        ...(both && storyAt > new Date() && +storyAt !== +when ? { storyScheduledFor: storyAt.toISOString() } : {}), player: seed.player,
+        ...(toIg && seed.collab?.length ? { collaborators: seed.collab } : {}), ...(toIg && seed.tags?.length ? { userTags: seed.tags } : {}) }) })
+      setReel(null)
+      if (draftId) deleteReelDraft(draftId, true)
+      await load()
+      toast.success(`Saved as a draft for ${fmtDate(when)} at ${fmtTime(when)}${opts.igSong ? ' — open it to pick the Instagram song before you approve' : ' — approve it on the calendar'}`, { duration: 7000 })
+      return
+    }
+    setReel(null)
+    if (draftId) deleteReelDraft(draftId, true)
+    setDrawer({ kind: 'new', when, seed })
     toast.success(opts.igSong ? 'Reel ready — pick a trending song, then save' : 'Reel ready — check the post and save it')
+  }
+  /** "Save draft to finish later" in the Reel maker: keep its settings (no video yet). */
+  async function saveReelSetup(setup: ReelSetup) {
+    if (!reel) return
+    const players = reel.squad || [reel.p]
+    const label = reel.squad ? `Squad · ${reel.squad.map(x => firstOf(x.playerName)).join(', ')}` : `${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`
+    const d = await api('/api/social/reel-drafts', { method: 'POST', body: JSON.stringify({ id: reel.draftId, label, playerIds: players.map(x => x.id), look: reel.look, ...(reel.looks ? { looks: reel.looks } : {}), setup }) })
+    setReelDrafts(d.drafts || []); setReel(null)
+    toast.success('Draft saved — it\'s under Saved Reels in Cleared to post')
+  }
+  function openReelDraft(d: ReelDraft) {
+    const all = cleared?.players || []
+    const players = d.playerIds.map(id => all.find(x => x.id === id)).filter((x): x is ClearedPlayer => !!x)
+    if (players.length !== d.playerIds.length) { toast.error('A player in this draft is no longer cleared to post'); return }
+    if (!liveAccounts.length) { toast.error('Connect an account first'); return }
+    const when = whenFor(players[0])
+    setReel({ p: players[0], look: d.look || d.looks?.[0] || 'countdown-photo', when, days: daysAt(players[0], when), ...(players.length > 1 ? { squad: players, looks: d.looks || players.map(() => d.look) } : {}), setup: d.setup as Partial<ReelSetup>, draftId: d.id })
+  }
+  async function deleteReelDraft(id: string, quiet = false) {
+    try { const r = await api(`/api/social/reel-drafts?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); setReelDrafts(r.drafts || []) }
+    catch (e: any) { if (!quiet) toast.error(e.message) }
   }
   /** "Plan all cleared players": one feed post + Story per player with nothing
    *  scheduled, each on its own open day before the event, plus a Roll Call carousel
@@ -467,7 +507,7 @@ function SocialInner() {
         )}
 
         {/* cleared players */}
-        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} />}
+        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} drafts={reelDrafts} onOpenDraft={openReelDraft} onDeleteDraft={id => deleteReelDraft(id)} />}
 
         {/* calendar */}
         {view === 'week' && (
@@ -558,12 +598,12 @@ function SocialInner() {
       </div>
 
       {/* a cleared player's Reel: recorded here, then handed to Compose */}
-      {reel && <ReelMaker key={reel.squad ? reel.squad.map(x => x.id).join('-') : `${reel.p.id}-${reel.look}`} src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look}
+      {reel && <ReelMaker key={(reel.draftId || '') + (reel.squad ? reel.squad.map(x => x.id).join('-') : `${reel.p.id}-${reel.look}`)} src={postPngUrl(reel.p.token, reel.look, reel.days)} style={reel.look}
         label={reel.squad ? `Squad · ${reel.squad.map(x => firstOf(x.playerName)).join(', ')}` : `${firstOf(reel.p.playerName)} · ${lookLabel(reel.look)}`}
         event={reel.p.event.name || 'Game day'} sub={storySub(reel.p)} days={reel.days} fileName={reel.squad ? `squad-${reel.squad.map(x => firstOf(x.playerName)).join('-')}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-') : fileSlug(reel.p, reel.look)} token={reel.p.token}
         squad={reel.squad?.map((x, i) => ({ token: x.token, first: firstOf(x.playerName), style: reel.looks?.[i] || reel.look }))}
         eventStart={reel.p.event.start} postDay={localDayKey(reel.when)}
-        initialSong="ig" onUse={useReel} onClose={() => setReel(null)} />}
+        initialSong="ig" onUse={useReel} onSaveSetup={saveReelSetup} initialSetup={reel.setup} onClose={() => setReel(null)} />}
     </div>
   )
 }
