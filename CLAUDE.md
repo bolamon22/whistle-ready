@@ -601,13 +601,15 @@ matches: the event's own record (lib/eventClient) is a name, email and phone, an
   `lib/chirpKeepClear`, so PublicChirp's greeting card waits while it is in the lower 60% of the screen (it covered
   the buttons). Team circles with no logo use `lib/names` `teamInitials` (skips class years: "Madskillz 2033/34" is M)
   on the public page, both bracket views and the hero.
-- **App icons (Oct 18).** Whistle Ready's `public/apple-touch-icon.png` (180, full bleed: iOS rounds it and paints
-  transparent pixels black), `icon-192.png` / `icon-512.png` (the tile, corners transparent; also the notification icon
-  and the emails' fallback logo), `icon-maskable-512.png` and `favicon.ico` are made by `scripts/make-app-icons.py`
-  from `public/whistle-ready-icon.png`. That source is a wide canvas with the tile in the middle, which is why the
-  first set came out tiny (and why the 36 px nav logo draws the tile at 13 px). A phone keeps the icon it saved when
-  the site was added to the home screen: remove it and add it again to see a new one. SEG's own set is
-  `public/org-icons/sunshine-events-group/`, served on its domain.
+- **App icons (Oct 18).** Whistle Ready's `public/apple-touch-icon.png` (+ `-precomposed`), `icon-192.png`, `icon-512.png`,
+  `icon-maskable-512.png` and `favicon.ico` are made by `scripts/make-app-icons.py` from `public/whistle-ready-icon.png`
+  (a wide canvas with the tile in the middle: why the first set came out tiny, and why the 36 px nav logo draws the tile
+  at 13 px). iOS 26 takes the home-screen icon from the web manifest, fetching it and its icons with no cookies:
+  `/manifest.webmanifest` sat behind the login (the middleware's static-file list had no `webmanifest`), so iPhones made
+  a letter icon ("W"). Every icon a phone can pick is opaque and full bleed, since transparent corners can also give a
+  letter (SEG's "S"); only `favicon.ico` keeps the rounded tile. SEG's set is `public/org-icons/sunshine-events-group/`
+  (rewritten in on its domain, ORG_ICON_FILES); the script flattens org icons onto white. A phone keeps the icon it
+  saved: remove the app and add it again (if the sheet still shows a letter, clear that site's Safari data first).
 - **Staff W-9 upload (Oct 11).** W-9 card on the staff portal (`components/StaffW9Card.tsx`, `/dashboard/staff`),
   `GET/POST /api/staff-portal/w9` (worker from the session email, oldest record, never from the request). All W-9
   storage goes through `lib/staffW9.ts`: encrypted data URL in AppSetting `w9:{workerId}`, `w9meta:{workerId}`
