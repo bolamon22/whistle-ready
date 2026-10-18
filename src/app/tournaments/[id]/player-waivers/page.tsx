@@ -19,7 +19,7 @@ const LABELS: Record<string, string> = {
   parentPhone: 'Parent phone', parent2Name: 'Parent 2', parent2Email: 'Parent 2 email', parent2Phone: 'Parent 2 phone',
   emergencyName: 'Emergency contact', emergencyPhone: 'Emergency phone', hotel: 'Hotel / rental', hotelName: 'Where staying',
   newsletter: 'Newsletter', signature: 'Signature', cardLink: 'Card QR link',
-  photoOk: 'OK to post photo', photoOkAt: 'Photo answer on', photoOkName: 'Photo answered by', photoAskAt: 'Photo permission asked',
+  photoOk: 'OK to post photo', photoOkAt: 'Photo answer on', photoOkName: 'Photo answered by', photoAskAt: 'Photo permission asked', photoIg: 'Instagram to tag',
 }
 const DETAIL_ORDER = Object.keys(LABELS)
 const HIDDEN_KEYS = ['tournamentId', 'tournamentName', 'agree', 'teamOther', 'teamPick', 'photoUrl', 'photoAskBy']

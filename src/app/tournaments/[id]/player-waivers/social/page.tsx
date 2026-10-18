@@ -14,7 +14,7 @@ import { ArrowLeft, Send, Check, Download, Mail } from 'lucide-react'
 type Player = {
   id: string; playerName: string; clubName: string; teamName: string; jersey: string; position: string
   photoUrl: string; cardUrl: string; parentName: string; emails: string[]
-  askAt: string; ok: string; okAt: string; okName: string
+  askAt: string; ok: string; okAt: string; okName: string; instagram: string
 }
 type Filter = 'all' | 'new' | 'asked' | 'yes' | 'no'
 
@@ -129,6 +129,7 @@ export default function SocialPhotos() {
                     {CHIP[st].label}{st === 'asked' ? ` · ${day(p.askAt)}` : (st === 'yes' || st === 'no') ? ` · ${day(p.okAt)}` : ''}
                   </span>
                   {st === 'yes' && p.okName && <div className="text-[11px] text-slate-500 truncate">By {p.okName}</div>}
+                  {st === 'yes' && p.instagram && <a href={`https://instagram.com/${p.instagram.replace(/^@/, '')}`} target="_blank" rel="noreferrer" className="text-[11px] font-semibold text-teal-700 truncate">Tag {p.instagram}</a>}
                   {!p.emails.length && st === 'new' && <div className="text-[11px] text-rose-700">No parent email on the waiver</div>}
                   {st === 'yes' && (
                     <div className="mt-auto pt-1 flex gap-3 text-xs">
@@ -154,6 +155,7 @@ export default function SocialPhotos() {
               <p><strong>{pickedList[0]?.playerName.split(' ')[0] || 'Alex'} made the cut!</strong> Out of every player card for this tournament, {pickedList[0]?.playerName.split(' ')[0] || 'Alex'}'s is one of our favorites.</p>
               <p>All week we're counting down on Instagram by spotlighting players who'll be on the field, and we'd love {pickedList[0]?.playerName.split(' ')[0] || 'Alex'} to be one of them.</p>
               <p>Before anything goes up, we need a parent or guardian's OK. It takes about ten seconds: <span className="text-teal-700 font-semibold">[Yes or no: answer here]</span></p>
+              <p>Saying yes? Add your Instagram handle on that page. We'll tag you and send it as a Collab post. Then please like, share and repost it!</p>
               <p className="text-slate-500">Rather not? Choose No or ignore the email, and it won't be posted.</p>
             </div>
             {pickedResend && <p className="text-xs text-amber-700 mt-2">Some of these were already asked. They'll get the email again.</p>}

@@ -2,14 +2,15 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSubmission, updateSubmissionData } from '@/lib/formSubmissions'
 import { orgById } from '@/lib/org'
 import { playerPassEnabled } from '@/lib/playerPass'
-import { readPhotoToken, firstName, photoPermissionText } from '@/lib/photoConsent'
+import { readPhotoToken, firstName, photoPermissionText, instagramHandle } from '@/lib/photoConsent'
 import { prisma } from '@/lib/db'
 
 // Public: a parent answering "may we share this photo on social media?"
 // (lib/photoConsent). No login -- the signed token in the emailed link is the
 // authorization, and it names exactly one waiver.
 //   GET  ?t=<token>  → what the page shows: first name, team, event, the photo, the current answer
-//   POST { t, answer: 'yes'|'no', name, guardian: true } → records the answer
+//   POST { t, answer: 'yes'|'no', name, guardian: true, instagram? } → records the answer
+//        (instagram: the handle to tag / invite as a Collab; kept only with a yes)
 // Only the player's first name and team go back to the browser: the link can be
 // forwarded, so it must not hand out the waiver's other details.
 
@@ -41,6 +42,7 @@ export async function GET(req: NextRequest) {
     photo: passOn && hit.s.passToken ? `/pass/${hit.s.passToken}/card.png` : String(d.photoUrl || ''),
     answer: String(d.photoOk || ''),
     answeredAt: String(d.photoOkAt || ''),
+    instagram: String(d.photoIg || ''),
     permission: photoPermissionText(orgName, tournamentName),
   })
 }
@@ -55,11 +57,13 @@ export async function POST(req: NextRequest) {
   if (answer === 'yes') {
     if (name.length < 2) return NextResponse.json({ error: 'Type your name to give permission.' }, { status: 400 })
     if (body.guardian !== true) return NextResponse.json({ error: "Please confirm you're the player's parent or guardian." }, { status: 400 })
+    if (String(body.instagram || '').trim() && !instagramHandle(body.instagram)) return NextResponse.json({ error: "That doesn't look like an Instagram handle. Try something like @yourname, or leave it blank." }, { status: 400 })
   }
   await updateSubmissionData(hit.t.o, hit.s.id, {
     photoOk: answer,
     photoOkAt: new Date().toISOString(),
     photoOkName: name,
+    photoIg: answer === 'yes' ? instagramHandle(body.instagram) : '',
   }, `parent (photo permission): ${name || 'no name given'}`)
-  return NextResponse.json({ ok: true, answer })
+  return NextResponse.json({ ok: true, answer, instagram: answer === 'yes' ? instagramHandle(body.instagram) : '' })
 }

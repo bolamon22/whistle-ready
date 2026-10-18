@@ -9,7 +9,7 @@ import { CheckCircle2, XCircle } from 'lucide-react'
 // Lives under /pass so it inherits that path's public passthrough on every
 // domain; the static "photo-ok" segment wins over /pass/[token].
 
-type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; permission: string }
+type Info = { player: string; team: string; orgName: string; tournamentName: string; photo: string; answer: string; answeredAt: string; instagram: string; permission: string }
 
 export default function PhotoPermissionPage() {
   const { token } = useParams() as { token: string }
@@ -17,6 +17,7 @@ export default function PhotoPermissionPage() {
   const [error, setError] = useState('')
   const [name, setName] = useState('')
   const [guardian, setGuardian] = useState(false)
+  const [ig, setIg] = useState('')
   const [saving, setSaving] = useState<'' | 'yes' | 'no'>('')
   const [formError, setFormError] = useState('')
   const [changing, setChanging] = useState(false)
@@ -26,6 +27,7 @@ export default function PhotoPermissionPage() {
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setError(j.error || 'This link is not valid.'); return }
       setInfo(j)
+      if (j.instagram) setIg(String(j.instagram))
     }).catch(() => setError('Could not load this page. Check your connection and try again.'))
   }, [token])
 
@@ -35,10 +37,10 @@ export default function PhotoPermissionPage() {
     if (a === 'yes' && !guardian) { setFormError("Check the box to confirm you're the player's parent or guardian."); return }
     setSaving(a)
     try {
-      const r = await fetch('/api/photo-ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, answer: a, name: name.trim(), guardian }) })
+      const r = await fetch('/api/photo-ok', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ t: token, answer: a, name: name.trim(), guardian, instagram: ig.trim() }) })
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setFormError(j.error || 'Could not save your answer.'); return }
-      setInfo(i => i ? { ...i, answer: a, answeredAt: new Date().toISOString() } : i)
+      setInfo(i => i ? { ...i, answer: a, answeredAt: new Date().toISOString(), instagram: a === 'yes' ? String(j.instagram || '') : '' } : i)
       setChanging(false)
     } catch { setFormError('Could not save your answer. Check your connection and try again.') }
     finally { setSaving('') }
@@ -76,7 +78,10 @@ export default function PhotoPermissionPage() {
             {answered ? (
               <div className="mt-6 text-center">
                 {info.answer === 'yes'
-                  ? <p className="inline-flex items-center gap-2 text-teal-300 font-semibold"><CheckCircle2 size={20} /> Thanks! You said yes.</p>
+                  ? <>
+                      <p className="inline-flex items-center gap-2 text-teal-300 font-semibold"><CheckCircle2 size={20} /> Thanks! You said yes.</p>
+                      <p className="text-slate-300 text-sm mt-2">{info.instagram ? `We'll tag ${info.instagram} and send it as a Collab post. Accept the invite, then share and repost!` : 'Watch our Instagram this week, and please share and repost when it goes up!'}</p>
+                    </>
                   : <p className="inline-flex items-center gap-2 text-slate-200 font-semibold"><XCircle size={20} /> Got it. We won't use this photo.</p>}
                 <p className="text-slate-400 text-xs mt-2">Saved {new Date(info.answeredAt).toLocaleDateString()}.</p>
                 <button type="button" onClick={() => { setChanging(true); setFormError('') }} className="mt-4 text-sm text-teal-300 underline underline-offset-4">Change my answer</button>
@@ -87,6 +92,12 @@ export default function PhotoPermissionPage() {
                   <label htmlFor="po-name" className="block text-sm font-medium text-slate-200 mb-1">Your name</label>
                   <input id="po-name" value={name} onChange={e => setName(e.target.value)} autoComplete="name"
                     className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                </div>
+                <div>
+                  <label htmlFor="po-ig" className="block text-sm font-medium text-slate-200 mb-1">Instagram to tag <span className="text-slate-400 font-normal">(optional)</span></label>
+                  <input id="po-ig" value={ig} onChange={e => setIg(e.target.value)} placeholder="@yourhandle" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+                    className="w-full rounded-lg bg-white text-slate-900 px-3 py-2.5 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                  <p className="text-xs text-slate-400 mt-1">Yours or your player's. We'll tag it and send a Collab invite so the post shows on your page too.</p>
                 </div>
                 <label htmlFor="po-guardian" className="flex items-start gap-3 text-sm text-slate-200">
                   <input id="po-guardian" type="checkbox" checked={guardian} onChange={e => setGuardian(e.target.checked)} className="mt-0.5 h-5 w-5 accent-teal-500" />
