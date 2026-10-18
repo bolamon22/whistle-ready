@@ -3,7 +3,7 @@ title: Manage organizations (platform admin)
 category: Admin
 order: 730
 routes: /admin, /admin/orgs, /admin/orgs/*
-keywords: organizations orgs platform dashboard new org create organization owner team subscription plan whistle ready tournament whistle ready assigner feature switches turn on off registration scheduling scores game day money tasks website status branding logo slug payment details switch org member another organization head assigner
+keywords: organizations orgs platform dashboard new org create organization owner team subscription plan whistle ready tournament whistle ready assigner feature switches turn on off registration scheduling scores game day money tasks website status branding logo slug payment details switch org member another organization head assigner archive archived restore close delete remove test organization fake
 ---
 The **Platform Dashboard** and **Organizations** pages are for platform admins who run more than one customer organization.
 
@@ -35,6 +35,13 @@ On the organization's page, the **Plan** section has both plans and a switch for
 3. Use **Make owner** or **Remove** on existing members.
 
 Someone whose login already belongs to another organization keeps it: they get this one too (marked **home is another organization** on the list) and switch between them from the logo at the top left. **Remove** takes them out of this organization only. Admin logins are never changed from here.
+
+**To archive or delete an organization:** open it and scroll to **Close or delete** at the bottom. Sunshine Events Group can't be archived or deleted.
+
+- **Archive** is for an organization with history. Nothing is deleted. Its people can't open it (anyone who also works for another organization keeps that one), its public site and event pages say "This page isn't available," and scheduled emails and posts that come due while it's archived don't go out, then or later. It leaves the Platform Dashboard list and moves to the **Archived** tab on **Organizations**. **Restore**, on the banner at the top of its page, opens it again.
+- **Delete** is for test organizations. Click **Delete…** to see what it takes away: events and games, team registrations, Staff Pool, form submissions, logins and payments. Then type the organization's name and click **Delete for good**. Its events and everything in them, its Staff Pool and its settings are deleted. Its logins stay, without this organization, so you can add them to another. This can't be undone.
+
+Delete is blocked, with a note to archive instead, when its events have any payment on record (team payments, staff pay, or event income and expenses), or when its Staff Pool has games or pay at another organization's events.
 
 **Common problems:**
 - The user must already have an account. Create it first in **Logins**.
