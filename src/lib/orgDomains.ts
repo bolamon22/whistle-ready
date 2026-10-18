@@ -18,7 +18,7 @@ export const ORG_DOMAINS: Record<string, string> = {
 // whistleready.app and the org's icon on their domain (tournament pages too).
 export const ORG_ICON_SLUGS = new Set<string>(['sunshine-events-group'])
 export const ORG_ICON_FILES = new Set<string>([
-  '/favicon.ico', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/manifest.webmanifest',
+  '/favicon.ico', '/icon-192.png', '/icon-512.png', '/icon-maskable-512.png', '/apple-touch-icon.png', '/apple-touch-icon-precomposed.png', '/manifest.webmanifest',
 ])
 
 // Event vanity domains: the whole domain (any path, www or not) 301s to one page on the

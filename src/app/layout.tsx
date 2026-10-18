@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   twitter: { card: 'summary_large_image' },
   manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: 'Whistle Ready', statusBarStyle: 'default' },
-  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48' }, { url: '/icon-192.png', type: 'image/png', sizes: '192x192' }], apple: '/apple-touch-icon.png' },
+  icons: { icon: [{ url: '/favicon.ico', sizes: '48x48' }, { url: '/icon-192.png', type: 'image/png', sizes: '192x192' }], apple: [{ url: '/apple-touch-icon.png', sizes: '180x180', type: 'image/png' }] },
 }
 
 export const viewport: Viewport = {

@@ -1,22 +1,27 @@
 """Whistle Ready's app icons, made from public/whistle-ready-icon.png (the rounded
-tile with the whistle, on a wide transparent canvas).
+tile with the whistle, on a wide transparent canvas), plus the opaque rule for each
+org's own set in public/org-icons/<slug>/.
 
-  apple-touch-icon.png  180  iPhone/iPad home screen. Cut square inside the tile's
-                             rounded border so the art fills it; iOS rounds the
-                             corners itself and paints transparent pixels black,
-                             so it must be fully opaque.
-  icon-192.png, icon-512.png  browser tabs, notifications, desktop/Android
-                             installs, the fallback logo in emails: the tile itself,
-                             filling the square, corners transparent.
-  icon-maskable-512.png      Android adaptive icon: the full-bleed art at 84% so
-                             the whistle stays inside the 80% safe circle, with the
-                             background carried out to the edges.
-  favicon.ico                the tile at 16, 32 and 48.
+  apple-touch-icon.png (+ -precomposed)  180  The art cut square inside the tile's
+                             rounded border, full bleed. iOS rounds the corners itself.
+  icon-192.png, icon-512.png  the manifest's icons, the same full-bleed art. iOS 26
+                             takes the home-screen icon from the manifest, and one with
+                             transparent corners can come out as a plain letter tile
+                             (Bo's iPhone showed "W" and "S", Oct 18 2026), so every
+                             one is opaque. Also the notification icon and the emails'
+                             fallback logo.
+  icon-maskable-512.png      Android adaptive icon: the art at 84% so the whistle stays
+                             inside the 80% safe circle, background carried to the edges.
+  favicon.ico                the tile at 16, 32 and 48 (browser tabs only).
+
+Org sets: icon-192/512 and apple-touch-icon are flattened onto white if they have any
+transparency, and apple-touch-icon is copied to apple-touch-icon-precomposed.
 
 Run from the repo root:  python3 scripts/make-app-icons.py
-The first set (Sep 2026) drew the tile at about a quarter of the square on white,
-so it looked tiny on a home screen (Bo, Oct 18 2026).
+The manifest must load without a login: phones fetch it and the icons with no cookies.
 """
+import os
+import shutil
 import sys
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
@@ -44,8 +49,9 @@ def save(img, name, size):
     img.resize((size, size), Image.LANCZOS).save(f'{OUT}/{name}', optimize=True)
 
 save(full, 'apple-touch-icon.png', 180)
-save(tile, 'icon-192.png', 192)
-save(tile, 'icon-512.png', 512)
+save(full, 'apple-touch-icon-precomposed.png', 180)
+save(full, 'icon-192.png', 192)
+save(full, 'icon-512.png', 512)
 
 # Maskable: art at 84%, its edges carried outward and softened.
 inner = round(512 * 0.84)
@@ -61,3 +67,20 @@ canvas.save(f'{OUT}/icon-maskable-512.png', optimize=True)
 
 tile.resize((256, 256), Image.LANCZOS).save(f'{OUT}/favicon.ico', sizes=[(16, 16), (32, 32), (48, 48)])
 print('tile', (x0, y0, x1, y1), 'side', side, 'inset', inset)
+
+# Org sets: same rule, no transparency anywhere iOS might pick from.
+org_root = os.path.join(OUT, 'org-icons')
+for slug in sorted(os.listdir(org_root)) if os.path.isdir(org_root) else []:
+    d = os.path.join(org_root, slug)
+    for name in ('apple-touch-icon.png', 'icon-192.png', 'icon-512.png'):
+        p = os.path.join(d, name)
+        if not os.path.exists(p):
+            continue
+        im = Image.open(p).convert('RGBA')
+        if im.split()[3].getextrema()[0] < 255:
+            flat = Image.new('RGB', im.size, (255, 255, 255))
+            flat.paste(im, (0, 0), im)
+            flat.save(p, optimize=True)
+            print('flattened', slug, name)
+    if os.path.exists(os.path.join(d, 'apple-touch-icon.png')):
+        shutil.copyfile(os.path.join(d, 'apple-touch-icon.png'), os.path.join(d, 'apple-touch-icon-precomposed.png'))
