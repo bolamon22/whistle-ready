@@ -276,7 +276,7 @@ export default function ReelBuilder({ initialPhotos, events, site, onDone, onClo
       setProgress('Uploading Reel… 0%')
       const name = `reel-${(headline || ev?.name || 'post').toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 40)}.mp4`
       const up = await blobUpload(name, new File([blob], name, { type: 'video/mp4' }), {
-        access: 'public', handleUploadUrl: '/api/social/upload-video',
+        access: 'public', handleUploadUrl: '/api/social/upload-video', multipart: true,   // one PUT over ~16 MB fails
         onUploadProgress: (p: { percentage: number }) => setProgress(`Uploading Reel… ${Math.round(p.percentage)}%`),
       })
       // MediaRecorder can only emit a fragmented MP4, which Instagram rejects (2207082):

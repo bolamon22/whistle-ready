@@ -306,7 +306,9 @@ function SocialInner() {
     }
     const thumbnailUrl = poster ? await uploadJpeg(poster, `${fileSlug(p, look)}-cover.jpg`).catch(() => '') : ''
     const name = `${fileSlug(p, look)}-reel.mp4`
-    const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video' })
+    // multipart: one big PUT over ~16 MB now fails at once in Chrome ("Failed to fetch", Oct 18 2026:
+    // a 30-second squad Reel sat on "Uploading the Reel..." while the client retried); 8 MB parts go through.
+    const up = await blobUpload(name, new File([video], name, { type: 'video/mp4' }), { access: 'public', handleUploadUrl: '/api/social/upload-video', multipart: true })
     // The browser records a fragmented MP4 with no audio track when there's no built-in
     // song; Instagram rejects that (2207082). Re-mux it server-side into a standard MP4.
     const vurl = await normalizeReel(up.url, why => toast.error(`Couldn't finish the video for Instagram (${why}). Facebook will take it; Instagram may not.`, { duration: 8000 }))
@@ -689,7 +691,7 @@ async function uploadOne(f: File, setBusy: (s: string) => void): Promise<Media> 
     if (info.poster) { setBusy('Saving cover frame…'); thumbnailUrl = await uploadImage(info.poster, 'cover.jpg') }
     setBusy('Uploading video… 0%')
     const blob = await blobUpload(f.name.replace(/[^\w.\-]+/g, '_'), f, {
-      access: 'public', handleUploadUrl: '/api/social/upload-video',
+      access: 'public', handleUploadUrl: '/api/social/upload-video', multipart: true,   // big single PUTs fail; see useReel
       onUploadProgress: (p: { percentage: number }) => setBusy(`Uploading video… ${Math.round(p.percentage)}%`),
     })
     // Re-mux to a progressive, Instagram-ingestible MP4 (MediaRecorder/phone files can be

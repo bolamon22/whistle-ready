@@ -73,7 +73,7 @@ export async function POST(request: Request) {
 
     const outBuf = await readFile(outp)
     const base = (url.split('/').pop() || 'reel').split('?')[0].replace(/\.(mp4|mov|webm)$/i, '').replace(/[^\w.-]+/g, '_')
-    const blob = await put(`social-video/${base}.mp4`, outBuf, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true })
+    const blob = await put(`social-video/${base}.mp4`, outBuf, { access: 'public', contentType: 'video/mp4', addRandomSuffix: true, multipart: true })
     return NextResponse.json({ url: blob.url })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'Could not normalize the video' }, { status: 500 })
