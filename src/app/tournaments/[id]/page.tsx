@@ -163,6 +163,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [headers,setHeaders]=useState<string[]>([])
   const [preview,setPreview]=useState<Record<string,string>[]>([])
   const [mapping,setMapping]=useState<Record<string,string>>({})
+  // A schedule laid out as times down, fields across (lib/gridSchedule, Bo Oct 19 2026):
+  // the grids found in the file, whether we import it that way, and the day for each grid.
+  const [grids,setGrids]=useState<{key:string;label:string;fields:number;games:number;first:string;last:string;dateGuess:string}[]>([])
+  const [gridMode,setGridMode]=useState(false)
+  const [gridDates,setGridDates]=useState<Record<string,string>>({})
 
   // Auto-assign state
   const [showAutoAssign,setShowAutoAssign]=useState(false)
@@ -322,20 +327,34 @@ export default function GridPage({ params }: { params:{id:string} }) {
     const guessed:Record<string,string>={}
     for(const f of FIELD_LABELS){const m=data.headers.find((h:string)=>h.toLowerCase().replace(/\s+/g,'').includes(f.key.toLowerCase())||h.toLowerCase().replace(/\s+/g,'')===f.label.toLowerCase().replace(/\s+/g,''));if(m)guessed[f.key]=m}
     setMapping(guessed)
+    // A grid whose columns don't map to games opens as a grid import. Each grid's day is the
+    // date in its title, else the event's days in order (setup dates, not stored game dates,
+    // which a bad import can fill with junk).
+    const gs=Array.isArray(data.grids)?data.grids:[]
+    setGrids(gs)
+    setGridMode(gs.length>0&&FIELD_LABELS.filter(f=>f.required&&guessed[f.key]).length<4)
+    const days=eventDayList({startDate:tournament?.startDate,endDate:tournament?.endDate},[])
+    setGridDates(Object.fromEntries(gs.map((g:{key:string;dateGuess:string},i:number)=>[g.key,g.dateGuess||days[i]||days[0]||''])))
     if(fileRef.current)fileRef.current.value=''
   }
+  function closeImport(){setImportStep('idle');setPendingFile(null);setHeaders([]);setPreview([]);setMapping({});setGrids([]);setGridMode(false);setGridDates({})}
 
   async function confirmImport(){
     if(!pendingFile)return
-    const missing=FIELD_LABELS.filter(f=>f.required&&!mapping[f.key])
-    if(missing.length>0){toast.error(`Please map: ${missing.map(f=>f.label).join(', ')}`);return}
+    if(gridMode){
+      if(!grids.some(g=>gridDates[g.key])){toast.error('Pick a day for the grid');return}
+    }else{
+      const missing=FIELD_LABELS.filter(f=>f.required&&!mapping[f.key])
+      if(missing.length>0){toast.error(`Please map: ${missing.map(f=>f.label).join(', ')}`);return}
+    }
     setImportStep('importing')
-    const fd=new FormData();fd.append('file',pendingFile);fd.append('mapping',JSON.stringify(mapping))
+    const fd=new FormData();fd.append('file',pendingFile)
+    if(gridMode)fd.append('grid',JSON.stringify({dates:gridDates}));else fd.append('mapping',JSON.stringify(mapping))
     const res=await fetch(`/api/tournaments/${params.id}/import`,{method:'POST',body:fd})
     const data=await res.json()
     if(res.ok){toast.success(`Imported ${data.imported} games`);setActiveDay('');await load()}
     else toast.error(data.error||'Import failed')
-    setImportStep('idle');setPendingFile(null);setHeaders([]);setPreview([]);setMapping({})
+    closeImport()
   }
 
   async function runAutoAssign(preview=true){
@@ -661,12 +680,30 @@ export default function GridPage({ params }: { params:{id:string} }) {
       {importStep==='mapping'&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-            <div className="px-6 py-5 border-b border-slate-100"><h2 className="text-lg font-bold">Map Your Columns</h2><p className="text-sm text-slate-500 mt-1">Match each field to a column in your file</p>
+            <div className="px-6 py-5 border-b border-slate-100"><h2 className="text-lg font-bold">{gridMode?'Field grid found':'Map Your Columns'}</h2><p className="text-sm text-slate-500 mt-1">{gridMode?'This file lays the day out with times down the side and fields across the top. Each filled cell becomes a game on that field at that time, with teams TBD and game numbers 1, 2, 3 in time and field order.':'Match each field to a column in your file'}</p>
               {/* An import replaces every game, and their assignments go with them (api/tournaments/[id]/import).
                   It used to say nothing, so re-importing an updated schedule wiped the board's refs. */}
               {games.length>0&&(()=>{const assigned=games.reduce((n,g)=>n+(g.assignments?.length||0),0);return<p role="alert" className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Importing replaces all {games.length} games on this board{assigned>0?<> and removes their <strong>{assigned} assignment{assigned===1?'':'s'}</strong></>:null}.</p>})()}
             </div>
+            {gridMode?(
             <div className="px-6 py-4 space-y-3">
+              {grids.map(g=>(
+                <div key={g.key} className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 px-4 py-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <p className="text-sm font-semibold text-slate-800">{g.label}</p>
+                    <p className="text-xs text-slate-500">{g.games} game{g.games===1?'':'s'} · {g.fields} fields · {formatTime(g.first)} to {formatTime(g.last)}</p>
+                  </div>
+                  <label className="text-xs font-semibold text-slate-500 inline-flex items-center gap-2">Day
+                    <input type="date" className="input h-9 w-auto" value={gridDates[g.key]||''} onChange={e=>setGridDates(d=>({...d,[g.key]:e.target.value}))}/>
+                  </label>
+                </div>
+              ))}
+              <p className="text-xs text-slate-500">Times with no AM or PM that come after noon, like 1:30 after 12:45, are read as afternoon. Leave a day blank to skip that grid.</p>
+              {headers.length>0&&<button type="button" className="text-xs font-semibold text-teal-700 hover:underline" onClick={()=>setGridMode(false)}>Map columns instead</button>}
+            </div>
+            ):(
+            <div className="px-6 py-4 space-y-3">
+              {grids.length>0&&<button type="button" className="text-xs font-semibold text-teal-700 hover:underline" onClick={()=>setGridMode(true)}>This file is a field grid (times down, fields across): import it that way</button>}
               {FIELD_LABELS.map(f=>(
                 <div key={f.key} className="flex items-center gap-4">
                   <div className="w-44 shrink-0"><span className="text-sm font-semibold text-slate-700">{f.label}</span>{f.required&&<span className="ml-1 text-red-400 text-xs">*</span>}</div>
@@ -675,8 +712,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 </div>
               ))}
             </div>
+            )}
             <div className="px-6 py-4 border-t border-slate-100 flex gap-3 justify-end">
-              <button className="btn-secondary" onClick={()=>{setImportStep('idle');setPendingFile(null)}}>Cancel</button>
+              <button className="btn-secondary" onClick={closeImport}>Cancel</button>
               <button className="btn-primary" onClick={confirmImport}>{games.length>0?'Replace games →':'Import Games →'}</button>
             </div>
           </div>

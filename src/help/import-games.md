@@ -3,7 +3,7 @@ title: Import games from TourneyMachine or a spreadsheet
 category: Staff
 order: 435
 routes: /tournaments/*
-keywords: import games schedule upload spreadsheet excel xlsx csv tourneymachine tourney machine schedule export game list add game head assigner replace games re-import update schedule map columns
+keywords: grid field grid times down fields across import games schedule upload spreadsheet excel xlsx csv tourneymachine tourney machine schedule export game list add game head assigner replace games re-import update schedule map columns
 ---
 Bring an event's games onto the **Assigner** board from a file, for example a schedule exported from TourneyMachine, then put refs and scorekeepers on them. The director (the **Head Assigner** on the Assigner plan) imports; assigners can't.
 
@@ -14,6 +14,12 @@ Bring an event's games onto the **Assigner** board from a file, for example a sc
 2. Click **⋯**, then **Import schedule**, and pick the file.
 3. In **Map Your Columns**, match **Game Number**, **Game Date**, **Start Time**, **Division**, **Location / Field**, **Team 1** and **Team 2**, and **Pool** if you have one. Columns whose names match are picked for you.
 4. Click **Import Games →**. Each game gets the event's officials per game (see "Set staff pay rates and officials per game").
+
+**A schedule laid out as a grid** (times down the left, field numbers across the top, each box the division or the matchup) imports too:
+1. Click **⋯**, then **Import schedule**, and pick the file. **Field grid found** opens instead of the column list.
+2. Check the count of games and fields, and pick the **Day** for each grid. A file with one grid per sheet, or one per day on the same sheet, shows each one.
+3. Click **Import Games →**. Every filled box becomes a game on that field at that time. The teams are TBD unless the box names them ("Team A vs Team B"), and games are numbered 1, 2, 3 by time and field.
+Times without AM or PM that come after noon, like 1:30 after 12:45, are read as afternoon.
 
 **To add one game:** click **⋯**, then **Add a game**.
 

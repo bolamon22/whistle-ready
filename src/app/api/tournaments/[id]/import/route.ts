@@ -4,6 +4,7 @@ import prisma from '@/lib/db'
 import { excelSerialToDate, excelSerialToTime } from '@/lib/utils'
 import { requireStaff } from '@/lib/apiAuth'
 import { refsLookup } from '@/lib/refRules'
+import { findGrids, gridGames } from '@/lib/gridSchedule'
 
 function parseDate(val: unknown): string {
   if (typeof val==='number') return excelSerialToDate(val)
@@ -29,15 +30,30 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
     const fd = await req.formData(); const file = fd.get('file') as File; const mj = fd.get('mapping') as string|null
     const buf = Buffer.from(await file.arrayBuffer())
     const wb = XLSX.read(buf, { type:'buffer' })
-    const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[wb.SheetNames[0]], { defval:'' })
-    if (!rows.length) return NextResponse.json({ error:'No data' }, { status:400 })
-    const mapping = mj ? JSON.parse(mj) : autoDetect(Object.keys(rows[0]))
-
     // Each game's refs from the event's officials setting: its standard officials per game
     // and the division exceptions (lib/refRules), like every other way games are made.
     // This read only the exceptions and gave every other game 2, so a Head Assigner who
     // set 1 or 3 per game in Pay rates got 2 on every imported game.
     const refsFor = await refsLookup(params.id)
+
+    // A field grid (lib/gridSchedule): `grid` carries the day picked for each grid found.
+    const gj = fd.get('grid') as string|null
+    if (gj) {
+      const dates: Record<string,string> = JSON.parse(gj).dates || {}
+      const grids = findGrids(wb.SheetNames.map(name => ({ name, rows: XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[name], { header: 1, raw: true, defval: null }) })))
+      const ok = (d: string) => /^\d{4}-\d{2}-\d{2}$/.test(d)
+      const made = gridGames(grids, g => ok(dates[g.key] || '') ? dates[g.key] : '')
+      if (!made.length) return NextResponse.json({ error:'Pick a day for at least one grid.' }, { status:400 })
+      const data = made.map(g => ({ tournamentId:params.id, ...g, pool:null, refCount:refsFor(g.division) }))
+      await prisma.game.deleteMany({ where:{tournamentId:params.id} })
+      await prisma.game.createMany({ data })
+      await prisma.tournament.update({ where:{id:params.id}, data:{dates:JSON.stringify(Array.from(new Set(made.map(g=>g.date))).sort())} })
+      return NextResponse.json({ imported:data.length })
+    }
+
+    const rows = XLSX.utils.sheet_to_json<Record<string,unknown>>(wb.Sheets[wb.SheetNames[0]], { defval:'' })
+    if (!rows.length) return NextResponse.json({ error:'No data' }, { status:400 })
+    const mapping = mj ? JSON.parse(mj) : autoDetect(Object.keys(rows[0]))
 
     const dateSet = new Set<string>()
     const games = rows.filter(r=>String(r[mapping.gameNumber]??'').trim()).map(r=>{
