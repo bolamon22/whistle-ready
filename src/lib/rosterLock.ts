@@ -33,6 +33,7 @@
 // staff waivers page keeps moving anyone anywhere at any time, because rosters
 // genuinely do need fixing on game day and somebody has to be able to do it.
 import { prisma } from './db'
+import { time12, dayDate } from '@/lib/time12'
 
 // THE EVENT'S WALL CLOCK, NOT THE SERVER'S.
 //
@@ -122,13 +123,13 @@ export async function rosterLock(tournamentId: string, now = new Date()): Promis
   let label = ''
   if (first) {
     at = `${first.date} ${String(first.startTime || '').trim()}`.trim()
-    label = `the first game of the event (${at})`
+    label = `the first game of the event (${dayDate(first.date)} ${time12(first.startTime)})`
   } else {
     try {
       const rows = await prisma.$queryRawUnsafe<any[]>(
         'SELECT startDate FROM "Tournament" WHERE id = ?', tournamentId)
       const sd = String(rows?.[0]?.startDate || '').trim()
-      if (sd) { at = sd; label = `the event start (${sd})` }
+      if (sd) { at = sd; label = `the event start (${dayDate(sd)})` }
     } catch { /* leave it unlocked rather than guess */ }
   }
 

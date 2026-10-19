@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { time12, dayDate } from '@/lib/time12'
 
 interface Tournament { id: string; name: string; startDate: string; logoUrl: string }
 interface Game {
@@ -144,9 +145,9 @@ export default function CoachDashboard() {
             const lost = hasScore && myScore! < oppScore!
             return (
               <div key={g.id} className={`bg-white border rounded-xl px-5 py-4 flex items-center gap-4 ${won ? 'border-green-200' : lost ? 'border-red-200' : 'border-gray-200'}`}>
-                <div className="text-center w-12 flex-shrink-0">
-                  <div className="text-xs text-gray-400">{g.date}</div>
-                  <div className="text-sm font-semibold text-gray-700">{g.startTime}</div>
+                <div className="text-center w-[72px] flex-shrink-0">
+                  <div className="text-xs text-gray-400 whitespace-nowrap">{dayDate(g.date)}</div>
+                  <div className="text-sm font-semibold text-gray-700 whitespace-nowrap">{time12(g.startTime)}</div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-gray-800">vs {opponent}</div>

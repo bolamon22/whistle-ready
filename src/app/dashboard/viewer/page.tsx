@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
+import { time12, dayDate } from '@/lib/time12'
 
 interface Tournament { id: string; name: string; startDate: string; endDate: string; logoUrl: string; location: string }
 interface Game {
@@ -101,9 +102,9 @@ export default function ViewerDashboard() {
       <div className="space-y-2">
         {displayGames.map(g => (
           <div key={g.id} className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-4">
-            <div className="text-center w-14 flex-shrink-0">
-              <div className="text-xs text-gray-400">{g.date}</div>
-              <div className="text-sm font-semibold text-gray-700">{g.startTime}</div>
+            <div className="text-center w-[72px] flex-shrink-0">
+              <div className="text-xs text-gray-400 whitespace-nowrap">{dayDate(g.date)}</div>
+              <div className="text-sm font-semibold text-gray-700 whitespace-nowrap">{time12(g.startTime)}</div>
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-medium text-gray-800">{g.team1} <span className="text-gray-400">vs</span> {g.team2}</div>

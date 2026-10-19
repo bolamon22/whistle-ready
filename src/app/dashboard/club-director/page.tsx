@@ -16,6 +16,7 @@ import FamilyMessages from '@/components/FamilyMessages'
 import HowToVideoLink from '@/components/HowToVideoLink'
 import { hasHowTo } from '@/lib/howToVideos'
 import type { FamilyMessage } from '@/lib/familyMessages'
+import { time12, dayDate } from '@/lib/time12'
 
 interface Tournament { id: string; name: string; startDate: string; endDate?: string; logoUrl: string; orgSlug?: string }
 interface Waiver {
@@ -1601,9 +1602,9 @@ export default function ClubDirectorDashboard() {
                   const myTeamData = data.registrations.flatMap(r => r.teams).find(t => t.teamName === myTeam)
                   return (
                     <div key={g.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-4 ${g.isChampionship ? 'border-amber-300 bg-amber-50' : won ? 'border-green-200' : lost ? 'border-red-200' : 'border-gray-200'}`}>
-                      <div className="w-14 text-center flex-shrink-0">
-                        <div className="text-xs text-gray-400">{g.date}</div>
-                        <div className="text-sm font-semibold text-gray-700">{g.startTime}</div>
+                      <div className="w-[72px] text-center flex-shrink-0">
+                        <div className="text-xs text-gray-400 whitespace-nowrap">{dayDate(g.date)}</div>
+                        <div className="text-sm font-semibold text-gray-700 whitespace-nowrap">{time12(g.startTime)}</div>
                         {g.isChampionship && <div className="text-xs text-amber-600 font-bold flex items-center justify-center gap-1"><Trophy size={11} className="shrink-0" /> Final</div>}
                       </div>
                       <div className="flex-1 min-w-0">

@@ -11,6 +11,7 @@ import { teamRefKey } from '@/lib/names'
 import { deviceId as getDeviceId } from '@/lib/pushClient'
 import { DOMAIN_BY_SLUG } from '@/lib/orgDomains'
 import { hasHowTo } from '@/lib/howToVideos'
+import { time12 } from '@/lib/time12'
 
 // The parent dashboard, redesigned for phones (Bo approved the mockup, Oct 13 2026:
 // "Parent Dashboard Redesign" canvas). Four tabs along the bottom on a phone, along
@@ -300,8 +301,8 @@ export default function ParentDashboard() {
       : nextGame?.id === g.id ? <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-700">Next up</span> : null
     return (
       <div key={g.id} data-testid="parent-game" className={`bg-white border rounded-2xl p-3.5 flex gap-3 items-start ${m ? 'border-teal-200' : 'border-slate-200'}`}>
-        <div className="w-[64px] shrink-0">
-          <div className="text-[15px] font-bold text-slate-900 whitespace-nowrap">{g.startTime}</div>
+        <div className="w-[76px] shrink-0">
+          <div className="text-[15px] font-bold text-slate-900 whitespace-nowrap">{time12(g.startTime)}</div>
           <div className="text-xs text-slate-500 leading-snug">{String(g.location || '').replace(/^.*?(Field\s*\S+)$/i, '$1')}</div>
         </div>
         <div className="flex-1 min-w-0">
@@ -366,7 +367,7 @@ export default function ParentDashboard() {
                   <span className="text-[11px] font-bold tracking-[0.08em] text-teal-200">NEXT GAME · {dayLabel(nextGame.date).toUpperCase()}</span>
                   {whose(nextGame) && <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-teal-400/15 border border-teal-300/40 text-teal-100">{whose(nextGame)!.players.map(p => firstName(p)).join(' & ')}</span>}
                 </div>
-                <div className="text-4xl font-extrabold tracking-tight">{nextGame.startTime}</div>
+                <div className="text-4xl font-extrabold tracking-tight">{time12(nextGame.startTime)}</div>
                 <div className="text-xl font-bold leading-snug">{nextGame.team1} <span className="text-teal-200 font-medium">vs</span> {nextGame.team2}</div>
                 <div className="flex items-center gap-1.5 text-sm text-teal-100"><MapPin size={16} aria-hidden /> {nextGame.location || ev.location}</div>
                 <div className="flex gap-2.5 flex-wrap">
