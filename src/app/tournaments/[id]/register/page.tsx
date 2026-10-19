@@ -93,6 +93,8 @@ export default function RegisterPage() {
   const [savedRegistrationId, setSavedRegistrationId] = useState('')
   const [invoiceBase, setInvoiceBase] = useState(0)
   const [payChoice, setPayChoice] = useState<'' | PayMethod>('')
+  // Part payment chosen on the payment step (0 = the whole invoice).
+  const [payNow, setPayNow] = useState(0)
   const [paypalLive, setPaypalLive] = useState(false)
   const [achNote, setAchNote] = useState<'' | 'processing' | 'micro'>('')
   const [microUrl, setMicroUrl] = useState('')
@@ -420,6 +422,8 @@ export default function RegisterPage() {
     const L = conf?.letter
     const D = conf?.data
     const donePaid = paid || step === 'success'
+    // Paid part of it on the payment step: say so, and where the rest gets paid.
+    const partPaid = step === 'success' && payNow > 0 && payNow < invoiceBase
     // Signed in already and their role was just raised to club director: the old
     // role is in their sign-in token until they sign in again (same as /claim).
     const resignIn = !!portal?.rolePromoted && !portalSignedIn && sessionStatus === 'authenticated'
@@ -430,7 +434,7 @@ export default function RegisterPage() {
           <div className="mx-auto mb-3 w-12 h-12 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
           </div>
-          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid && !achNote ? 'Payment complete!' : L?.allWaitlisted ? "You're on the waiting list" : 'Registration received!'}</h2>
+          <h2 className="text-2xl font-bold text-center text-slate-900 mb-1">{donePaid && !achNote ? (partPaid ? 'Payment received!' : 'Payment complete!') : L?.allWaitlisted ? "You're on the waiting list" : 'Registration received!'}</h2>
           {L ? (
             <div className="mt-4 text-left">
               <p className="font-semibold text-slate-800">{L.greeting}</p>
@@ -445,7 +449,9 @@ export default function RegisterPage() {
               {L.waitlistNote && <div className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 leading-relaxed" dangerouslySetInnerHTML={{ __html: mdToHtml(L.waitlistNote) }} />}
               {achNote === 'processing' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">Bank transfer (ACH) initiated — it typically clears within 4 business days, and we&apos;ll mark your registration paid automatically once it does.</p>}
               {achNote === 'micro' && <p className="mt-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 rounded-lg px-3 py-2">One more step: Stripe is sending a small verification deposit to your bank (1&ndash;2 days). Follow the emailed instructions{microUrl ? <> or <a href={microUrl} className="underline" target="_blank" rel="noreferrer">verify here</a></> : null} to complete your payment.</p>}
-              {!achNote && (donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? "Payment received — you're all set." : L.payment}</p>}
+              {!achNote && (donePaid || L.payment) && <p className="mt-3 text-sm bg-teal-50 border border-teal-100 text-teal-800 rounded-lg px-3 py-2">{donePaid ? (partPaid
+                ? `Payment of ${fmt(payNow)} received. Your remaining ${fmt(invoiceBase - payNow)} can be paid any time from your club portal or the payment link in your email.`
+                : "Payment received — you're all set.") : L.payment}</p>}
 
               {/* Account CTA — the main next step. Shown here (not just in the email)
                   because this is the moment the coach is actually paying attention.
@@ -519,7 +525,8 @@ export default function RegisterPage() {
   }
 
   if (step === 'payment' && savedRegistrationId) {
-    const cardTotal = Math.round(invoiceBase * 1.03 * 100) / 100
+    const amt = payNow > 0 && payNow <= invoiceBase ? payNow : invoiceBase
+    const cardTotal = Math.round(amt * 1.03 * 100) / 100
     return (
       <div className="min-h-screen bg-gray-50">
         <Toaster />
@@ -537,16 +544,20 @@ export default function RegisterPage() {
             </div>
             <div className="space-y-1.5 text-sm">
               <div className="flex justify-between font-semibold text-gray-800"><span>Registration ({teams.length} team{teams.length !== 1 ? 's' : ''})</span><span>{fmt(invoiceBase)}</span></div>
+              {amt < invoiceBase && <>
+                <div className="flex justify-between text-gray-600"><span>Paying now</span><span>{fmt(amt)}</span></div>
+                <div className="flex justify-between text-gray-400 text-xs"><span>Left on your balance after this payment</span><span>{fmt(invoiceBase - amt)}</span></div>
+              </>}
               {payChoice === 'card' && <>
-                <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - invoiceBase)}</span></div>
+                <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - amt)}</span></div>
                 <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
               </>}
               {payChoice === 'ach' && <>
                 <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0</span></div>
-                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(invoiceBase)}</span></div>
+                <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(amt)}</span></div>
               </>}
               {payChoice === 'paypal' && <>
-                <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - invoiceBase)}</span></div>
+                <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - amt)}</span></div>
                 <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
               </>}
             </div>
@@ -561,6 +572,7 @@ export default function RegisterPage() {
               contactEmail={contactEmail}
               initialMethod={paymentMethod === 'ach' ? 'ach' : paymentMethod === 'paypal' ? 'paypal' : 'card'}
               onMethodChange={setPayChoice}
+              onAmountChange={setPayNow}
               onCardSuccess={() => setStep('success')}
               onPayPalSuccess={() => setStep('success')}
               onAchProcessing={() => { setAchNote('processing'); setStep('success') }}

@@ -12,6 +12,9 @@ import { CreditCard, Landmark, Lock, Wallet } from 'lucide-react'
 const fmt = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 type StripePromise = ReturnType<typeof loadStripe>
 export type PayMethod = 'card' | 'ach' | 'paypal'
+// Smallest part-payment a club can make. Below this the fees and bookkeeping
+// cost more than the commitment is worth.
+export const MIN_PART_PAYMENT = 100
 
 function CardPayForm({ clientSecret, clubName, regId, total, onSuccess }: {
   clientSecret: string; clubName: string; regId: string; total: number; onSuccess: () => void
@@ -324,11 +327,15 @@ function PayPalPayForm({ clientId, registrationId, balance, total, tournamentNam
   )
 }
 
-export default function StripePayPanel({ registrationId, balance, clubName, tournamentName, contactEmail = '', initialMethod = '', onMethodChange, onCardSuccess, onPayPalSuccess, onAchProcessing, onAchMicrodeposits, onAchSuccess }: {
+export default function StripePayPanel({ registrationId, balance, clubName, tournamentName, contactEmail = '', initialMethod = '', allowPartial = true, onAmountChange, onMethodChange, onCardSuccess, onPayPalSuccess, onAchProcessing, onAchMicrodeposits, onAchSuccess }: {
   registrationId: string; balance: number; clubName: string; tournamentName: string
   contactEmail?: string
   initialMethod?: '' | PayMethod
-  onMethodChange?: (m: PayMethod) => void
+  // Part payments: a club can pay a deposit or whatever its card limit allows,
+  // and the rest stays on the balance for the same link or the club portal.
+  allowPartial?: boolean
+  onAmountChange?: (amount: number) => void
+  onMethodChange?: (m: '' | PayMethod) => void
   onCardSuccess: () => void
   onPayPalSuccess?: () => void
   onAchProcessing: () => void
@@ -362,20 +369,38 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
       .catch(() => setPaypalProbe('off'))
   }, [])
 
-  const cardTotal = Math.round(balance * 1.03 * 100) / 100
+  const [partial, setPartial] = useState(false)
+  const [partStr, setPartStr] = useState('')
+  const canPartial = allowPartial && balance > MIN_PART_PAYMENT
+  const partNum = Math.round((parseFloat(partStr.replace(/[$,\s]/g, '')) || 0) * 100) / 100
+  const payAmount = partial ? partNum : balance
+  const amountOk = !partial || (partNum >= MIN_PART_PAYMENT && partNum <= balance)
+  const cardTotal = Math.round(payAmount * 1.03 * 100) / 100
+
+  useEffect(() => { onAmountChange?.(amountOk && payAmount > 0 ? payAmount : balance) },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [payAmount, amountOk, balance])
+
+  // A started payment is for one amount; changing the amount means picking the
+  // method again so Stripe and PayPal get the new number.
+  function resetMethod() {
+    if (!method && !clientSecret) return
+    setMethod(''); setClientSecret(''); setPayError(''); setWalletShown(false)
+    onMethodChange?.('')
+  }
 
   async function chooseMethod(m: PayMethod) {
-    if (creating) return
+    if (creating || !amountOk || payAmount <= 0) return
     setMethod(m); setClientSecret(''); setPayError(''); setWalletShown(false)
     onMethodChange?.(m)
     if (m === 'paypal') return // the PayPal pane creates its own order when clicked
     setCreating(true)
     try {
-      const amount = m === 'ach' ? balance : cardTotal
+      const amount = m === 'ach' ? payAmount : cardTotal
       const res = await fetch('/api/stripe/create-team-intent', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount, baseAmount: balance,
+          amount, baseAmount: payAmount,
           tournamentName, clubName, registrationId,
           ...(m === 'ach' ? { paymentMethodType: 'us_bank_account' } : {}),
         }),
@@ -398,24 +423,63 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  const tileOff = creating || !amountOk || payAmount <= 0
   return (
     <div>
+      {canPartial && (
+        <div className="mb-5">
+          <div className="grid grid-cols-2 gap-3">
+            <button type="button" onClick={() => { if (partial) { setPartial(false); resetMethod() } }} disabled={creating}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${!partial ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+              <div className="font-semibold text-slate-800 text-sm">Pay full balance</div>
+              <div className="text-xs text-gray-500 mt-0.5">{fmt(balance)}</div>
+            </button>
+            <button type="button" onClick={() => { if (!partial) { setPartial(true); resetMethod() } }} disabled={creating}
+              className={`rounded-xl border-2 px-4 py-3 text-left transition-colors ${partial ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+              <div className="font-semibold text-slate-800 text-sm">Pay part now</div>
+              <div className="text-xs text-gray-500 mt-0.5">Deposit or partial payment</div>
+            </button>
+          </div>
+          {partial && (
+            <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3">
+              <label htmlFor="part-amount" className="text-xs font-medium text-gray-600">Amount to pay now</label>
+              <div className="relative mt-1 max-w-[220px]">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">$</span>
+                <input id="part-amount" type="text" inputMode="decimal" autoComplete="off" autoFocus
+                  value={partStr} placeholder={String(Math.min(1000, balance))}
+                  onChange={e => { setPartStr(e.target.value); resetMethod() }}
+                  className="w-full bg-white border border-gray-300 rounded-lg pl-7 pr-3 py-2 text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-teal-500" />
+              </div>
+              {partStr && !amountOk ? (
+                <p className="text-xs text-red-500 mt-1.5">Enter an amount from {fmt(MIN_PART_PAYMENT)} up to {fmt(balance)}.</p>
+              ) : partNum > 0 ? (
+                <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
+                  {fmt(Math.max(0, balance - partNum))} stays on your balance &mdash; pay it any time from this same link or your club portal.
+                  {' '}Card and PayPal/Venmo charge {fmt(cardTotal)} with the 3% fee.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1.5">Minimum {fmt(MIN_PART_PAYMENT)}. The rest stays on your balance to pay later.</p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div className={paypalProbe !== 'off' ? 'grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5' : 'grid grid-cols-2 gap-3 mb-5'}>
-        <button type="button" onClick={() => chooseMethod('ach')} disabled={creating}
-          className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'ach' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+        <button type="button" onClick={() => chooseMethod('ach')} disabled={tileOff}
+          className={`rounded-xl border-2 p-4 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${method === 'ach' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
           <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Landmark size={16} className="text-teal-600" /> Bank transfer (ACH)</div>
-          <div className="text-xs text-teal-600 font-medium mt-1">No fee — pay {fmt(balance)}</div>
+          <div className="text-xs text-teal-600 font-medium mt-1">No fee — pay {fmt(payAmount)}</div>
           <div className="text-xs text-gray-400 mt-0.5">Clears in ~4 business days</div>
         </button>
-        <button type="button" onClick={() => chooseMethod('card')} disabled={creating}
-          className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'card' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+        <button type="button" onClick={() => chooseMethod('card')} disabled={tileOff}
+          className={`rounded-xl border-2 p-4 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${method === 'card' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
           <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><CreditCard size={16} className="text-teal-600" /> {applePayDevice ? 'Card or Apple Pay' : 'Card'}</div>
           <div className="text-xs text-gray-500 font-medium mt-1">3% fee — pay {fmt(cardTotal)}</div>
           <div className="text-xs text-gray-400 mt-0.5">Instant confirmation</div>
         </button>
         {paypalProbe !== 'off' && (
-          <button type="button" onClick={() => chooseMethod('paypal')} disabled={creating}
-            className={`rounded-xl border-2 p-4 text-left transition-colors ${method === 'paypal' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
+          <button type="button" onClick={() => chooseMethod('paypal')} disabled={tileOff}
+            className={`rounded-xl border-2 p-4 text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${method === 'paypal' ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'}`}>
             <div className="flex items-center gap-2 font-semibold text-slate-800 text-sm"><Wallet size={16} className="text-teal-600" /> PayPal / Venmo</div>
             <div className="text-xs text-gray-500 font-medium mt-1">3% fee &mdash; pay {fmt(cardTotal)}</div>
             <div className="text-xs text-gray-400 mt-0.5">Instant confirmation</div>
@@ -444,13 +508,13 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
         <AchPayForm
           stripePromise={stripePromise} clientSecret={clientSecret}
           clubName={clubName} tournamentName={tournamentName}
-          regId={registrationId} total={balance} contactEmail={contactEmail}
+          regId={registrationId} total={payAmount} contactEmail={contactEmail}
           onProcessing={onAchProcessing} onMicrodeposits={onAchMicrodeposits} onSuccess={onAchSuccess}
         />
       )}
       {!creating && method === 'paypal' && (
         paypalProbe === 'ready' && paypalClientId ? (
-          <PayPalPayForm clientId={paypalClientId} registrationId={registrationId} balance={balance} total={cardTotal}
+          <PayPalPayForm key={payAmount} clientId={paypalClientId} registrationId={registrationId} balance={payAmount} total={cardTotal}
             tournamentName={tournamentName} clubName={clubName} onSuccess={onPayPalSuccess || onCardSuccess} />
         ) : paypalProbe === 'pending' ? (
           <p className="text-sm text-slate-400 text-center py-3">Loading PayPal&hellip;</p>
@@ -458,7 +522,7 @@ export default function StripePayPanel({ registrationId, balance, clubName, tour
           <p className="text-sm text-red-500">PayPal isn&apos;t available right now &mdash; please choose another method above.</p>
         )
       )}
-      {!method && !creating && <p className="text-xs text-gray-400 text-center">Choose how you&apos;d like to pay.</p>}
+      {!method && !creating && <p className="text-xs text-gray-400 text-center">{amountOk && payAmount > 0 ? 'Choose how you\u2019d like to pay.' : 'Enter the amount above, then choose how you\u2019d like to pay.'}</p>}
 
       <div className="mt-5 pt-4 border-t border-gray-100 text-center">
         {method === 'paypal' ? (

@@ -39,8 +39,12 @@ export default function PayPage() {
   const [microUrl, setMicroUrl] = useState('')
 
   const balance = info?.balance || 0
-  const cardTotal = Math.round(balance * 1.03 * 100) / 100
-  const totalForMethod = method === 'ach' ? balance : cardTotal
+  // What they're paying now: the whole balance, or the part they chose.
+  const [payNow, setPayNow] = useState(0)
+  const amt = payNow > 0 && payNow <= balance ? payNow : balance
+  const isPart = amt < balance
+  const cardTotal = Math.round(amt * 1.03 * 100) / 100
+  const totalForMethod = method === 'ach' ? amt : cardTotal
 
   useEffect(() => {
     if (!regId) return
@@ -120,7 +124,9 @@ export default function PayPage() {
     <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
       <CheckCircle2 className="mx-auto text-green-500 mb-3" size={36} />
       <h2 className="text-lg font-bold text-slate-800 mb-1">Payment received — thank you!</h2>
-      <p className="text-sm text-slate-500">We&apos;ve recorded {fmt(totalForMethod)} for {info?.clubName}. See you on the field!</p>
+      <p className="text-sm text-slate-500">We&apos;ve recorded {fmt(totalForMethod)} for {info?.clubName}.{isPart
+        ? <> Your remaining balance is <strong className="text-slate-700">{fmt(balance - amt)}</strong> &mdash; use this same link or your club portal to pay it any time.</>
+        : ' See you on the field!'}</p>
     </div>
   </>)
 
@@ -130,7 +136,7 @@ export default function PayPage() {
       <Clock className="mx-auto text-teal-500 mb-3" size={36} />
       <h2 className="text-lg font-bold text-slate-800 mb-1">Bank transfer (ACH) initiated</h2>
       <p className="text-sm text-slate-500 leading-relaxed">
-        Your payment of {fmt(balance)} for {info?.clubName} is on its way — ACH transfers typically clear within
+        Your payment of {fmt(amt)} for {info?.clubName} is on its way — ACH transfers typically clear within
         4 business days, and we&apos;ll mark your registration paid automatically once it does. You can close this page.
       </p>
     </div>
@@ -173,16 +179,20 @@ export default function PayPage() {
           <div className="flex justify-between text-teal-700"><span>Bank transfer clearing{startedOn(info.clearing.startedAt) ? ` (sent ${startedOn(info.clearing.startedAt)})` : ''}</span><span>{fmt(info.clearing.amount)}</span></div>
         )}
         <div className="flex justify-between font-semibold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Balance due</span><span>{fmt(balance)}</span></div>
+        {isPart && <>
+          <div className="flex justify-between text-gray-600"><span>Paying now</span><span>{fmt(amt)}</span></div>
+          <div className="flex justify-between text-gray-400 text-xs"><span>Left on your balance after this payment</span><span>{fmt(balance - amt)}</span></div>
+        </>}
         {method === 'card' && <>
-          <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - balance)}</span></div>
+          <div className="flex justify-between text-gray-400 text-xs"><span>Card processing fee (3%)</span><span>+{fmt(cardTotal - amt)}</span></div>
           <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
         </>}
         {method === 'ach' && <>
           <div className="flex justify-between text-teal-600 text-xs"><span>Bank transfer (ACH) — no processing fee</span><span>+$0.00</span></div>
-          <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(balance)}</span></div>
+          <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(amt)}</span></div>
         </>}
         {method === 'paypal' && <>
-          <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - balance)}</span></div>
+          <div className="flex justify-between text-gray-400 text-xs"><span>PayPal / Venmo processing fee (3%)</span><span>+{fmt(cardTotal - amt)}</span></div>
           <div className="flex justify-between font-bold text-gray-800 border-t border-gray-200 pt-2 mt-2"><span>Total due today</span><span>{fmt(cardTotal)}</span></div>
         </>}
       </div>
@@ -196,6 +206,7 @@ export default function PayPage() {
         clubName={info?.clubName || ''}
         tournamentName={info?.tournamentName || ''}
         onMethodChange={setMethod}
+        onAmountChange={setPayNow}
         onCardSuccess={() => setStatus('success')}
         onPayPalSuccess={() => setStatus('success')}
         onAchProcessing={() => setStatus('initiated')}
@@ -205,7 +216,7 @@ export default function PayPage() {
     </div>
 
     <p className="text-center text-xs text-gray-400 pb-6">
-      Prefer Zelle? Send {fmt(balance)} to <span className="font-medium text-gray-500">{info?.zelleHandle || 'info@sunshinelax.com'}</span> with
+      Prefer Zelle? Send {fmt(balance)} (or part of it) to <span className="font-medium text-gray-500">{info?.zelleHandle || 'info@sunshinelax.com'}</span> with
       &ldquo;{info?.clubName || 'your club name'}&rdquo; in the memo &mdash; we&apos;ll mark your invoice paid when it arrives.
       <br />Paying by check? <a href={`/api/registrations/${encodeURIComponent(regId)}/invoice`} className="font-medium text-teal-600 hover:underline">Download the invoice</a> for
       your accounting office. It has the mailing address and what to write on the memo line.
