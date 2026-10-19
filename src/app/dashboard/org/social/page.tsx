@@ -16,10 +16,11 @@ import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
 import MusicDrawer from './MusicDrawer'
+import LooksLibrary from './LooksLibrary'
 import PlayersTray, { planList, type ClearedData, type ReelDraft } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
 import ReelMaker, { type ReelSetup } from '@/components/ReelMaker'
-import { POST_STYLES, styleLabel } from '@/lib/socialPosts'
+import { POST_STYLES, styleLabel, FAVORITE_STYLES, SEASON_LOOKS, seasonOf } from '@/lib/socialPosts'
 import { lookFor, daysUntil, playerCaption, rollCallCaption, squadCaption, squadHandles, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
@@ -146,6 +147,9 @@ function SocialInner() {
   const [playerBusy, setPlayerBusy] = useState('')
   const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null; squad?: ClearedPlayer[]; looks?: string[]; setup?: Partial<ReelSetup>; draftId?: string } | null>(null)
   const [reelDrafts, setReelDrafts] = useState<ReelDraft[]>([])
+  // Looks library (LooksLibrary): the org's starred looks lead every look menu.
+  const [lookFavs, setLookFavs] = useState<string[]>(FAVORITE_STYLES)
+  const [looksOpen, setLooksOpen] = useState(false)
   const dragId = useRef<string | null>(null)
   const today = new Date()
 
@@ -163,13 +167,14 @@ function SocialInner() {
 
   async function load() {
     try {
-      const [p, a, q, ins, ide, cl, rd] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null), api('/api/social/players').catch(() => null), api('/api/social/reel-drafts').catch(() => null)])
+      const [p, a, q, ins, ide, cl, rd, lk] = await Promise.all([api('/api/social/posts'), api('/api/social/accounts'), api(`/api/social/queue?tz=${new Date().getTimezoneOffset()}`).catch(() => null), api('/api/social/insights/summary').catch(() => null), api('/api/social/ideas').catch(() => null), api('/api/social/players').catch(() => null), api('/api/social/reel-drafts').catch(() => null), api('/api/social/looks').catch(() => null)])
       setPosts(p.posts || []); setAccounts(a.accounts || []); setConfigured(a.configured !== false)
       if (q) setQueue(q)
       if (ins) setInsights(ins)
       if (ide) setIdeaSrc(ide)
       if (cl) setCleared(cl)
       if (rd) setReelDrafts(rd.drafts || [])
+      if (lk && Array.isArray(lk.favorites)) setLookFavs(lk.favorites)
     } catch (e: any) { toast.error(e.message) } finally { setLoading(false) }
   }
 
@@ -370,6 +375,13 @@ function SocialInner() {
     const when = whenFor(players[0])
     setReel({ p: players[0], look: d.look || d.looks?.[0] || 'countdown-photo', when, days: daysAt(players[0], when), ...(players.length > 1 ? { squad: players, looks: d.looks || players.map(() => d.look) } : {}), setup: d.setup as Partial<ReelSetup>, draftId: d.id })
   }
+  /** Star / unstar a look in the Looks library (saved for the whole org). */
+  async function toggleLookFav(id: string) {
+    const next = lookFavs.includes(id) ? lookFavs.filter(x => x !== id) : [...lookFavs, id]
+    setLookFavs(next)
+    try { const r = await api('/api/social/looks', { method: 'PUT', body: JSON.stringify({ favorites: next }) }); if (Array.isArray(r.favorites)) setLookFavs(r.favorites) }
+    catch (e: any) { toast.error(e.message) }
+  }
   /** Siblings (lib/siblings): link players so each gets the Siblings look naming the others. */
   async function linkSiblings(ids: string[], rel: string) {
     try {
@@ -424,7 +436,7 @@ function SocialInner() {
         const when = pickDay(p, 'least')
         if (!when) { skipped++; continue }
         const i = idx[p.tournamentId] = (idx[p.tournamentId] ?? -1) + 1
-        const look = lookFor(p.event.daysOut, i); const n = daysAt(p, when)
+        const look = lookFor(p.event.daysOut, i, SEASON_LOOKS[seasonOf(p.event.name, p.event.start)] || []); const n = daysAt(p, when)
         const [feed, story] = await Promise.all([feedJpeg(p.token, look, n), storyJpeg(p.token, look, n, { event: p.event.name, sub: storySub(p), handle: p.instagram })])
         const [feedUrl, storyUrl] = await Promise.all([uploadJpeg(feed, `${fileSlug(p, look)}.jpg`), uploadJpeg(story, `${fileSlug(p, look)}-story.jpg`)])
         await api('/api/social/posts', { method: 'POST', body: JSON.stringify({ socialAccountIds: ids, caption: playerCaption(p, look, n, site), mediaUrls: [feedUrl], mediaType: 'image', placements: ['feed', 'story'], scheduledFor: when.toISOString(), storyScheduledFor: storyTimeFor({ mode: 'morning' }, when).toISOString(), storyMediaUrl: storyUrl, collaborators: collabFor(p), player: { submissionIds: [p.id], tournamentId: p.tournamentId, style: look, kind: 'post', days: n } }) })
@@ -468,6 +480,7 @@ function SocialInner() {
             <div className="min-w-0"><div className="font-extrabold text-sm leading-tight">Social scheduler</div><div className="text-xs text-slate-500 truncate hidden sm:block">Instagram &amp; Facebook · approve once, it publishes itself</div></div>
           </div>
           <div className="flex items-center gap-2">
+          <button onClick={() => setLooksOpen(true)} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm px-3 py-2.5" title="Every post look in folders (Everyday, Fall, Christmas, Siblings), previewed on a real player"><Layers size={15} className="text-teal-700" /> <span className="hidden sm:inline">Looks</span></button>
           <button onClick={() => setDrawer({ kind: 'music' })} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm px-3 py-2.5" title="Your music for Reels: add, rename, sort into categories"><Music size={15} className="text-teal-700" /> <span className="hidden sm:inline">Music</span></button>
           <button onClick={() => setDrawer({ kind: 'chirp' })} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white hover:border-teal-400 text-slate-800 font-bold text-sm pl-1.5 pr-3 py-1.5" title="Brainstorm post ideas with Chirp"><ChirpAvatar size={26} /> <span className="hidden sm:inline">Ask Chirp</span><span className="sm:hidden">Chirp</span></button>
           <button onClick={() => newPostOn(addDays(today, 1))} disabled={!accounts.length} className="inline-flex items-center gap-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-bold text-sm px-4 py-2.5 disabled:opacity-40"><Plus size={15} strokeWidth={2.8} /> <span className="hidden sm:inline">Create post</span><span className="sm:hidden">Post</span></button>
@@ -538,7 +551,7 @@ function SocialInner() {
         )}
 
         {/* cleared players */}
-        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} drafts={reelDrafts} onOpenDraft={openReelDraft} onDeleteDraft={id => deleteReelDraft(id)} onLinkSiblings={linkSiblings} onUnlinkSibling={unlinkSibling} />}
+        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} drafts={reelDrafts} onOpenDraft={openReelDraft} onDeleteDraft={id => deleteReelDraft(id)} onLinkSiblings={linkSiblings} onUnlinkSibling={unlinkSibling} favorites={lookFavs} />}
 
         {/* calendar */}
         {view === 'week' && (
@@ -637,7 +650,10 @@ function SocialInner() {
         eventStart={reel.p.event.start} postDay={localDayKey(reel.when)}
         initialSong="ig" onUse={useReel} onSaveSetup={saveReelSetup} initialSetup={reel.setup}
         draftNote={reel.draftId ? (() => { const d = reelDrafts.find(x => x.id === reel.draftId); return d ? `Your saved draft from ${new Date(d.savedAt).toLocaleString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })}` : 'Your saved draft' })() : undefined}
-        onStartOver={reel.draftId ? startReelOver : undefined} onClose={() => setReel(null)} />}
+        onStartOver={reel.draftId ? startReelOver : undefined} favorites={lookFavs} onClose={() => setReel(null)} />}
+
+      {looksOpen && <LooksLibrary players={cleared?.players || []} favorites={lookFavs} onToggleFavorite={toggleLookFav} onClose={() => setLooksOpen(false)}
+        onPost={(p, look) => { setLooksOpen(false); composePlayer(p, look, 'post') }} onReel={(p, look) => { setLooksOpen(false); reelPlayer(p, look, true) }} />}
     </div>
   )
 }

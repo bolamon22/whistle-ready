@@ -1,4 +1,6 @@
 import type { CSSProperties } from 'react'
+import { ANTON, BARLOW, MONO, SERIF, SCRIPT, fit, cut, topCrop } from '@/lib/postKit'
+import { SeasonalBody, SEASONAL_LOOKS, SEASONAL_MARK } from '@/lib/seasonalPosts'
 
 // Instagram posts built around a player's card (Bo, Oct 18 2026: "include their
 // player in all the pictures and say it's going to be a post similar to this").
@@ -22,7 +24,14 @@ export const POST_H = 1350
 // "· photo" ones and draw the card in the photo's place when there's no photo.
 export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
   | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey' | 'siblings' | 'siblings-poster'
-const ALL_STYLES: { id: PostStyle; label: string }[] = [
+  | 'harvest-moon' | 'fall-countdown' | 'letterman' | 'under-the-lights' | 'fall-foliage'
+  | 'ugly-sweater' | 'nice-list' | 'snow-globe' | 'gift-tag'
+/** Folders in the Looks library (Bo, Oct 18 2026: "some sort of folder and preview area"). */
+export type LookFolder = 'everyday' | 'siblings' | 'fall' | 'christmas'
+export const LOOK_FOLDERS: { id: LookFolder; label: string }[] = [
+  { id: 'everyday', label: 'Everyday' }, { id: 'fall', label: 'Fall' }, { id: 'christmas', label: 'Christmas' }, { id: 'siblings', label: 'Siblings' },
+]
+const ALL_STYLES: { id: PostStyle; label: string; folder?: LookFolder }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
   { id: 'draft', label: 'Draft Day' },
@@ -40,10 +49,21 @@ const ALL_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'jersey', label: 'Name on the Back' },
   // Brothers / Sisters / Brother & Sister (Bo, Oct 18 2026): one card per sibling, all
   // in the same look and naming each other, for players staff link as siblings.
-  { id: 'siblings', label: 'Siblings' },
+  { id: 'siblings', label: 'Siblings · Card set', folder: 'siblings' },
   // "The Brothers Take On Monster Mash" (Bo picked this from five ideas, Oct 18 2026): a
   // buddy-movie poster with every sibling's photo, oldest first; TWINS when they share a birthday.
-  { id: 'siblings-poster', label: 'Siblings · Movie poster' },
+  { id: 'siblings-poster', label: 'Siblings · Movie poster', folder: 'siblings' },
+  // Seasonal looks (lib/seasonalPosts; Bo, Oct 18 2026): fall for the Fall Classic,
+  // Christmas for Jingle Brawl.
+  { id: 'harvest-moon', label: 'Harvest Moon', folder: 'fall' },
+  { id: 'fall-countdown', label: 'Falling Leaves Countdown', folder: 'fall' },
+  { id: 'letterman', label: 'Letterman Jacket', folder: 'fall' },
+  { id: 'under-the-lights', label: 'Under the Lights', folder: 'fall' },
+  { id: 'fall-foliage', label: 'Fall Foliage', folder: 'fall' },
+  { id: 'ugly-sweater', label: 'Ugly Sweater', folder: 'christmas' },
+  { id: 'nice-list', label: 'Naughty or Nice List', folder: 'christmas' },
+  { id: 'snow-globe', label: 'Snow Globe', folder: 'christmas' },
+  { id: 'gift-tag', label: 'Gift Tag', folder: 'christmas' },
 ]
 // Name on the Back is retired from every picker (Bo, Oct 18 2026: "that one's not very
 // good. I'll probably never use it"). It still renders, so emails already sent with it
@@ -53,14 +73,39 @@ const RETIRED = new Set<PostStyle>(['jersey'])
 export const SIBLING_STYLE: PostStyle = 'siblings'
 export const SIBLING_POSTER: PostStyle = 'siblings-poster'
 export const isSiblingStyle = (s: string) => s === SIBLING_STYLE || s === SIBLING_POSTER
-/** The looks staff can pick for any player, in the standard order. */
-export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id) && !isSiblingStyle(s.id))
+/** The everyday looks staff can pick for any player, in the standard order (also what the
+ *  photo-permission email offers families as examples). */
+export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id) && !s.folder)
+/** Every look in the Looks library and the scheduler's menus, with its folder. */
+export const LIBRARY_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id)).map(s => ({ ...s, folder: s.folder || 'everyday' as LookFolder }))
+export const lookFolder = (id: string): LookFolder => LIBRARY_STYLES.find(s => s.id === id)?.folder || 'everyday'
+/** The look menus' groups: the org's favorites, then folders with the event's season first
+ *  (siblings only when the player has linked siblings). */
+export function lookMenu(favorites: string[], season: LookFolder | '', withSiblings = false): { label: string; looks: { id: string; label: string }[] }[] {
+  const favs = favorites.map(id => LIBRARY_STYLES.find(s => s.id === id)).filter((s): s is (typeof LIBRARY_STYLES)[number] => !!s && (withSiblings || s.folder !== 'siblings'))
+  const order: LookFolder[] = [...(season ? [season] : []), 'everyday', ...(['fall', 'christmas'] as LookFolder[]).filter(f => f !== season), ...(withSiblings ? ['siblings' as LookFolder] : [])]
+  const groups = order.map(f => ({ label: LOOK_FOLDERS.find(x => x.id === f)!.label, looks: LIBRARY_STYLES.filter(s => s.folder === f && !favs.some(x => x.id === s.id)).map(s => ({ id: s.id, label: s.label })) }))
+  return [{ label: 'Favorites', looks: favs.map(s => ({ id: s.id, label: s.label })) }, ...groups].filter(g => g.looks.length)
+}
+/** Seasonal default looks, in the order the tray rotates through them. */
+export const SEASON_LOOKS: Record<string, string[]> = {
+  fall: ['fall-countdown', 'harvest-moon', 'under-the-lights', 'letterman', 'fall-foliage'],
+  christmas: ['ugly-sweater', 'snow-globe', 'nice-list', 'gift-tag'],
+}
+/** Which seasonal folder suits an event: Christmas in December (or a holiday name), fall in
+ *  September–November or a fall name. '' otherwise. */
+export function seasonOf(name: string, start: string): LookFolder | '' {
+  const n = String(name || '').toLowerCase(), m = Number(String(start || '').slice(5, 7))
+  if (/jingle|holiday|christmas|santa|snow|winter/.test(n) || m === 12) return 'christmas'
+  if (/fall|autumn|harvest|thanksgiving/.test(n) || m === 11) return 'fall'
+  return ''
+}
 export const styleLabel = (id: string) => ALL_STYLES.find(s => s.id === id)?.label || id
 /** Bo's favorites (Oct 18 2026), offered first on the social scheduler. */
 export const FAVORITE_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo', 'cover', 'rookie', 'scout', 'main-event']
 /** The looks that use the player's photo rather than the card. */
 const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey', 'siblings', 'siblings-poster'])
-export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s)
+export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s) || SEASONAL_LOOKS.has(s)
 /** What the Ask dialog starts with ticked. */
 export const DEFAULT_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo']
 export const isPostStyle = (s: string): s is PostStyle => ALL_STYLES.some(p => p.id === s)
@@ -131,18 +176,11 @@ export function siblingTitle(genders: string[], rel = ''): string {
 }
 
 const CARD_RATIO = 1140 / 720
-const ANTON = 'Anton'
-const BARLOW = 'Barlow Condensed'
-const MONO = 'Courier Prime'
-
-/** A font size that keeps `text` within `maxW` at Anton's rough character width. */
-const fit = (text: string, maxW: number, max: number) => Math.min(max, Math.floor(maxW / (Math.max(1, text.length) * 0.5)))
-const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s)
 
 // Small "Whistle Ready" mark in a corner of every post (Bo: "maybe it's just the small
 // Whistle Ready logo on the bottom corner"), placed where each look has room. Drawn as
 // type rather than the logo file, which has its own dark background and fine print.
-const MARK_AT: Record<PostStyle, CSSProperties> = {
+const MARK_AT: Record<string, CSSProperties> = {
   committed: { right: 28, bottom: 140 },
   premiere: { right: 28, bottom: 132 },
   draft: { right: 28, top: 28 },
@@ -157,6 +195,7 @@ const MARK_AT: Record<PostStyle, CSSProperties> = {
   'main-event': { right: 30, bottom: 26 },
   siblings: { right: 30, bottom: 26 },
   'siblings-poster': { right: 30, bottom: 24 },
+  ...(SEASONAL_MARK as Record<string, CSSProperties>),
   jersey: { left: 450, bottom: 24 },
 }
 
@@ -175,22 +214,8 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
   )
 }
 
-/** A photo filling a w×h box, cropped from the top instead of the middle. Satori ignores
- *  object-position (it always centers a cover crop), which cut heads off in wide boxes like
- *  Main Event's (Bo, Oct 18 2026). Scales to cover and keeps the top, minus a sliver. */
-function topCrop(src: string, w: number, h: number, pw: number, ph: number, u: (n: number) => number, extra: CSSProperties = {}) {
-  const scale = Math.max(w / pw, h / ph)
-  const dw = pw * scale, dh = ph * scale
-  const top = -Math.min(dh - h, (dh - h) * 0.04)
-  return (
-    <div style={{ display: 'flex', position: 'relative', overflow: 'hidden', width: u(w), height: u(h), ...extra }}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={src} width={u(dw)} height={u(dh)} alt="" style={{ position: 'absolute', left: u((w - dw) / 2), top: u(top) }} />
-    </div>
-  )
-}
-
 function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData; width?: number }) {
+  if (SEASONAL_LOOKS.has(style)) return <SeasonalBody style={style} d={d} width={width} />
   if (usesPhoto(style) && !d.photoSrc) style = style.replace(/(-to)?-photo$/, '') as PostStyle   // no photo on file: the card version
   const k = width / POST_W
   const u = (n: number) => Math.round(n * k * 10) / 10
@@ -846,6 +871,10 @@ export function loadPostFonts(): Promise<SatoriFont[]> {
         googleFont('Barlow+Condensed', BARLOW, [500, 600, 700, 800]),
         googleFont('Barlow+Condensed', BARLOW, [500], 'italic'),
         googleFont('Courier+Prime', MONO, [400, 700]).catch(() => [] as SatoriFont[]),
+        // The seasonal looks (lib/seasonalPosts): a classic serif and a holiday script.
+        googleFont('Playfair+Display', SERIF, [700, 800]).catch(() => [] as SatoriFont[]),
+        googleFont('Playfair+Display', SERIF, [700], 'italic').catch(() => [] as SatoriFont[]),
+        googleFont('Great+Vibes', SCRIPT, [400]).catch(() => [] as SatoriFont[]),
       ])
       const all = sets.flat()
       if (!all.some(f => f.name === ANTON)) throw new Error('no fonts')

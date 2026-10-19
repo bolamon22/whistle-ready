@@ -71,8 +71,10 @@ export const baseLook = (style: string) => style.replace(/(-to)?-photo$/, '')
 // rotates through the rest so a run of posts doesn't all look the same.
 const NEAR = ['countdown-photo', 'rookie', 'main-event', 'committed-photo', 'draft-photo', 'cover', 'scout']
 const FAR = ['committed-photo', 'rookie', 'draft-photo', 'main-event', 'cover', 'scout']
-export function lookFor(daysOut: number | null, i = 0): string {
-  const list = daysOut != null && daysOut <= 7 ? NEAR : FAR
+/** The default look for the i-th player: the event's seasonal looks when it has a season
+ *  (lib/socialPosts SEASON_LOOKS), else the near / far rotation. */
+export function lookFor(daysOut: number | null, i = 0, seasonal: string[] = []): string {
+  const list = seasonal.length ? seasonal : daysOut != null && daysOut <= 7 ? NEAR : FAR
   return list[((i % list.length) + list.length) % list.length]
 }
 

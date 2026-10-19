@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X, Search, Maximize2, ChevronDown, ExternalLink } from 'lucide-react'
-import { POST_STYLES, FAVORITE_STYLES, SIBLING_STYLE, SIBLING_POSTER } from '@/lib/socialPosts'
+import { FAVORITE_STYLES, SIBLING_STYLE, SIBLING_POSTER, SEASON_LOOKS, lookMenu, seasonOf, styleLabel } from '@/lib/socialPosts'
 import { lookFor, teamLabel, firstOf, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
 
@@ -34,14 +34,13 @@ export function planList(players: ClearedPlayer[]): { posts: ClearedPlayer[]; ro
 }
 
 // Bo's favorites first, then the rest.
-const FAVS = FAVORITE_STYLES.map(id => POST_STYLES.find(s => s.id === id)).filter((s): s is (typeof POST_STYLES)[number] => !!s)
-const MORE = POST_STYLES.filter(s => !FAVORITE_STYLES.includes(s.id))
+/** The event's seasonal looks (fall for the Fall Classic, Christmas for Jingle Brawl), first in line. */
+const seasonLooks = (p: ClearedPlayer) => SEASON_LOOKS[seasonOf(p.event.name, p.event.start)] || []
 const fmtDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })
 const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled', publishing: 'Publishing', published: 'Posted', failed: 'Failed' }
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
 const STRIP = 12
 const shortDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const LOOK_LABEL: Record<string, string> = { ...Object.fromEntries(POST_STYLES.map(s => [s.id, s.label])), siblings: 'Siblings', 'siblings-poster': 'Siblings · Movie poster' }
 const PLAT: Record<string, string> = { instagram: 'IG', facebook: 'FB' }
 const posted = (p: ClearedPlayer) => p.posts.filter(x => x.status === 'published').length
 
@@ -53,7 +52,7 @@ const uniq = (xs: string[]) => Array.from(new Set(xs.filter(Boolean))).sort((a, 
 const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-500 hover:text-slate-900'}`
 const sel_ = 'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 max-w-[200px]'
 
-export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll, drafts = [], onOpenDraft, onDeleteDraft, onLinkSiblings, onUnlinkSibling }: {
+export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll, drafts = [], onOpenDraft, onDeleteDraft, onLinkSiblings, onUnlinkSibling, favorites = FAVORITE_STYLES }: {
   data: ClearedData; canPost: boolean; busy: string
   /** Reels saved to finish later, reopened in the Reel maker where they left off. */
   drafts?: ReelDraft[]; onOpenDraft?: (d: ReelDraft) => void; onDeleteDraft?: (id: string) => void
@@ -67,6 +66,8 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   /** Link 2–4 players as siblings ('' = title from their genders), or take one out. */
   onLinkSiblings?: (ids: string[], rel: string) => Promise<void>
   onUnlinkSibling?: (id: string) => Promise<void>
+  /** The org's starred looks (Looks library). */
+  favorites?: string[]
 }) {
   const [looks, setLooks] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState(false)
@@ -118,7 +119,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
 
   const plan = planList(shown)
   const planN = plan.posts.length + plan.rollcalls.length
-  const lookOf = (p: ClearedPlayer) => looks[p.id] || lookFor(p.event.daysOut, 0)
+  const lookOf = (p: ClearedPlayer) => looks[p.id] || lookFor(p.event.daysOut, 0, seasonLooks(p))
   const picked = sel.map(id => players.find(p => p.id === id)).filter((p): p is ClearedPlayer => !!p)
   const sameEvent = new Set(picked.map(p => p.tournamentId)).size <= 1
   const squadOk = picked.length >= 2 && picked.length <= 4 && sameEvent
@@ -174,7 +175,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
             <ol className="mt-1 mb-0.5 rounded-lg bg-white border border-slate-200 divide-y divide-slate-100 max-h-40 overflow-y-auto">
               {p.posts.slice().reverse().map(x => (
                 <li key={x.postId} className="px-2 py-1.5 text-[11px] leading-tight">
-                  <div className="font-bold text-slate-800 truncate">{KIND[x.kind] || 'Post'}{x.story && x.kind !== 'story' ? ' + Story' : ''} · {LOOK_LABEL[x.style] || x.style}</div>
+                  <div className="font-bold text-slate-800 truncate">{KIND[x.kind] || 'Post'}{x.story && x.kind !== 'story' ? ' + Story' : ''} · {styleLabel(x.style)}</div>
                   <div className="text-slate-500 flex items-center gap-1">
                     <span className={x.status === 'published' ? 'text-emerald-700 font-semibold' : x.status === 'failed' ? 'text-rose-700 font-semibold' : ''}>{STATUS[x.status] || x.status}</span>
                     <span className="truncate">{shortDay(x.scheduledFor)}{x.platforms?.length ? ` · ${x.platforms.map(k => PLAT[k] || k).join(' + ')}` : ''}</span>
@@ -189,8 +190,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
               <option value={SIBLING_POSTER}>Movie poster · {p.siblings.title.startsWith('BROTHER &') ? '' : 'The '}{p.siblings.title.toLowerCase()} take on {p.event.name || 'the event'}</option>
               <option value={SIBLING_STYLE}>Card set · one card each</option>
             </optgroup>}
-            <optgroup label="Favorites">{FAVS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
-            <optgroup label="More looks">{MORE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
+            {lookMenu(favorites, seasonOf(p.event.name, p.event.start), false).map(g => <optgroup key={g.label} label={g.label}>{g.looks.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>)}
           </select>
         </div>
         <div className="grid grid-cols-3 gap-1 px-2.5 pb-2.5 mt-auto">
@@ -231,7 +231,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
       <span className="font-bold text-pink-900">Squad Reel · {picked.map(p => firstOf(p.playerName)).join(', ')}</span>
       <span className="text-pink-800/80">{!sameEvent ? 'Pick players from the same event.' : picked.length < 2 ? 'Tick 1–3 more players (2–4 in all).' : picked.length > 4 ? 'Four players at most.' : `${picked.length <= 2 ? '15' : '30'} seconds, one look each (change them in the next step), then an end card naming everyone.`}</span>
       <span className="ml-auto inline-flex gap-1.5">
-        <button onClick={() => { setFull(false); onSquad(picked, picked.map((p, i) => looks[p.id] || (picked.every(x => x.siblings && x.siblings.ids.length === picked.length && picked.every(y => x.siblings!.ids.includes(y.id))) ? SIBLING_STYLE : lookFor(p.event.daysOut, i)))) }} disabled={!squadOk || !canPost || !!busy} className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Film size={12} /> Make Squad Reel</button>
+        <button onClick={() => { setFull(false); onSquad(picked, picked.map((p, i) => looks[p.id] || (picked.every(x => x.siblings && x.siblings.ids.length === picked.length && picked.every(y => x.siblings!.ids.includes(y.id))) ? SIBLING_STYLE : lookFor(p.event.daysOut, i, seasonLooks(p))))) }} disabled={!squadOk || !canPost || !!busy} className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Film size={12} /> Make Squad Reel</button>
         {onLinkSiblings && picked.length >= 2 && picked.length <= 4 && sameEvent && (
           // Siblings get their own look: one card each, naming the others (lib/siblings).
           <span className="inline-flex items-center rounded-lg border border-indigo-300 bg-white overflow-hidden">

@@ -6,7 +6,7 @@ import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { allCategories, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
-import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
+import { FAVORITE_STYLES, SEASON_LOOKS, lookMenu, seasonOf, styleLabel } from '@/lib/socialPosts'
 
 // Length (Bo, Oct 18 2026: "choose between 8, 15 seconds ... maybe even 30 if we really
 // feel like we have a good one"). Longer Reels don't stretch one graphic: they play the
@@ -14,8 +14,6 @@ import { FAVORITE_STYLES, POST_STYLES } from '@/lib/socialPosts'
 // dipping to black between them. 8 s = one look, 15 s = two, 30 s = four.
 const LENGTHS = [{ sec: 8, looks: 1 }, { sec: 15, looks: 2 }, { sec: 30, looks: 4 }] as const
 const lookKind = (s: string) => s.replace(/(-to)?-photo$/, '')
-const FAV_LOOKS = FAVORITE_STYLES.map(id => POST_STYLES.find(s => s.id === id)).filter((s): s is (typeof POST_STYLES)[number] => !!s)
-const MORE_LOOKS = POST_STYLES.filter(s => !FAVORITE_STYLES.includes(s.id))
 /** Squad Reels close on a card naming everyone ("Ready for Monster Mash"). */
 const END = 2.5
 
@@ -54,6 +52,8 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
    *  too"), and the settings a saved draft reopens with. */
   onSaveSetup?: (setup: ReelSetup) => Promise<void>
   initialSetup?: Partial<ReelSetup>
+  /** The org's starred looks (Looks library); Bo's originals when not given. */
+  favorites?: string[]
   /** Shown when a saved draft was reopened, with a way to throw it away and start fresh. */
   draftNote?: string
   onStartOver?: () => void
@@ -230,7 +230,7 @@ async function mp4Codecs(blob: Blob): Promise<{ h264: boolean; aac: boolean }> {
   return { h264: has('avc1') || has('avc3'), aac: has('mp4a') }
 }
 
-export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay, onSaveSetup, initialSetup, draftNote, onStartOver }: Props) {
+export default function ReelMaker({ src, style, label, event, sub, days: daysProp = null, fileName, onClose, token, initialSong, onUse, squad, eventStart, postDay, onSaveSetup, initialSetup, draftNote, onStartOver, favorites = FAVORITE_STYLES }: Props) {
   const today = dayKey(new Date())
   // Starts on today (Bo, Oct 18 2026: the first open day was Thursday, so a Reel he
   // wanted out now said "2 days out"). Pick another day here before making the Reel.
@@ -241,13 +241,15 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const squadMode = !!squad && squad.length > 1
   // The Siblings look only makes sense for players linked as siblings (picked in the tray).
   const canSiblings = style.startsWith('siblings') || !!squad?.some(s => s.style.startsWith('siblings'))
+  // Look menus: favorites, then folders with this event's season first (lib/socialPosts).
+  const menu = lookMenu(favorites, seasonOf(event, eventStart || ''), false)
   const isCustomLook = (s: string) => s in CUSTOM_REELS
   const [len, setLen] = useState<number>(initialSetup?.len && LENGTHS.some(l => l.sec === initialSetup.len) ? initialSetup.len : squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
   // The look for each part, picked by staff (Bo: "I'd like to be able to pick the looks").
   // One player: up to 4 parts, starting from the chosen look and Bo's favorites. Squad:
   // one part per player, each starting on the look picked in the tray.
   const [picks, setPicks] = useState<string[]>(() => initialSetup?.picks?.length ? initialSetup.picks : squadMode ? squad!.map(p => p.style)
-    : [style, ...FAVORITE_STYLES.filter(s => s !== style && lookKind(s) !== lookKind(style))].slice(0, 4))
+    : [style, ...[...(SEASON_LOOKS[seasonOf(event, eventStart || '')] || []), ...favorites].filter((s, i, a) => a.indexOf(s) === i && s !== style && lookKind(s) !== lookKind(style))].slice(0, 4))
   const lookCount = squadMode ? squad!.length : token ? (LENGTHS.find(l => l.sec === len)?.looks || 1) : 1
   // Squad order (Bo: "reorder them ... I might watch the video and say it should be
   // different"): indexes into `squad`; picks stay keyed by the player's original index.
@@ -318,7 +320,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   // The Reel's cover (Bo, Oct 18 2026: "pick the cover photo ourselves ... it kind of just
   // defaults to the last one"). One moment per part (player or look), plus the end card,
   // or for a one-look Reel three moments through it. Defaults to the first part.
-  const lookName = (id: string) => POST_STYLES.find(x => x.id === id)?.label || id
+  const lookName = (id: string) => styleLabel(id)
   const covers: { t: number; label: string }[] = slots.length === 1 && !endDur
     ? [0.3, 0.6, 0.9].map((f, i) => ({ t: segDur * f, label: ['Start', 'Middle', 'End'][i] }))
     : [...slots.map((x, i) => ({ t: i * segDur + segDur * 0.65, label: x.who || lookName(x.style) })),
@@ -564,8 +566,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
                   <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? `${i + 1}. ${x.who}` : `${i + 1}.`}</span>
                   <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= pi) n.push(x.style); n[pi] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
                     {canSiblings && <><option value="siblings-poster">Siblings · Movie poster</option><option value="siblings">Siblings · Card set</option></>}
-                    <optgroup label="Favorites">{FAV_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
-                    <optgroup label="More looks">{MORE_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
+                    {menu.map(g => <optgroup key={g.label} label={g.label}>{g.looks.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>)}
                   </select>
                 </div>
               )})}

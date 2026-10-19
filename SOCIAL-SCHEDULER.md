@@ -342,3 +342,9 @@ FAMILY." and a release line. Oldest first when the waivers have birthdays; TWINS
 when they share one (birthdays never leave the server). The original one-card-each look
 stays as "Card set" for Reels.
 
+## Holiday looks and the Looks library (Oct 18 2026)
+
+- Fall folder: Harvest Moon, Falling Leaves Countdown, Letterman Jacket, Under the Lights, Classic Fall Foliage (a little Thanksgiving). Christmas folder: Ugly Sweater, Naughty or Nice List, Snow Globe, Gift Tag. Designs live in `src/lib/seasonalPosts.tsx`; shared drawing helpers (leaves, snow, tiled patterns, head-safe crop) in `src/lib/postKit.tsx`.
+- `seasonOf(eventName, start)` picks the season: December or a holiday name is Christmas, November or a fall name is Fall. Auto-picked looks (cards, squad Reels, Plan all) use that season's looks; the look menus show Favorites, then the event's season, then the rest.
+- Looks button in the scheduler header opens the library: folders (Favorites, Everyday, Fall, Christmas, Siblings) previewed on a real cleared player, star to favorite (saved per org in AppSetting `postLooks:{orgId}` via `/api/social/looks`), Post or Reel straight from a look.
+- Seasonal looks are not offered in the photo-permission email (`POST_STYLES` is everyday only).
