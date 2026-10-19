@@ -248,6 +248,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [density,setDensityRaw]=useState<Density>('compact')
   const [fitFields,setFitFieldsRaw]=useState(true)
   const [miniOpen,setMiniOpen]=useState<Set<string>>(new Set())   // games shown as a card while in Mini
+  // Refs or Scorekeepers only (Bo, Oct 19 2026): every card shows just those slots, and the
+  // open counts, Needs crew and "x of y crewed" count only them. Compact cards drop the teams
+  // line so a crew reads at a glance; Full still shows them.
+  const [crewShow,setCrewShow]=useState<'all'|'refs'|'sk'>('all')
   // Staffing panel (Oct 2026 redesign): the staff list, the staffing needs and the Staff portal
   // switches moved off the top of the page. Minimized to a rail, a slide-in over the board, or
   // pinned beside it (pinned is remembered on this browser).
@@ -566,7 +570,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   // Who is on a game, slot by slot, and whether it is fully crewed.
   const crewOf=(g:Game,doubled:Set<string>)=>{
     const rc=slotsOf(g)
-    const parts=[...slotRoles(rc),'scorekeeper'].map((role,i)=>({role,short:role==='scorekeeper'?'SK':`R${i+1}`,a:g.assignments.find(x=>x.role===role)}))
+    const parts=[...slotRoles(rc),'scorekeeper'].map((role,i)=>({role,short:role==='scorekeeper'?'SK':`R${i+1}`,a:g.assignments.find(x=>x.role===role)})).filter(p=>crewShow==='all'||(crewShow==='sk')===(p.role==='scorekeeper'))
     const open=parts.filter(p=>!p.a).length
     const dbl=parts.some(p=>p.a&&doubled.has(p.a.workerId))
     return{parts,open,total:parts.length,dbl,full:open===0&&!dbl}
@@ -1084,6 +1088,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
             <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Card size" title="Card size">
               {(['full','compact','mini'] as const).map(d=><button key={d} type="button" onClick={()=>setDensity(d)} aria-pressed={density===d} className={segBtn(density===d)} title={d==='full'?'Card size: full. Both teams, scores and one row per slot':d==='compact'?'Card size: compact. Game, teams, officials as chips':'Card size: mini. One line per game'}>{d==='full'?'Full':d==='compact'?'Compact':'Mini'}</button>)}
             </div>
+            <div className="inline-flex p-1 rounded-xl bg-slate-100 gap-0.5" role="group" aria-label="Show crew" title="Show every slot, only refs, or only scorekeepers">
+              {([['all','Everyone'],['refs','Refs'],['sk','Scorekeepers']] as const).map(([k,l])=><button key={k} type="button" onClick={()=>setCrewShow(k)} aria-pressed={crewShow===k} className={segBtn(crewShow===k)}>{l}</button>)}
+            </div>
             <div className="relative">
               <button type="button" aria-label="Layout" title="Layout: column width, fold rows, refs per game" aria-expanded={layoutOpen} onClick={()=>{setLayoutOpen(o=>!o);setMoreOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><SlidersHorizontal size={15}/></button>
             {layoutOpen&&(<>
@@ -1447,19 +1454,19 @@ export default function GridPage({ params }: { params:{id:string} }) {
           const dropWorkerOnGame=(e:React.DragEvent,game:Game)=>{
             // A name dropped on a one-line game goes into its first open slot.
             const wid=e.dataTransfer.getData('workerId'); if(!wid||locked)return false
-            const rc=slotsOf(game); const openRole=[...slotRoles(rc),'scorekeeper'].find(r=>!game.assignments.some(a=>a.role===r))
+            const rc=slotsOf(game); const openRole=[...(crewShow==='sk'?[]:slotRoles(rc)),...(crewShow==='refs'?[]:['scorekeeper'])].find(r=>!game.assignments.some(a=>a.role===r))
             if(openRole)assign(game.id,openRole,wid); else toast.error('Every slot on that game is filled')
             return true
           }
           const renderSlots=(game:Game,doubled:Set<string>,isAssigning:boolean,chip:boolean)=>{
             const rc=slotsOf(game)
-            const nodes=slotRoles(rc).map((role,i)=>{
+            const nodes=(crewShow==='sk'?[]:slotRoles(rc)).map((role,i)=>{
               const roleObj=GRID_ROLES.find(r=>r.value===role)||{value:role,label:`Ref ${i+1}`,short:`R${i+1}`,color:'#0284c7'}
               const existing=game.assignments.find(a=>a.role===role)
               return <div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':'+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+':'+role?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" chip={chip} mark={markFor(game.id,role)} displayName={existing?.worker?lastNameOf(existing.worker):undefined}/></div>
             })
             const sk=game.assignments.find(a=>a.role==='scorekeeper')
-            nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            if(crewShow!=='refs')nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
             return nodes
           }
           // One line: status dot, game, division, the crew by last name. Used by the
@@ -1504,7 +1511,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                     {!gameLocked&&<button type="button" className="ml-0.5 text-slate-400 hover:text-slate-700 opacity-0 group-hover/card:opacity-100 transition-opacity" onClick={e=>{e.stopPropagation();openEditGame(game)}} title="Edit game">✎</button>}
                   </span>
                 </div>
-                <div className="text-[11px] font-bold text-slate-900 truncate leading-tight" title={`${game.team1} v ${game.team2}`}>{game.team1}<span className="font-normal text-slate-400 px-1">v</span>{game.team2}</div>
+                {crewShow==='all'&&<div className="text-[11px] font-bold text-slate-900 truncate leading-tight" title={`${game.team1} v ${game.team2}`}>{game.team1}<span className="font-normal text-slate-400 px-1">v</span>{game.team2}</div>}
                 {/* Chips sit three across when the column has room (a wide monitor) and
                     wrap to two + one when it does not, so a last name stays readable. */}
                 <div className="flex flex-wrap gap-0.5 [&>*]:flex-[1_1_68px] [&>*]:min-w-0">{renderSlots(game,doubled,isAssigning,true)}</div>
@@ -1647,6 +1654,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                             <div className="flex items-center gap-1"><span className="font-bold text-[12px] text-slate-900 flex-1 leading-tight">{game.team2}</span>{showScores&&<input type="number" min="0" className="w-8 h-5 text-[10px] text-center border border-slate-200 rounded bg-white/80 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed" disabled={gameLocked||!!game.ownClub} title={game.ownClub?'Your club plays in this game, so someone else posts its score.':undefined} defaultValue={game.score2??''} onBlur={e=>saveScore(game.id,'score2',e.target.value)} placeholder="—"/>}</div>
                           </div>
                           <div className="space-y-0.5 pt-1" style={{borderTop:`1px solid ${dc.border}`}}>
+                            {crewShow!=='sk'&&<>
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[8px] font-bold text-slate-400 uppercase tracking-wide">Refs</span>
                               <div className="flex items-center gap-0.5">
@@ -1662,8 +1670,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
                               const existing=game.assignments.find(a=>a.role===role)
                               return<div key={role} onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":"+role)}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,role,wid)}} className={dragSlot===game.id+":"+role?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={roleObj} existing={existing} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,role,wid)} getGameCount={getGameCount} doubled={doubled} slotType="ref" mark={markFor(game.id,role)}/></div>
                             })}
+                            </>}
                             {/* Scorekeeper */}
-                            <div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" mark={markFor(game.id,'scorekeeper')}/></div>
+                            {crewShow!=='refs'&&<div onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();setDragSlot(game.id+":scorekeeper")}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData("workerId");setDragSlot(null);if(wid&&!locked)assign(game.id,"scorekeeper",wid)}} className={dragSlot===game.id+":scorekeeper"?"rounded ring-1 ring-sky-400 bg-sky-50":""}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={game.assignments.find(a=>a.role==='scorekeeper')} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" mark={markFor(game.id,'scorekeeper')}/></div>}
                           </div>
                           </>}
                         </td>

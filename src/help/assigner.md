@@ -22,6 +22,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 - The top of the page shows how many slots are filled for the day. A red **double-booked** count appears when someone is on two games at once; click it to see just those games.
 - Filter the games by search, division, **All** / **Boys** / **Girls** (Boys turns blue and Girls pink when on; click it again for All), and **Needs crew** or **Conflicts**. The numbers are that day's games. Games that don't match fade on the grid. **Clear** resets the filters.
 - **Card size** (**Full**, **Compact**, **Mini**) changes how much each game shows. **Full** cards have score boxes only when the event is set to **Show scores** (pick **Show scores** or **No scores** on **+ New Tournament** or **Edit** on its card).
+- **Everyone**, **Refs** and **Scorekeepers** pick which slots every game shows. **Refs** or **Scorekeepers** shows just those people, and **Needs crew** and each time's "crewed" count only them. **Compact** cards also hide the teams then; switch to **Full** to see them. For a view-only copy to use at the fields, open **Live → Field board**.
 - **Layout** holds **Fit all fields** or **Fixed width** columns, and **Fold staffed**, **Fold all** and **Open all** to collapse time rows.
 - The staffing panel's **Needs** tab shows who is on games that day and **Min staff (busiest day)**, an estimate of how many refs and scorekeepers you need based on **Games/ref**. Click **By day** for each day.
 
