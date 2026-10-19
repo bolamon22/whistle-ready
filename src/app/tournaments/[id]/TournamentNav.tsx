@@ -124,6 +124,7 @@ export default function TournamentNav({ id, name, logoUrl, stats }: Props) {
     { label: 'Live', items: [
       { href: `${base}/scores`,         label: 'Post scores' },
       { href: `${base}/assignments`,    label: 'Assignments' },
+      { href: `${base}/field-board`,    label: 'Field board' },
       { href: `${base}/communications`, label: 'Communications' },
       { href: `${base}/chirp-insights`, label: 'Chirp insights' },
     ]},

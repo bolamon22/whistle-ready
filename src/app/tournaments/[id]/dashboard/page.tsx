@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import {
   Target, ClipboardList, Radio, TriangleAlert, ClipboardCheck, Contact,
-  Megaphone, Siren, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, Eye, EyeOff, CheckCircle2, XCircle, Circle, type LucideIcon,
+  Megaphone, Siren, Wallet, ArrowRight, Trophy, ChevronDown, GripVertical, Eye, EyeOff, CheckCircle2, XCircle, Circle, LayoutGrid, type LucideIcon,
 } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import CopyTournamentButton from '@/components/CopyTournamentButton'
@@ -352,6 +352,7 @@ export default function DashboardPage() {
             <GameDayCard href={`/tournaments/${id}/scores`}         icon={Target}         label="Post scores"     hint="Quick entry" accent />
             <GameDayCard href={`/tournaments/${id}/assignments`}    icon={ClipboardList}  label="Assignments"     hint={`~${assignPct}% filled`} />
             {linkIf(`/tournaments/${id}/communications`) && <GameDayCard href={`/tournaments/${id}/communications`} icon={Megaphone}      label="Communications"  hint="Field requests · broadcast · incidents · contacts" />}
+            {linkIf(`/tournaments/${id}/field-board`) && <GameDayCard href={`/tournaments/${id}/field-board`} icon={LayoutGrid} label="Field board" hint="Who's on every field · view only" />}
             {linkIf(`/tournaments/${id}/tables`) && <GameDayCard href={`/tournaments/${id}/tables`} icon={ClipboardList}  label="Score tables"    hint="Who's checked in at each table" />}
             {linkIf(`/tournaments/${id}/awards`) && <GameDayCard href={`/tournaments/${id}/awards`} icon={Trophy}         label="Awards"          hint="Medals and champion photos" />}
             {linkIf(`/tournaments/${id}/emergency`) && <GameDayCard href={`/tournaments/${id}/emergency`} icon={Siren}          label="Emergency plan"  hint="911 address · ER · AED · lightning" />}

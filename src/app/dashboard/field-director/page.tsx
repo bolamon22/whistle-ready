@@ -1,6 +1,6 @@
 'use client'
 
-import { Radio, Users, CalendarClock, Store, CalendarDays, GraduationCap, ClipboardList, Trophy, TriangleAlert } from 'lucide-react'
+import { Radio, Users, CalendarClock, Store, CalendarDays, GraduationCap, ClipboardList, Trophy, TriangleAlert, LayoutGrid } from 'lucide-react'
 import RoleHome from '@/components/RoleHome'
 
 // The field director's home (Oct 13 2026): only the events they're assigned to
@@ -16,6 +16,7 @@ export default function FieldDirectorDashboard() {
       emptyText="No events yet. Ask your director to add you to an event on Your team."
       actions={id => [
         { href: `/tournaments/${id}/communications`, Icon: Radio,         label: 'Game day' },
+        { href: `/tournaments/${id}/field-board`,    Icon: LayoutGrid,    label: 'Field board' },
         { href: `/tournaments/${id}/tables`,         Icon: ClipboardList, label: 'Score tables' },
         { href: `/tournaments/${id}/incidents`,      Icon: TriangleAlert, label: 'Issues' },
         { href: `/tournaments/${id}/awards`,         Icon: Trophy,        label: 'Awards' },
