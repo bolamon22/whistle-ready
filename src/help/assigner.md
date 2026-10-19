@@ -51,7 +51,7 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **To rename a division:** click the **⋯** button at the top right of the Assigner, then **Divisions** (the Head Assigner, directors and schedulers). Change the name and click **Rename**: every game in the division moves with it. The tag under each name shows whose game it is, **Boys**, **Girls** or **Boys & girls**, from the name, or from the event's **Teams** when the name says neither, so adding Boys or Girls to a name changes it. A name another division already has is refused.
 
-**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games, rename divisions or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import games from TourneyMachine or a spreadsheet".
+**Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games, rename divisions or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import, build or delete the games".
 
 **To prevent accidental changes:** click **⋯**, then **Lock editing**. A **Locked** tag shows at the top; click it to unlock. This applies on your own browser only.
 

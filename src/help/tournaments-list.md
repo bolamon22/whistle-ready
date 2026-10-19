@@ -17,7 +17,7 @@ The **Tournaments** page is your home page. It lists every tournament, with the 
 5. Upload a logo if you have one, and tick divisions under **Divisions** (use **Select all defaults**, **Clear all**, or type one in **Add custom division…**).
 6. Click **Create Tournament**. If you chose CSV import, you go straight to the import page.
 
-On the Whistle Ready Assigner plan the form asks only for the name, sport, teams, dates, location and logo. The games, with their fields and divisions, come in when you import the schedule on the **Assigner** board (see "Import games from TourneyMachine or a spreadsheet").
+On the Whistle Ready Assigner plan the form asks only for the name, sport, teams, dates, location and logo. The games, with their fields and divisions, come in when you import the schedule on the **Assigner** board (see "Import, build or delete the games").
 
 **Teams:** when every kind picked is boys and men's (or girls and women's), a division whose name doesn't say boys or girls counts as that side's game. The Assigner's **Boys games** and **Girls games** filter, **Auto-assign**, **Clear**, the boys' and girls' refs pay groups, **Notify officials** and what officials see all go by it. With both sides picked, the division name decides, and a name that says neither can take either kind of ref. To fix a name, see "Assign refs and scorekeepers to games" (**Divisions** on the Assigner).
 
