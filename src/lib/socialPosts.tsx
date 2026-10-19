@@ -21,7 +21,7 @@ export const POST_H = 1350
 // "add them all ... I'll use them for the Fall Classic too") are photo-first like the
 // "· photo" ones and draw the card in the photo's place when there's no photo.
 export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
-  | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey' | 'siblings'
+  | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey' | 'siblings' | 'siblings-poster'
 const ALL_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
@@ -41,6 +41,9 @@ const ALL_STYLES: { id: PostStyle; label: string }[] = [
   // Brothers / Sisters / Brother & Sister (Bo, Oct 18 2026): one card per sibling, all
   // in the same look and naming each other, for players staff link as siblings.
   { id: 'siblings', label: 'Siblings' },
+  // "The Brothers Take On Monster Mash" (Bo picked this from five ideas, Oct 18 2026): a
+  // buddy-movie poster with every sibling's photo, oldest first; TWINS when they share a birthday.
+  { id: 'siblings-poster', label: 'Siblings · Movie poster' },
 ]
 // Name on the Back is retired from every picker (Bo, Oct 18 2026: "that one's not very
 // good. I'll probably never use it"). It still renders, so emails already sent with it
@@ -48,13 +51,15 @@ const ALL_STYLES: { id: PostStyle; label: string }[] = [
 const RETIRED = new Set<PostStyle>(['jersey'])
 /** Only offered for players linked as siblings (see lib/siblings). */
 export const SIBLING_STYLE: PostStyle = 'siblings'
+export const SIBLING_POSTER: PostStyle = 'siblings-poster'
+export const isSiblingStyle = (s: string) => s === SIBLING_STYLE || s === SIBLING_POSTER
 /** The looks staff can pick for any player, in the standard order. */
-export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id) && s.id !== SIBLING_STYLE)
+export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id) && !isSiblingStyle(s.id))
 export const styleLabel = (id: string) => ALL_STYLES.find(s => s.id === id)?.label || id
 /** Bo's favorites (Oct 18 2026), offered first on the social scheduler. */
 export const FAVORITE_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo', 'cover', 'rookie', 'scout', 'main-event']
 /** The looks that use the player's photo rather than the card. */
-const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey', 'siblings'])
+const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey', 'siblings', 'siblings-poster'])
 export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s)
 /** What the Ask dialog starts with ticked. */
 export const DEFAULT_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo']
@@ -87,7 +92,7 @@ export type PostData = {
   photoW?: number
   photoH?: number
   /** Siblings look: everyone's first name in order, which one this card is, and the title. */
-  sibs?: { names: string[]; index: number; title: string }
+  sibs?: { names: string[]; index: number; title: string; photos?: { src: string; w: number; h: number }[] }
 }
 
 /** Width × height of a PNG, JPEG, GIF or WebP from its bytes; null when unknown. */
@@ -151,6 +156,7 @@ const MARK_AT: Record<PostStyle, CSSProperties> = {
   scout: { right: 36, bottom: 34 },
   'main-event': { right: 30, bottom: 26 },
   siblings: { right: 30, bottom: 26 },
+  'siblings-poster': { right: 30, bottom: 24 },
   jersey: { left: 450, bottom: 24 },
 }
 
@@ -390,6 +396,53 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
               </div>
               <div style={{ display: 'flex', border: `${u(6)}px solid ${RED}`, color: RED, borderRadius: u(12), padding: `${u(8)}px ${u(22)}px`, fontFamily: ANTON, fontSize: u(64), lineHeight: 1, transform: 'rotate(-9deg)' }}>CLEARED TO PLAY</div>
             </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (style === 'siblings-poster') {
+      // Buddy-movie poster: names billed across the top, the siblings side by side, then
+      // "THE BROTHERS / TAKE ON / MONSTER MASH" and a release line with the event's dates.
+      const sib = d.sibs && d.sibs.names.length > 1 ? d.sibs : { names: [d.first || 'Player'], index: 0, title: 'SIBLINGS', photos: undefined }
+      const shots = (sib.photos && sib.photos.length ? sib.photos : d.photoSrc ? [{ src: d.photoSrc, w: d.photoW || 0, h: d.photoH || 0 }] : []).slice(0, 4)
+      const who = sib.title === 'BROTHERS' || sib.title === 'SISTERS' || sib.title === 'TWINS' || sib.title === 'TRIPLETS' || sib.title === 'SIBLINGS' ? `THE ${sib.title}` : sib.title
+      // The event's name on one or two lines, as big as fits.
+      const words = eventCapsPlain.split(/\s+/)
+      let lines = [eventCapsPlain]
+      if (eventCapsPlain.length > 13 && words.length > 1) {
+        let best = 0, bestDiff = 1e9
+        for (let i = 1; i < words.length; i++) { const a = words.slice(0, i).join(' '), b = words.slice(i).join(' '); const diff = Math.abs(a.length - b.length); if (diff < bestDiff) { best = i; bestDiff = diff } }
+        lines = [words.slice(0, best).join(' '), words.slice(best).join(' ')]
+      }
+      const evSize = Math.min(118, ...lines.map(l => fit(l, 1000, 118)))
+      const PH = 760, gap = 8
+      const pw = shots.length ? Math.floor((POST_W - gap * (shots.length - 1)) / shots.length) : POST_W
+      return (
+        <div style={{ ...root, background: '#07070b' }}>
+          <div style={{ position: 'absolute', left: 0, top: u(70), width: u(POST_W), height: u(PH), display: 'flex' }}>
+            {shots.length ? shots.map((ph, i) => (
+              <div key={i} style={{ display: 'flex', marginLeft: i ? u(gap) : 0 }}>
+                {ph.w && ph.h ? topCrop(ph.src, pw, PH, ph.w, ph.h, u)
+                  // eslint-disable-next-line @next/next/no-img-element
+                  : <img src={ph.src} width={u(pw)} height={u(PH)} alt="" style={{ objectFit: 'cover' }} />}
+              </div>
+            )) : <div style={{ display: 'flex', width: u(POST_W), height: u(PH), background: NAVY }} />}
+            <div style={{ position: 'absolute', left: 0, top: 0, width: u(POST_W), height: u(PH), display: 'flex', backgroundImage: 'linear-gradient(180deg, rgba(7,7,11,0.85) 0%, rgba(7,7,11,0) 16%, rgba(7,7,11,0) 50%, rgba(7,7,11,0.92) 82%, #07070b 100%)' }} />
+          </div>
+          <div style={{ position: 'absolute', left: 0, top: u(26), width: u(POST_W), display: 'flex', justifyContent: 'center' }}>
+            {sib.names.map((n, i) => <div key={i} style={{ ...caps(34, '#f1f5f9', 0.34, 700), margin: `0 ${u(30)}px` }}>{n.toUpperCase()}</div>)}
+          </div>
+          <div style={{ position: 'absolute', left: 0, top: u(lines.length > 1 ? 540 : 620), width: u(POST_W), display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(who, 980, 124)), lineHeight: 1, color: '#ffffff', letterSpacing: '0.03em' }}>{who}</div>
+            <div style={{ ...caps(42, ORANGE, 0.5, 800), marginTop: u(6) }}>TAKE ON</div>
+            {lines.map((l, i) => <div key={i} style={{ display: 'flex', fontFamily: ANTON, fontSize: u(evSize), lineHeight: 0.98, color: ORANGE }}>{l}</div>)}
+            <div style={{ ...caps(28, CREAM, 0.3, 700), marginTop: u(14) }}>IT RUNS IN THE FAMILY.</div>
+          </div>
+          <div style={{ position: 'absolute', left: u(60), right: u(60), bottom: u(80), display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', width: u(960), borderTop: `${u(2)}px solid rgba(255,255,255,0.25)`, marginBottom: u(14) }} />
+            <div style={{ ...caps(22, 'rgba(255,255,255,0.6)', 0.2, 600), textAlign: 'center' }}>{d.orgName ? `A ${cut(d.orgName.toUpperCase(), 40)} PRODUCTION` : club.toUpperCase()}</div>
+            <div style={{ ...caps(34, '#ffffff', 0.28, 800), marginTop: u(8) }}>{[dateShort ? `ON THE FIELD ${dateShort}` : '', whereCaps].filter(Boolean).join('  ·  ')}</div>
           </div>
         </div>
       )

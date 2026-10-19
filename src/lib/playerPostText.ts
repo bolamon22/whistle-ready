@@ -122,7 +122,7 @@ export function playerCaption(p: ClearedPlayer, style: string, days: number | nu
     jersey: `Name on the back: ${F}.`,
   }
   const look = baseLook(style)
-  const sib = look === 'siblings' && p.siblings ? siblingLine(p.siblings, E) : ''
+  const sib = look === 'siblings' && p.siblings ? siblingLine(p.siblings, E) : look === 'siblings-poster' && p.siblings ? posterLine(p.siblings, E) : ''
   const first = sib || hook[look] || `${F} is ready for ${E}.`
   const who = [p.jersey ? `#${p.jersey}` : '', teamLabel(p)].filter(Boolean).join(' · ')
   // Name the event once: on this line only when the opening line didn't.
@@ -159,6 +159,15 @@ export function siblingLine(s: NonNullable<ClearedPlayer['siblings']>, E: string
   const n = s.names
   const who = n.length === 2 ? n.join(' & ') : `${n.slice(0, -1).join(', ')} & ${n[n.length - 1]}`
   return `${who}: ${s.title === 'SIBLINGS' ? 'siblings' : s.title.toLowerCase()}, ${n.length === 2 ? 'both' : 'all'} ready for ${E}.`
+}
+
+/** "The brothers take on Monster Mash Lax Clash: Finn & Jack." for the movie poster. */
+export function posterLine(s: NonNullable<ClearedPlayer['siblings']>, E: string): string {
+  const n = s.names
+  const who = n.length === 2 ? n.join(' & ') : `${n.slice(0, -1).join(', ')} & ${n[n.length - 1]}`
+  const t = s.title.toLowerCase()
+  const lead = s.title.startsWith('BROTHER &') || s.title.startsWith('BROTHERS &') ? t.charAt(0).toUpperCase() + t.slice(1) : `The ${t}`
+  return `${lead} take on ${E}: ${who}. It runs in the family.`
 }
 
 export function squadCaption(list: ClearedPlayer[], site: string): string {

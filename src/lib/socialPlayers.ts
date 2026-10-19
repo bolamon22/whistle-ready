@@ -5,7 +5,7 @@ import { eventDates } from '@/lib/vendorApproval'
 import { startFacts } from '@/lib/socialPosts'
 import { instagramHandle } from '@/lib/photoConsent'
 import { cleanCollaborators, cleanHandles, type PostPlayerLink, type ClearedPlayer } from '@/lib/playerPostText'
-import { genderOf, getSiblingGroupsMany } from '@/lib/siblings'
+import { genderOf, getSiblingGroupsMany, birthOrder } from '@/lib/siblings'
 import { siblingTitle } from '@/lib/socialPosts'
 
 // Cleared players on the social scheduler (Bo, Oct 18 2026: "can we put the yes's on
@@ -147,6 +147,7 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
     for (const sid of Array.from(new Set(ids))) (byPlayer[sid] ||= []).push({ ...u, platforms: u.platforms!.slice().sort().reverse() })
   }
 
+  const dobOf = new Map<string, string>()   // birthdays, only for sibling order / twins
   const players: ClearedPlayer[] = []
   let waiting = 0
   for (const e of events) {
@@ -165,6 +166,7 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
       const ok = String(d.photoOk || '')
       if (!ok && d.photoAskAt) waiting++
       if (ok !== 'yes' || !s.passToken) continue
+      dobOf.set(s.id, String(d.dob || ''))
       players.push({
         id: s.id,
         tournamentId: e.id,
@@ -190,9 +192,12 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
   const byId = new Map(players.map(p => [p.id, p]))
   for (const p of players) {
     const g = sibGroups[p.id]; if (!g) continue
-    const members = g.ids.map(id => byId.get(id)).filter((x): x is ClearedPlayer => !!x)
-    if (members.length < 2) continue   // a sibling who isn't cleared to post (yet)
-    p.siblings = { ids: members.map(m => m.id), names: members.map(m => (m.playerName.split(/\s+/)[0] || 'Player')), rel: g.rel, title: siblingTitle(members.map(m => m.gender), g.rel) }
+    const found = g.ids.map(id => byId.get(id)).filter((x): x is ClearedPlayer => !!x)
+    if (found.length < 2) continue   // a sibling who isn't cleared to post (yet)
+    // Oldest first, and TWINS when they share a birthday (the birthday itself stays here).
+    const bo = birthOrder(found.map(m => dobOf.get(m.id) || ''))
+    const members = bo.order.map(i => found[i])
+    p.siblings = { ids: members.map(m => m.id), names: members.map(m => (m.playerName.split(/\s+/)[0] || 'Player')), rel: g.rel, title: bo.title || siblingTitle(members.map(m => m.gender), g.rel) }
   }
   // Possible siblings: same last name and same club at the same event, not yet linked.
   const fam = new Map<string, ClearedPlayer[]>()

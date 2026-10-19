@@ -240,7 +240,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const days = eventStart ? (dayDays != null && dayDays >= 0 ? dayDays : null) : daysProp
   const squadMode = !!squad && squad.length > 1
   // The Siblings look only makes sense for players linked as siblings (picked in the tray).
-  const canSiblings = style === 'siblings' || !!squad?.some(s => s.style === 'siblings')
+  const canSiblings = style.startsWith('siblings') || !!squad?.some(s => s.style.startsWith('siblings'))
   const isCustomLook = (s: string) => s in CUSTOM_REELS
   const [len, setLen] = useState<number>(initialSetup?.len && LENGTHS.some(l => l.sec === initialSetup.len) ? initialSetup.len : squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
   // The look for each part, picked by staff (Bo: "I'd like to be able to pick the looks").
@@ -563,7 +563,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
                   </span>}
                   <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? `${i + 1}. ${x.who}` : `${i + 1}.`}</span>
                   <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= pi) n.push(x.style); n[pi] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
-                    {canSiblings && <option value="siblings">Siblings</option>}
+                    {canSiblings && <><option value="siblings-poster">Siblings · Movie poster</option><option value="siblings">Siblings · Card set</option></>}
                     <optgroup label="Favorites">{FAV_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
                     <optgroup label="More looks">{MORE_LOOKS.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>
                   </select>

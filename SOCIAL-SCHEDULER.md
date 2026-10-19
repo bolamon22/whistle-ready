@@ -336,4 +336,9 @@ player (AppSetting `siblings:{submissionId}`) so /pass/<token>/post/siblings.png
 others. Each sibling gets their own card: title BROTHERS / SISTERS / BROTHER & SISTER (from
 waiver genders, or set when linking), everyone's first name with this one lit, "1 OF 2".
 Only siblings whose family said yes are named. The card's "Reel" makes a Squad Reel of the set.
+Siblings · Movie poster ('siblings-poster', Bo's pick of five ideas): every linked sibling's
+photo side by side, names billed on top, "THE BROTHERS / TAKE ON / <EVENT>", "IT RUNS IN THE
+FAMILY." and a release line. Oldest first when the waivers have birthdays; TWINS / TRIPLETS
+when they share one (birthdays never leave the server). The original one-card-each look
+stays as "Card set" for Reels.
 

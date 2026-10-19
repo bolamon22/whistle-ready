@@ -70,8 +70,21 @@ export async function unlinkSibling(id: string) {
   for (const x of rest) await prisma.appSetting.upsert({ where: { key: key(x) }, update: { value }, create: { key: key(x), value } })
 }
 
-/** For the Siblings post: everyone's first name in order, which one this is, and the title. */
-export async function siblingCard(orgId: string, id: string): Promise<{ names: string[]; index: number; title: string } | null> {
+/** Oldest first when every sibling's birthday is on the waiver; and TWINS / TRIPLETS when
+ *  they share one. Returns the order (indexes into `dobs`) and a title override or ''. */
+export function birthOrder(dobs: string[]): { order: number[]; title: string } {
+  const t = dobs.map(x => { const v = Date.parse(String(x || '')); return Number.isFinite(v) ? v : NaN })
+  const order = dobs.map((_, i) => i)
+  if (t.some(v => Number.isNaN(v))) return { order, title: '' }
+  order.sort((a, b) => t[a] - t[b])
+  const same = t.every(v => Math.abs(v - t[0]) < 2 * 86_400_000)
+  return { order, title: same ? (dobs.length === 2 ? 'TWINS' : dobs.length === 3 ? 'TRIPLETS' : '') : '' }
+}
+
+export type SiblingCard = { names: string[]; index: number; title: string; members: { id: string; name: string; photoUrl: string }[] }
+/** For the Siblings looks: everyone's first name (oldest first when known), which one this
+ *  is, the title, and each sibling's photo for the movie poster. */
+export async function siblingCard(orgId: string, id: string): Promise<SiblingCard | null> {
   const g = await getSiblingGroup(id)
   if (!g) return null
   const subs = await Promise.all(g.ids.map(x => getSubmission(orgId, x).catch(() => null)))
@@ -79,9 +92,12 @@ export async function siblingCard(orgId: string, id: string): Promise<{ names: s
   const people = g.ids.map((x, i) => ({ id: x, d: subs[i]?.data || null })).filter(p => p.d && (p.id === id || String(p.d.photoOk || '') === 'yes'))
   if (people.length < 2) return null
   const first = (n: string) => String(n || '').trim().split(/\s+/)[0] || 'Player'
+  const bo = birthOrder(people.map(p => String(p.d.dob || '')))
+  const ordered = bo.order.map(i => people[i])
   return {
-    names: people.map(p => first(p.d.playerName)),
-    index: Math.max(0, people.findIndex(p => p.id === id)),
-    title: siblingTitle(people.map(p => genderOf(p.d, String(p.d.division || ''))), g.rel),
+    names: ordered.map(p => first(p.d.playerName)),
+    index: Math.max(0, ordered.findIndex(p => p.id === id)),
+    title: bo.title || siblingTitle(ordered.map(p => genderOf(p.d, String(p.d.division || ''))), g.rel),
+    members: ordered.map(p => ({ id: p.id, name: first(p.d.playerName), photoUrl: String(p.d.photoUrl || '') })),
   }
 }

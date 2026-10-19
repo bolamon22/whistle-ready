@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X, Search, Maximize2, ChevronDown, ExternalLink } from 'lucide-react'
-import { POST_STYLES, FAVORITE_STYLES, SIBLING_STYLE } from '@/lib/socialPosts'
+import { POST_STYLES, FAVORITE_STYLES, SIBLING_STYLE, SIBLING_POSTER } from '@/lib/socialPosts'
 import { lookFor, teamLabel, firstOf, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
 
@@ -41,7 +41,7 @@ const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled',
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
 const STRIP = 12
 const shortDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const LOOK_LABEL: Record<string, string> = { ...Object.fromEntries(POST_STYLES.map(s => [s.id, s.label])), siblings: 'Siblings' }
+const LOOK_LABEL: Record<string, string> = { ...Object.fromEntries(POST_STYLES.map(s => [s.id, s.label])), siblings: 'Siblings', 'siblings-poster': 'Siblings · Movie poster' }
 const PLAT: Record<string, string> = { instagram: 'IG', facebook: 'FB' }
 const posted = (p: ClearedPlayer) => p.posts.filter(x => x.status === 'published').length
 
@@ -185,7 +185,10 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
             </ol>
           )}
           <select value={look} onChange={e => setLooks({ ...looks, [p.id]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700" aria-label="Look">
-            {p.siblings && <option value={SIBLING_STYLE}>Siblings · {p.siblings.title.charAt(0) + p.siblings.title.slice(1).toLowerCase()}</option>}
+            {p.siblings && <optgroup label={`Siblings · ${p.siblings.title.charAt(0) + p.siblings.title.slice(1).toLowerCase()}`}>
+              <option value={SIBLING_POSTER}>Movie poster · {p.siblings.title.startsWith('BROTHER &') ? '' : 'The '}{p.siblings.title.toLowerCase()} take on {p.event.name || 'the event'}</option>
+              <option value={SIBLING_STYLE}>Card set · one card each</option>
+            </optgroup>}
             <optgroup label="Favorites">{FAVS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
             <optgroup label="More looks">{MORE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
           </select>

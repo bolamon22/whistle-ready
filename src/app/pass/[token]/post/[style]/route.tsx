@@ -27,24 +27,34 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   const width = Math.min(POST_W, Math.max(360, Math.round(Number(q.get('w')) || POST_W)))
   const tid = pass.submission.tournamentId
   // The photo looks draw the family's own photo; without one they fall back to the card.
-  let photoSrc = usesPhoto(style) ? await imageForSatori(pass.card.photoUrl, base) : ''
   // The photo's size, so the looks can crop from the top (Satori only center-crops, which
   // cut heads off). A remote photo is fetched once and passed in as data.
-  let photoW = 0, photoH = 0
-  if (photoSrc) {
-    try {
-      let bytes: Uint8Array
-      if (photoSrc.startsWith('data:')) bytes = Buffer.from(photoSrc.slice(photoSrc.indexOf(',') + 1, photoSrc.indexOf(',') + 1 + 200_000), 'base64')
-      else {
-        const r = await fetch(photoSrc)
-        const buf = Buffer.from(await r.arrayBuffer())
-        if (r.ok && buf.length) { bytes = buf; photoSrc = `data:${r.headers.get('content-type') || 'image/jpeg'};base64,${buf.toString('base64')}` } else bytes = new Uint8Array()
-      }
-      const sz = imageSize(bytes)
-      if (sz && sz.w > 0 && sz.h > 0) { photoW = sz.w; photoH = sz.h }
-    } catch {}
+  async function loadPhoto(url: string): Promise<{ src: string; w: number; h: number }> {
+    let src = await imageForSatori(url, base)
+    let w = 0, h = 0
+    if (src) {
+      try {
+        let bytes: Uint8Array
+        if (src.startsWith('data:')) bytes = Buffer.from(src.slice(src.indexOf(',') + 1, src.indexOf(',') + 1 + 200_000), 'base64')
+        else {
+          const r = await fetch(src)
+          const buf = Buffer.from(await r.arrayBuffer())
+          if (r.ok && buf.length) { bytes = buf; src = `data:${r.headers.get('content-type') || 'image/jpeg'};base64,${buf.toString('base64')}` } else bytes = new Uint8Array()
+        }
+        const sz = imageSize(bytes)
+        if (sz && sz.w > 0 && sz.h > 0) { w = sz.w; h = sz.h }
+      } catch {}
+    }
+    return { src, w, h }
   }
-  const sibs = style === 'siblings' && pass.submission.orgId ? await siblingCard(pass.submission.orgId, pass.submission.id).catch(() => null) : null
+  const main = usesPhoto(style) ? await loadPhoto(pass.card.photoUrl) : { src: '', w: 0, h: 0 }
+  const photoSrc = main.src, photoW = main.w, photoH = main.h
+  const card = (style === 'siblings' || style === 'siblings-poster') && pass.submission.orgId ? await siblingCard(pass.submission.orgId, pass.submission.id).catch(() => null) : null
+  // The movie poster shows every sibling's photo (each family said yes; see lib/siblings).
+  const photos = card && style === 'siblings-poster'
+    ? (await Promise.all(card.members.map(m => m.id === pass.submission.id ? Promise.resolve(main) : m.photoUrl ? loadPhoto(m.photoUrl).catch(() => null) : Promise.resolve(null)))).filter((x): x is { src: string; w: number; h: number } => !!x && !!x.src)
+    : undefined
+  const sibs = card ? { names: card.names, index: card.index, title: card.title, ...(photos ? { photos } : {}) } : null
   const [cardSrc, logoSrc, clubLogoSrc, fonts, start] = await Promise.all([
     photoSrc ? Promise.resolve('') : passCardDataUrl(pass, base),
     imageForSatori(pass.card.tournamentLogoUrl, base),
