@@ -78,6 +78,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
           okAt: String(d.photoOkAt || ''),
           schedAt: String(d.photoAskSchedAt || ''),
           okName: String(d.photoOkName || ''),
+          submittedAt: String(s.submittedAt || ''),
           instagram: String(d.photoIg || ''),
           clubInstagram: String(d.photoClubIg || ''),
           clubFacebook: String(d.photoClubFb || ''),

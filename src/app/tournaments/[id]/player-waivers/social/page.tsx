@@ -17,11 +17,16 @@ type Player = {
   id: string; playerName: string; clubName: string; teamName: string; jersey: string; position: string
   photoUrl: string; cardUrl: string; parentName: string; emails: string[]
   askAt: string; schedAt: string; ok: string; okAt: string; okName: string; instagram: string; clubInstagram: string; clubFacebook: string
+  submittedAt: string
 }
-type Filter = 'all' | 'new' | 'scheduled' | 'asked' | 'yes' | 'no'
+type Filter = 'all' | 'recent' | 'new' | 'scheduled' | 'asked' | 'yes' | 'no'
 
-const state = (p: Player): Exclude<Filter, 'all'> => p.ok === 'yes' ? 'yes' : p.ok === 'no' ? 'no' : p.schedAt ? 'scheduled' : p.askAt ? 'asked' : 'new'
-const CHIP: Record<Exclude<Filter, 'all'>, { label: string; cls: string }> = {
+// "Just added": waivers with a photo from the last 3 days that nobody has asked yet, so
+// the newest arrivals are easy to review (Bo, Oct 18 2026: "go through the new waivers").
+const RECENT_MS = 3 * 86_400_000
+const isRecent = (p: Player) => state(p) === 'new' && !!p.submittedAt && Date.now() - Date.parse(p.submittedAt) < RECENT_MS
+const state = (p: Player): Exclude<Filter, 'all' | 'recent'> => p.ok === 'yes' ? 'yes' : p.ok === 'no' ? 'no' : p.schedAt ? 'scheduled' : p.askAt ? 'asked' : 'new'
+const CHIP: Record<Exclude<Filter, 'all' | 'recent'>, { label: string; cls: string }> = {
   new: { label: 'Not asked', cls: 'bg-slate-100 text-slate-600' },
   scheduled: { label: 'Scheduled', cls: 'bg-sky-100 text-sky-800' },
   asked: { label: 'Asked · waiting', cls: 'bg-amber-100 text-amber-800' },
@@ -66,11 +71,13 @@ export default function SocialPhotos() {
   }, [id, tick])
 
   const counts = useMemo(() => {
-    const c = { all: players.length, new: 0, scheduled: 0, asked: 0, yes: 0, no: 0 }
-    for (const p of players) c[state(p)]++
+    const c = { all: players.length, recent: 0, new: 0, scheduled: 0, asked: 0, yes: 0, no: 0 }
+    for (const p of players) { c[state(p)]++; if (isRecent(p)) c.recent++ }
     return c
   }, [players])
-  const shown = useMemo(() => filter === 'all' ? players : players.filter(p => state(p) === filter), [players, filter])
+  const shown = useMemo(() => filter === 'all' ? players
+    : filter === 'recent' ? players.filter(isRecent).sort((a, b) => b.submittedAt.localeCompare(a.submittedAt))
+    : players.filter(p => state(p) === filter), [players, filter])
   const askable = (p: Player) => (state(p) === 'new' || state(p) === 'asked' || state(p) === 'scheduled') && p.emails.length > 0
   const pickedList = players.filter(p => picked.has(p.id))
   const pickedResend = pickedList.some(p => state(p) === 'asked')
@@ -148,10 +155,10 @@ export default function SocialPhotos() {
           </button>
         </div>
         <div className="max-w-6xl mx-auto px-4 pb-3 flex flex-wrap gap-2">
-          {(['all', 'new', 'scheduled', 'asked', 'yes', 'no'] as Filter[]).map(f => (
+          {(['all', 'recent', 'new', 'scheduled', 'asked', 'yes', 'no'] as Filter[]).map(f => (
             <button key={f} type="button" onClick={() => setFilter(f)}
               className={`text-xs font-semibold rounded-full px-3 py-1.5 border ${filter === f ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
-              {f === 'all' ? 'All' : CHIP[f].label.split(' ·')[0]} <span className="opacity-70">{counts[f]}</span>
+              {f === 'all' ? 'All' : f === 'recent' ? 'Just added' : CHIP[f].label.split(' ·')[0]} <span className="opacity-70">{counts[f]}</span>
             </button>
           ))}
           {!emailReady && <span className="text-xs text-rose-700 self-center">Email isn't set up, so requests can't be sent.</span>}
@@ -197,6 +204,7 @@ export default function SocialPhotos() {
                   {p.cardUrl && <button type="button" onClick={() => setPreview(p.id)} className="self-start inline-flex items-center gap-1 text-xs font-semibold text-teal-700 hover:text-teal-900"><Eye size={13} /> Preview posts</button>}
                   <div className="font-semibold text-slate-900 text-sm truncate">{p.playerName}{p.jersey ? ` #${p.jersey}` : ''}</div>
                   <div className="text-xs text-slate-500 truncate">{p.teamName || p.clubName}</div>
+                  {isRecent(p) && <span className="self-start text-[10px] font-bold uppercase tracking-wide rounded-full px-2 py-0.5 bg-teal-100 text-teal-800">New · {day(p.submittedAt)}</span>}
                   <span className={`self-start text-[11px] font-semibold rounded-full px-2 py-0.5 ${CHIP[st].cls}`}>
                     {CHIP[st].label}{st === 'scheduled' ? ` · ${when(p.schedAt)}` : st === 'asked' ? ` · ${day(p.askAt)}` : (st === 'yes' || st === 'no') ? ` · ${day(p.okAt)}` : ''}
                   </span>
