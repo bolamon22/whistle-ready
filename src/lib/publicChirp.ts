@@ -352,6 +352,9 @@ ${turns}
 export async function emailTranscript(scope: PublicScope, convoId: string): Promise<{ ok: boolean; reason?: string }> {
   const to = String(scope.org?.contactEmail || '').trim()
   if (!to) return { ok: false, reason: 'no org contact email' }
+  // Bundled by default: the chat waits for the next digest (sendChirpDigest)
+  // instead of one email per chat (Bo, Oct 19 2026: "way too many emails").
+  if (scope.org?.id && (await getMailMode(scope.org.id)) !== 'each') return { ok: true, reason: 'batched' }
   const list = await readConvos(scope.key)
   const c = list.find(x => x.id === convoId)
   if (!c || c.turns.length <= c.emailed) return { ok: false, reason: 'nothing new' }
@@ -372,4 +375,76 @@ export async function emailTranscript(scope: PublicScope, convoId: string): Prom
   const value = String(sent + 1)
   await prisma.appSetting.upsert({ where: { key: capKey }, create: { key: capKey, value }, update: { value } }).catch(() => {})
   return { ok: true }
+}
+
+
+// ---- Bundled transcript emails ----
+//
+// One email per chat filled the inbox on busy days. The default now is one
+// email every 3 hours with every chat since the last one; the organizer can
+// pick daily, one per chat, or off on Chirp insights. The cron
+// (/api/chirp/digest, hourly) does the sending.
+
+export type MailMode = 'each' | '3h' | 'daily' | 'off'
+export const MAIL_MODES: { id: MailMode; label: string }[] = [
+  { id: '3h', label: 'Every 3 hours' },
+  { id: 'daily', label: 'Once a day' },
+  { id: 'each', label: 'After every chat' },
+  { id: 'off', label: 'Off' },
+]
+const MODE_HOURS: Record<string, number> = { '3h': 3, daily: 24 }
+export async function getMailMode(orgId: string): Promise<MailMode> {
+  const row = await prisma.appSetting.findUnique({ where: { key: `chirpMailMode:${orgId}` } }).catch(() => null)
+  const v = String((row as any)?.value || '')
+  return (MAIL_MODES.some(m => m.id === v) ? v : '3h') as MailMode
+}
+export async function setMailMode(orgId: string, mode: MailMode) {
+  const key = `chirpMailMode:${orgId}`
+  await prisma.appSetting.upsert({ where: { key }, create: { key, value: mode }, update: { value: mode } })
+}
+
+/** Send one org its bundled Chirp chats if its interval has passed (or force).
+ *  A chat still going (a turn in the last 15 minutes) waits for the next one. */
+export async function sendChirpDigest(org: Org, opts: { force?: boolean } = {}): Promise<{ sent: boolean; chats: number; reason?: string }> {
+  const to = String(org.contactEmail || '').trim()
+  if (!to) return { sent: false, chats: 0, reason: 'no contact email' }
+  const mode = await getMailMode(org.id)
+  if (!MODE_HOURS[mode] && !opts.force) return { sent: false, chats: 0, reason: `mode ${mode}` }
+  const lastKey = `chirpDigestAt:${org.id}`
+  const lastRow = await prisma.appSetting.findUnique({ where: { key: lastKey } }).catch(() => null)
+  const last = Number((lastRow as any)?.value || 0)
+  if (!opts.force && Date.now() - last < MODE_HOURS[mode] * 3600000 - 10 * 60000) return { sent: false, chats: 0, reason: 'not due' }
+
+  const tournaments: any[] = await prisma.$queryRawUnsafe('SELECT id, name FROM "Tournament" WHERE orgId = ?', org.id).catch(() => [])
+  const scopes = [...tournaments.map(t => ({ key: String(t.id), title: String(t.name || 'Event'), org, tournamentId: String(t.id) })),
+    { key: `org:${org.id}`, title: `${org.name} website`, org, tournamentId: undefined as string | undefined }]
+  const idle = Date.now() - 15 * 60000
+  type Pending = { scope: typeof scopes[number]; c: Convo; fresh: Turn[] }
+  const pending: Pending[] = []
+  const lists = new Map<string, Convo[]>()
+  for (const sc of scopes) {
+    const list = await readConvos(sc.key)
+    lists.set(sc.key, list)
+    for (const c of list) if (c.turns.length > (c.emailed || 0) && c.updatedAt <= idle) pending.push({ scope: sc, c, fresh: c.turns.slice(c.emailed || 0) })
+  }
+  if (!pending.length) return { sent: false, chats: 0, reason: 'nothing new' }
+  // Concerns first, then chats Chirp couldn't answer, then the rest, newest first.
+  const rank = (p: Pending) => (p.fresh.some(t => isConcern(t.q)) ? 0 : p.fresh.some(t => t.covered === false) ? 1 : 2)
+  pending.sort((a, b) => rank(a) - rank(b) || b.c.updatedAt - a.c.updatedAt)
+  const batch = pending.slice(0, 40)
+
+  const questions = batch.reduce((n, p) => n + p.fresh.length, 0)
+  const missed = batch.reduce((n, p) => n + p.fresh.filter(t => t.covered === false).length, 0)
+  const concerns = batch.filter(p => rank(p) === 0).length
+  const parts = batch.map(p => transcriptEmail(p.scope, p.c, p.fresh))
+  const summary = `${batch.length} chat${batch.length === 1 ? '' : 's'} · ${questions} question${questions === 1 ? '' : 's'}${missed ? ` · ${missed} Chirp couldn't answer` : ''}${concerns ? ` · ${concerns} with a concern` : ''}`
+  const html = `<div style="font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;max-width:620px;margin:0 auto;padding:16px 0 4px;color:#0f172a"><div style="font-size:18px;font-weight:700">Chirp chats since your last update</div><div style="font-size:14px;color:#475569;margin-top:4px">${summary}${pending.length > batch.length ? ` · ${pending.length - batch.length} more in the next email` : ''}</div></div>` + parts.map(x => x.html).join('')
+  const text = `Chirp chats since your last update\n${summary}\n\n` + parts.map(x => x.text).join('\n\n----\n\n')
+  const subject = `${concerns ? '[Concern] ' : ''}${missed ? '[Needs an answer] ' : ''}Chirp: ${summary}`
+  const r = await sendEmail({ to, subject, html, text, fromName: `Chirp · ${org.name || 'Whistle Ready'}` })
+  if (!r.ok) return { sent: false, chats: 0, reason: r.error }
+  for (const p of batch) p.c.emailed = p.c.turns.length
+  for (const sc of scopes) if (batch.some(p => p.scope.key === sc.key)) await writeConvos(sc.key, lists.get(sc.key)!)
+  await prisma.appSetting.upsert({ where: { key: lastKey }, create: { key: lastKey, value: String(Date.now()) }, update: { value: String(Date.now()) } })
+  return { sent: true, chats: batch.length }
 }

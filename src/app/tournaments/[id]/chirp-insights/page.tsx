@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db'
 import TournamentNav from '../TournamentNav'
 import ChirpFaqSuggest from '@/components/ChirpFaqSuggest'
+import ChirpMailSetting from '@/components/ChirpMailSetting'
 import { MessageCircleQuestion } from 'lucide-react'
 import { roleLabel, staffLogKey, type StaffLogEntry } from '@/lib/chirp'
 
@@ -47,6 +48,7 @@ export default async function ChirpInsightsPage({ params, searchParams }: { para
         <div className="mb-5">
           <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2"><MessageCircleQuestion size={20} className="text-teal-600" /> Chirp insights</h1>
           <p className="text-sm text-slate-500 mt-1">What your staff and attendees ask Chirp.</p>
+          <div className="mt-3"><ChirpMailSetting tournamentId={params.id} /></div>
         </div>
 
         <div className="bg-white border border-slate-200 rounded-xl p-5 mb-6">
