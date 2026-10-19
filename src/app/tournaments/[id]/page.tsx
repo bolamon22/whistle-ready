@@ -4,7 +4,7 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -14,6 +14,7 @@ import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 import RefLevelPill from '@/components/RefLevelPill'
 import { scoresShown } from '@/lib/eventScores'
+import ScheduleBuilder from './ScheduleBuilder'
 
 // refLevel (lib/refLevel) comes back only for those who see this person's pay (api/workers).
 interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null;refLevel?:number|null }
@@ -290,6 +291,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
   // Game edit/add
   const [editGame,setEditGame]=useState<Game|null>(null)
   const [showAddGame,setShowAddGame]=useState(false)
+  // Build a schedule by hand, and delete the games to start over (Bo, Oct 19 2026): a head
+  // assigner handed a schedule that didn't import well can wipe it and lay it out here.
+  const [showBuilder,setShowBuilder]=useState(false)
+  const [delGames,setDelGames]=useState<null|'day'|'all'>(null)
+  const [deletingGames,setDeletingGames]=useState(false)
   const [gameForm,setGameForm]=useState<Record<string,unknown>>({})
   const [gameSaving,setGameSaving]=useState(false)
 
@@ -721,6 +727,37 @@ export default function GridPage({ params }: { params:{id:string} }) {
         </div>
       )}
 
+      {showBuilder&&<ScheduleBuilder tournamentId={params.id} days={eventDayList({startDate:tournament?.startDate,endDate:tournament?.endDate},games.map(g=>g.date))} defaultDay={activeDay||''}
+        gamesByDay={games.reduce((m,g)=>{m[g.date]=(m[g.date]||0)+1;return m},{} as Record<string,number>)}
+        knownDivisions={[...new Set(games.map(g=>g.division).filter(Boolean))]}
+        onClose={()=>setShowBuilder(false)} onDone={async d=>{setShowBuilder(false);await load();setActiveDay(d)}}/>}
+      {delGames&&(()=>{
+        const scopeGames=delGames==='day'?games.filter(g=>g.date===activeDay):games
+        const assigned=scopeGames.reduce((n,g)=>n+(g.assignments?.length||0),0)
+        return(
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" role="dialog" aria-label="Delete games">
+            <h2 className="text-lg font-bold">Delete games</h2>
+            {dates.length>1&&activeDay&&(
+              <div className="space-y-2 text-sm">
+                <label className="flex items-center gap-2"><input type="radio" checked={delGames==='day'} onChange={()=>setDelGames('day')}/> Just {formatDate(activeDay)} ({games.filter(g=>g.date===activeDay).length} games)</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={delGames==='all'} onChange={()=>setDelGames('all')}/> The whole event ({games.length} games)</label>
+              </div>
+            )}
+            <p className="text-sm text-slate-600">This deletes {scopeGames.length} game{scopeGames.length===1?'':'s'}{assigned>0?<> and takes <strong>{assigned} ref and scorekeeper assignment{assigned===1?'':'s'}</strong> off them</>:null}. It can&apos;t be undone, but you can import or build the schedule again. Officials aren&apos;t sent change alerts for this.</p>
+            <div className="flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={()=>setDelGames(null)} disabled={deletingGames}>Cancel</button>
+              <button type="button" className="h-10 px-4 rounded-xl bg-red-600 text-white font-semibold hover:bg-red-700 disabled:opacity-50" disabled={deletingGames||!scopeGames.length} onClick={async()=>{
+                setDeletingGames(true)
+                const res=await fetch(`/api/tournaments/${params.id}/games`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify(delGames==='day'?{date:activeDay}:{})})
+                const d=await res.json().catch(()=>({}))
+                setDeletingGames(false)
+                if(!res.ok){toast.error(d.error||'Could not delete the games');return}
+                toast.success(`Deleted ${d.deleted} games`);setDelGames(null);setActiveDay('');await load()
+              }}>{deletingGames?'Deleting…':`Delete ${scopeGames.length} game${scopeGames.length===1?'':'s'}`}</button>
+            </div>
+          </div>
+        </div>)})()}
       {showDivs && <DivisionsPanel tournamentId={params.id} games={games} side={side} onClose={()=>setShowDivs(false)} onRenamed={load} />}
       {showNotify && <NotifyOfficials tournamentId={params.id} day={activeDay} dayLabel={activeDay?formatDate(activeDay):''} onClose={()=>setShowNotify(false)} onSent={()=>{load();setReleaseKey(k=>k+1)}} />}
       {/* Auto-assign modal */}
@@ -1086,7 +1123,9 @@ export default function GridPage({ params }: { params:{id:string} }) {
             <div className="absolute right-0 top-11 z-50 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
               {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);openAddGame()}}><Plus size={15} className="text-slate-400"/> Add a game</button>}
               {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);fileRef.current?.click()}}><Upload size={15} className="text-slate-400"/> Import schedule</button>}
+              {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);setShowBuilder(true)}}><LayoutGrid size={15} className="text-slate-400"/> Build a schedule</button>}
               {!noSchedule&&games.length>0&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);setShowDivs(true)}}><Tags size={15} className="text-slate-400"/> Divisions</button>}
+              {!noSchedule&&games.length>0&&<button type="button" className={`${menuItem} text-red-700`} onClick={()=>{setMoreOpen(false);setDelGames(dayGames.length>0&&dates.length>1?'day':'all')}}><Trash2 size={15} className="text-red-400"/> Delete games</button>}
               {!noSchedule&&<div className="my-1 border-t border-slate-100"/>}
               <button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);toggleLock(!locked)}}><Lock size={15} className="text-slate-400"/> {locked?'Unlock editing':'Lock editing'}</button>
               {dayGames.length>0&&(<>
@@ -1484,7 +1523,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
       {/* ── GRID VIEW ── */}
       {viewMode==='grid'&&games.length===0?(
-        <div className="card p-16 text-center"><div className="text-5xl mb-4">📋</div><p className="font-semibold text-slate-700">No games imported yet</p><p className="text-sm text-slate-400 mt-1">Click "↑ Import" to upload your schedule</p></div>
+        <div className="card p-16 text-center"><div className="text-5xl mb-4">📋</div><p className="font-semibold text-slate-700">No games yet</p><p className="text-sm text-slate-400 mt-1">{noSchedule?'Your director adds the games.':'Import the schedule from a file, or lay it out by hand.'}</p>{!noSchedule&&<div className="mt-4 flex flex-wrap justify-center gap-2"><button type="button" className="btn-secondary inline-flex items-center gap-1.5" onClick={()=>fileRef.current?.click()}><Upload size={15}/> Import a file</button><button type="button" className="btn-primary inline-flex items-center gap-1.5" onClick={()=>setShowBuilder(true)}><LayoutGrid size={15}/> Build a schedule</button></div>}</div>
       ):viewMode==='grid'&&dayGames.length===0?<div className="text-slate-400 text-center py-12">No games on this day</div>:viewMode==='grid'&&(
         (()=>{
           // Division colors; the card keeps a left stripe and tint in every density.

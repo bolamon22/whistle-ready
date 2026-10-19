@@ -92,3 +92,23 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
   }})
   return NextResponse.json(game, { status:201 })
 }
+
+// Delete every game (or one day's), and their assignments with them (Bo, Oct 19 2026:
+// "if we don't like the file upload the way it turns out, can we just delete it?").
+// Only whoever loads the schedule: the director (the Head Assigner on the Assigner plan),
+// the scheduler, or an admin. No official change alerts: a schedule being wiped to start
+// over isn't a change to tell each ref about game by game.
+export async function DELETE(req: Request, { params }: { params:{id:string} }) {
+  const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (!['admin', 'director', 'scheduler'].includes(gate.role)) return NextResponse.json({ error: 'Only the director or scheduler can delete the schedule.' }, { status: 403 })
+  const b = await req.json().catch(() => ({} as Record<string, unknown>))
+  const date = typeof b.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(b.date) ? b.date : ''
+  const where = { tournamentId: params.id, ...(date ? { date } : {}) }
+  const assigned = await prisma.assignment.count({ where: { game: where } })
+  const gone = await prisma.game.deleteMany({ where })
+  await prisma.auditLog.create({ data: {
+    tournamentId: params.id, action: 'DELETE_GAMES', deletedBy: String(b.deletedBy || gate.session?.user?.name || gate.session?.user?.email || gate.userId || ''),
+    detail: `Deleted ${gone.count} games${date ? ` on ${date}` : ' (whole event)'} and ${assigned} assignments`,
+  } })
+  return NextResponse.json({ deleted: gone.count, assignments: assigned })
+}

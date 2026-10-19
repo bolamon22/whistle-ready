@@ -1,9 +1,9 @@
 ---
-title: Import games from TourneyMachine or a spreadsheet
+title: Import, build or delete the games
 category: Staff
 order: 435
 routes: /tournaments/*
-keywords: grid field grid times down fields across import games schedule upload spreadsheet excel xlsx csv tourneymachine tourney machine schedule export game list add game head assigner replace games re-import update schedule map columns
+keywords: build a schedule by hand delete games start over undo import grid field grid times down fields across import games schedule upload spreadsheet excel xlsx csv tourneymachine tourney machine schedule export game list add game head assigner replace games re-import update schedule map columns
 ---
 Bring an event's games onto the **Assigner** board from a file, for example a schedule exported from TourneyMachine, then put refs and scorekeepers on them. The director (the **Head Assigner** on the Assigner plan) imports; assigners can't.
 
@@ -20,6 +20,15 @@ Bring an event's games onto the **Assigner** board from a file, for example a sc
 2. Check the count of games and fields, and pick the **Day** for each grid. A file with one grid per sheet, or one per day on the same sheet, shows each one.
 3. Click **Import Games →**. Every filled box becomes a game on that field at that time. The teams are TBD unless the box names them ("Team A vs Team B"), and games are numbered 1, 2, 3 by time and field.
 Times without AM or PM that come after noon, like 1:30 after 12:45, are read as afternoon.
+
+**To lay the schedule out by hand** (for a schedule you were given on paper, in a picture, or in a file that didn't import well):
+1. Click **⋯**, then **Build a schedule**.
+2. Pick the **Day**, the number of **Fields**, the **First game** time, the **Minutes apart** and the number of **Time slots**. Rename a field (like **Field 2A**) or change one time (a slot that runs short) right in the grid.
+3. Add your divisions in **Add a division** (several at once with commas, like K-2, JV, VAR).
+4. Pick a division, then click or drag across the boxes. The arrow beside a time fills that row, and the arrow under a field fills that field. **Erase** clears boxes.
+5. Click **Make games**. If the day already has games, choose **Replace them** or **Add to them** first. Teams are TBD and the games are numbered after the ones already there.
+
+**To delete games and start over:** click **⋯**, then **Delete games**. Pick just the day you're on or the whole event. Their ref and scorekeeper assignments come off too, and officials aren't sent change alerts for it.
 
 **To add one game:** click **⋯**, then **Add a game**.
 
