@@ -21,7 +21,7 @@ export const POST_H = 1350
 // "add them all ... I'll use them for the Fall Classic too") are photo-first like the
 // "· photo" ones and draw the card in the photo's place when there's no photo.
 export type PostStyle = 'committed' | 'premiere' | 'draft' | 'countdown' | 'committed-photo' | 'committed-to-photo' | 'draft-photo' | 'countdown-photo'
-  | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey'
+  | 'cover' | 'rookie' | 'scout' | 'main-event' | 'jersey' | 'siblings'
 const ALL_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'committed', label: 'Committed' },
   { id: 'premiere', label: 'Now Showing' },
@@ -38,17 +38,23 @@ const ALL_STYLES: { id: PostStyle; label: string }[] = [
   { id: 'scout', label: 'Scouting Report' },
   { id: 'main-event', label: 'Main Event' },
   { id: 'jersey', label: 'Name on the Back' },
+  // Brothers / Sisters / Brother & Sister (Bo, Oct 18 2026): one card per sibling, all
+  // in the same look and naming each other, for players staff link as siblings.
+  { id: 'siblings', label: 'Siblings' },
 ]
 // Name on the Back is retired from every picker (Bo, Oct 18 2026: "that one's not very
 // good. I'll probably never use it"). It still renders, so emails already sent with it
 // keep their pictures.
 const RETIRED = new Set<PostStyle>(['jersey'])
-/** The looks staff can pick, in the standard order. */
-export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id))
+/** Only offered for players linked as siblings (see lib/siblings). */
+export const SIBLING_STYLE: PostStyle = 'siblings'
+/** The looks staff can pick for any player, in the standard order. */
+export const POST_STYLES = ALL_STYLES.filter(s => !RETIRED.has(s.id) && s.id !== SIBLING_STYLE)
+export const styleLabel = (id: string) => ALL_STYLES.find(s => s.id === id)?.label || id
 /** Bo's favorites (Oct 18 2026), offered first on the social scheduler. */
 export const FAVORITE_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo', 'cover', 'rookie', 'scout', 'main-event']
 /** The looks that use the player's photo rather than the card. */
-const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey'])
+const HERO_LOOKS = new Set<PostStyle>(['cover', 'rookie', 'scout', 'main-event', 'jersey', 'siblings'])
 export const usesPhoto = (s: PostStyle) => s.endsWith('-photo') || HERO_LOOKS.has(s)
 /** What the Ask dialog starts with ticked. */
 export const DEFAULT_STYLES: PostStyle[] = ['committed-photo', 'draft-photo', 'countdown-photo']
@@ -77,6 +83,46 @@ export type PostData = {
   logoSrc: string          // the event's logo, or ''
   orgName: string
   daysOut: number | null   // whole days until the first game day; null when unknown
+  /** The photo's pixel size, so it can be cropped from the top (heads stay in). */
+  photoW?: number
+  photoH?: number
+  /** Siblings look: everyone's first name in order, which one this card is, and the title. */
+  sibs?: { names: string[]; index: number; title: string }
+}
+
+/** Width × height of a PNG, JPEG, GIF or WebP from its bytes; null when unknown. */
+export function imageSize(b: Uint8Array): { w: number; h: number } | null {
+  try {
+    if (b[0] === 0x89 && b[1] === 0x50) return { w: (b[16] << 24 | b[17] << 16 | b[18] << 8 | b[19]) >>> 0, h: (b[20] << 24 | b[21] << 16 | b[22] << 8 | b[23]) >>> 0 }
+    if (b[0] === 0x47 && b[1] === 0x49) return { w: b[6] | b[7] << 8, h: b[8] | b[9] << 8 }
+    if (b[0] === 0x52 && b[1] === 0x49 && b[8] === 0x57) {   // WebP
+      const kind = String.fromCharCode(b[12], b[13], b[14], b[15])
+      if (kind === 'VP8 ') return { w: (b[26] | b[27] << 8) & 0x3fff, h: (b[28] | b[29] << 8) & 0x3fff }
+      if (kind === 'VP8L') { const n = b[21] | b[22] << 8 | b[23] << 16 | b[24] << 24; return { w: (n & 0x3fff) + 1, h: ((n >> 14) & 0x3fff) + 1 } }
+      if (kind === 'VP8X') return { w: 1 + (b[24] | b[25] << 8 | b[26] << 16), h: 1 + (b[27] | b[28] << 8 | b[29] << 16) }
+    }
+    if (b[0] === 0xff && b[1] === 0xd8) {                    // JPEG: find the frame header
+      let i = 2
+      while (i + 9 < b.length) {
+        if (b[i] !== 0xff) { i++; continue }
+        const m = b[i + 1], len = b[i + 2] << 8 | b[i + 3]
+        if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc) return { w: b[i + 7] << 8 | b[i + 8], h: b[i + 5] << 8 | b[i + 6] }
+        i += 2 + len
+      }
+    }
+  } catch {}
+  return null
+}
+
+/** "BROTHERS", "SISTERS", "BROTHER & SISTER", "BROTHERS & SISTER"…, or "SIBLINGS" when we can't tell. */
+export function siblingTitle(genders: string[], rel = ''): string {
+  if (rel === 'brothers') return 'BROTHERS'
+  if (rel === 'sisters') return 'SISTERS'
+  const b = genders.filter(g => g === 'boys').length, g = genders.filter(x => x === 'girls').length
+  if (rel === 'mixed' || (b && g)) return b && g ? `${b > 1 ? 'BROTHERS' : 'BROTHER'} & ${g > 1 ? 'SISTERS' : 'SISTER'}` : 'BROTHER & SISTER'
+  if (b === genders.length && b > 1) return 'BROTHERS'
+  if (g === genders.length && g > 1) return 'SISTERS'
+  return 'SIBLINGS'
 }
 
 const CARD_RATIO = 1140 / 720
@@ -104,6 +150,7 @@ const MARK_AT: Record<PostStyle, CSSProperties> = {
   rookie: { right: 56, bottom: 46 },
   scout: { right: 36, bottom: 34 },
   'main-event': { right: 30, bottom: 26 },
+  siblings: { right: 30, bottom: 26 },
   jersey: { left: 450, bottom: 24 },
 }
 
@@ -118,6 +165,21 @@ export function PostArt({ style, d, width = POST_W }: { style: PostStyle; d: Pos
         <div style={{ display: 'flex', color: '#ffffff' }}>WHISTLE</div>
         <div style={{ display: 'flex', color: '#2dd4bf', marginLeft: Math.round(7 * k) }}>READY</div>
       </div>
+    </div>
+  )
+}
+
+/** A photo filling a w×h box, cropped from the top instead of the middle. Satori ignores
+ *  object-position (it always centers a cover crop), which cut heads off in wide boxes like
+ *  Main Event's (Bo, Oct 18 2026). Scales to cover and keeps the top, minus a sliver. */
+function topCrop(src: string, w: number, h: number, pw: number, ph: number, u: (n: number) => number, extra: CSSProperties = {}) {
+  const scale = Math.max(w / pw, h / ph)
+  const dw = pw * scale, dh = ph * scale
+  const top = -Math.min(dh - h, (dh - h) * 0.04)
+  return (
+    <div style={{ display: 'flex', position: 'relative', overflow: 'hidden', width: u(w), height: u(h), ...extra }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} width={u(dw)} height={u(dh)} alt="" style={{ position: 'absolute', left: u((w - dw) / 2), top: u(top) }} />
     </div>
   )
 }
@@ -172,7 +234,9 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
   if (HERO_LOOKS.has(style)) {
     const NAVY = '#13294b', ORANGE = '#f26b2a', CREAM = '#f6ead6', RED = '#b93a26', GOLD = '#f8d27a'
     const heroSrc = d.photoSrc || d.cardSrc
-    const hero = (w: number, h: number, extra: CSSProperties = {}) => (
+    const hero = (w: number, h: number, extra: CSSProperties = {}) => d.photoSrc && d.photoW && d.photoH
+      ? topCrop(d.photoSrc, w, h, d.photoW, d.photoH, u, { background: '#0a1222', ...extra })
+      : (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={heroSrc} width={u(w)} height={u(h)} alt=""
         style={{ objectFit: d.photoSrc ? 'cover' : 'contain', objectPosition: 'center top', background: '#0a1222', ...extra }} />
@@ -331,6 +395,38 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
       )
     }
 
+    if (style === 'siblings') {
+      // One card per sibling, all alike: the shared title, everyone's names with this
+      // player's lit up, and "1 OF 2" so the set reads as a set.
+      const sib = d.sibs && d.sibs.names.length > 1 ? d.sibs : { names: [d.first || 'Player'], index: 0, title: 'SIBLINGS' }
+      const names = sib.names.map(n => n.toUpperCase())
+      const joined = names.length === 2 ? names.join(' & ') : `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`
+      const nameSize = fit(joined, 980, 120)
+      return (
+        <div style={{ ...root, background: NAVY }}>
+          <div style={{ position: 'absolute', left: u(-200), top: u(880), width: u(1500), height: u(170), background: ORANGE, transform: 'rotate(-8deg)', display: 'flex' }} />
+          {lockup(240, 80, { marginTop: u(40) })}
+          <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(fit(sib.title, 980, 180)), lineHeight: 0.95, marginTop: u(18), letterSpacing: '0.02em' }}>{sib.title}</div>
+          <div style={{ display: 'flex', position: 'relative', marginTop: u(14) }}>
+            {hero(700, 690, { borderRadius: u(28), border: `${u(8)}px solid #ffffff`, boxShadow: `0 ${u(30)}px ${u(80)}px rgba(0,0,0,0.6)` })}
+            {sib.names.length > 1 && <div style={{ position: 'absolute', right: u(-28), top: u(-24), width: u(150), height: u(150), borderRadius: u(75), background: ORANGE, border: `${u(6)}px solid #ffffff`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ display: 'flex', fontFamily: ANTON, fontSize: u(54), lineHeight: 1 }}>{`${sib.index + 1}`}</div>
+              <div style={caps(20, '#ffffff', 0.18, 800)}>{`OF ${sib.names.length}`}</div>
+            </div>}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', marginTop: u(22), fontFamily: ANTON, fontSize: u(nameSize), lineHeight: 1 }}>
+            {names.map((n, i) => (
+              <div key={i} style={{ display: 'flex' }}>
+                {i > 0 && <div style={{ display: 'flex', color: GOLD, margin: i === names.length - 1 ? `0 ${u(18)}px` : `0 ${u(18)}px 0 0` }}>{i === names.length - 1 ? '&' : ','}</div>}
+                <div style={{ display: 'flex', color: i === sib.index ? '#ffffff' : 'rgba(255,255,255,0.45)' }}>{n}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{ ...caps(26, CREAM, 0.2, 700), marginTop: u(14) }}>{[team ? team.toUpperCase() : club.toUpperCase(), dateShort].filter(Boolean).join('  ·  ')}</div>
+        </div>
+      )
+    }
+
     if (style === 'main-event') {
       return (
         <div style={{ ...root, background: '#0a0a0a' }}>
@@ -484,7 +580,9 @@ function PostBody({ style, d, width = POST_W }: { style: PostStyle; d: PostData;
   }
 
   if (usesPhoto(style) && d.photoSrc) {
-    const photo = (w: number, h: number, extra: CSSProperties = {}) => (
+    const photo = (w: number, h: number, extra: CSSProperties = {}) => d.photoW && d.photoH
+      ? topCrop(d.photoSrc!, w, h, d.photoW, d.photoH, u, extra)
+      : (
       // eslint-disable-next-line @next/next/no-img-element
       <img src={d.photoSrc} width={u(w)} height={u(h)} alt="" style={{ objectFit: 'cover', objectPosition: 'center top', ...extra }} />
     )
