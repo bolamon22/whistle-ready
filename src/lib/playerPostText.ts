@@ -34,6 +34,10 @@ export type ClearedPlayer = {
   clubFacebook: string
   /** Every post this player is in (one entry per compose: IG + FB, feed + Story count
    *  once), oldest first. `platforms`/`permalink` feed the card's usage log. */
+  /** Linked siblings at this event (lib/siblings), this player included, in card order. */
+  siblings?: { ids: string[]; names: string[]; rel: string; title: string }
+  /** Unlinked players with the same last name and club at this event. */
+  maybeSiblings?: string[]
   posts: { postId: string; status: string; kind: string; style: string; scheduledFor: string; platforms?: string[]; story?: boolean; permalink?: string }[]
 }
 
@@ -118,7 +122,8 @@ export function playerCaption(p: ClearedPlayer, style: string, days: number | nu
     jersey: `Name on the back: ${F}.`,
   }
   const look = baseLook(style)
-  const first = hook[look] || `${F} is ready for ${E}.`
+  const sib = look === 'siblings' && p.siblings ? siblingLine(p.siblings, E) : ''
+  const first = sib || hook[look] || `${F} is ready for ${E}.`
   const who = [p.jersey ? `#${p.jersey}` : '', teamLabel(p)].filter(Boolean).join(' · ')
   // Name the event once: on this line only when the opening line didn't.
   const where = [first.includes(E) ? '' : E, p.event.dates, p.event.location].filter(Boolean).join(' · ')
@@ -149,11 +154,21 @@ export function squadHandles(list: Pick<ClearedPlayer, 'instagram' | 'clubInstag
 }
 
 /** Squad Reel caption: 2–4 players at one event. */
+/** "Finn & Jack: brothers, both ready for Monster Mash." for the Siblings look. */
+export function siblingLine(s: NonNullable<ClearedPlayer['siblings']>, E: string): string {
+  const n = s.names
+  const who = n.length === 2 ? n.join(' & ') : `${n.slice(0, -1).join(', ')} & ${n[n.length - 1]}`
+  return `${who}: ${s.title === 'SIBLINGS' ? 'siblings' : s.title.toLowerCase()}, ${n.length === 2 ? 'both' : 'all'} ready for ${E}.`
+}
+
 export function squadCaption(list: ClearedPlayer[], site: string): string {
   const e = list[0]?.event
   const E = e?.name || 'the tournament'
   const clubs = Array.from(new Set(list.map(p => p.club.trim()).filter(Boolean)))
-  const first = clubs.length === 1 ? `${clubs[0]} is ready for ${E}.` : `Ready for ${E}.`
+  // A squad that is exactly one set of siblings opens with them as siblings.
+  const sibs = list[0]?.siblings
+  const allSibs = !!sibs && sibs.ids.length === list.length && list.every(p => sibs.ids.includes(p.id))
+  const first = allSibs ? siblingLine({ ...sibs!, names: list.map(p => firstOf(p.playerName)) }, E) : clubs.length === 1 ? `${clubs[0]} is ready for ${E}.` : `Ready for ${E}.`
   const names = list.map(p => `${firstOf(p.playerName)}${p.jersey ? ` #${p.jersey}` : ''} · ${teamLabel(p)}`)
   const where = [e?.dates, e?.location].filter(Boolean).join(' · ')
   const tags = Array.from(new Set(list.flatMap(p => [p.instagram, p.clubInstagram]).filter(Boolean))).join(' ')

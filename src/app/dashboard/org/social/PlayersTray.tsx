@@ -13,7 +13,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Film, Image as ImageIcon, Smartphone, Sparkles, Check, Users, X, Search, Maximize2, ChevronDown, ExternalLink } from 'lucide-react'
-import { POST_STYLES, FAVORITE_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, FAVORITE_STYLES, SIBLING_STYLE } from '@/lib/socialPosts'
 import { lookFor, teamLabel, firstOf, type ClearedPlayer } from '@/lib/playerPostText'
 import { postPngUrl } from './playerMedia'
 
@@ -41,7 +41,7 @@ const STATUS: Record<string, string> = { draft: 'Draft', scheduled: 'Scheduled',
 const KIND: Record<string, string> = { post: 'Post', reel: 'Reel', story: 'Story', rollcall: 'Roll Call' }
 const STRIP = 12
 const shortDay = (iso: string) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
-const LOOK_LABEL: Record<string, string> = Object.fromEntries(POST_STYLES.map(s => [s.id, s.label]))
+const LOOK_LABEL: Record<string, string> = { ...Object.fromEntries(POST_STYLES.map(s => [s.id, s.label])), siblings: 'Siblings' }
 const PLAT: Record<string, string> = { instagram: 'IG', facebook: 'FB' }
 const posted = (p: ClearedPlayer) => p.posts.filter(x => x.status === 'published').length
 
@@ -53,7 +53,7 @@ const uniq = (xs: string[]) => Array.from(new Set(xs.filter(Boolean))).sort((a, 
 const chip = (on: boolean) => `rounded-full border px-2.5 py-1 text-xs font-bold whitespace-nowrap ${on ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 bg-white text-slate-500 hover:text-slate-900'}`
 const sel_ = 'rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 max-w-[200px]'
 
-export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll, drafts = [], onOpenDraft, onDeleteDraft }: {
+export default function PlayersTray({ data, canPost, busy, onPost, onReel, onStory, onSquad, onPlanAll, drafts = [], onOpenDraft, onDeleteDraft, onLinkSiblings, onUnlinkSibling }: {
   data: ClearedData; canPost: boolean; busy: string
   /** Reels saved to finish later, reopened in the Reel maker where they left off. */
   drafts?: ReelDraft[]; onOpenDraft?: (d: ReelDraft) => void; onDeleteDraft?: (id: string) => void
@@ -64,6 +64,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   onSquad: (players: ClearedPlayer[], looks: string[]) => void
   /** Plan drafts for these players (the ones the filters show). */
   onPlanAll: (players: ClearedPlayer[]) => void
+  /** Link 2–4 players as siblings ('' = title from their genders), or take one out. */
+  onLinkSiblings?: (ids: string[], rel: string) => Promise<void>
+  onUnlinkSibling?: (id: string) => Promise<void>
 }) {
   const [looks, setLooks] = useState<Record<string, string>>({})
   const [confirm, setConfirm] = useState(false)
@@ -71,6 +74,9 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
   const [f, setF] = useState<Filters>(NO_FILTERS)
   const [full, setFull] = useState(false)
   const [logOpen, setLogOpen] = useState<string | null>(null)
+  const [sibRel, setSibRel] = useState('')
+  const [linking, setLinking] = useState(false)
+  const link = async (ids: string[], rel: string) => { if (!onLinkSiblings || linking) return; setLinking(true); try { await onLinkSiblings(ids, rel); setSel([]) } finally { setLinking(false) } }
   const draftIds = useMemo(() => new Set(drafts.flatMap(d => d.playerIds)), [drafts])   // the card whose usage log is open
   const set = (patch: Partial<Filters>) => setF(x => ({ ...x, ...patch }))
   const { players, waiting } = data
@@ -141,6 +147,20 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
           <div className="text-[11px] text-slate-500 truncate" title={teamLabel(p)}>{teamLabel(p)}</div>
           {(p.division || p.gender) && <div className="text-[11px] text-slate-500 truncate">{[p.division, !p.division && p.gender ? (p.gender === 'girls' ? 'Girls' : 'Boys') : ''].filter(Boolean).join(' · ')}</div>}
           <div className="text-[11px] font-semibold text-teal-700 truncate" title={handles.join(' · ')}>{handles.length ? `Collab ${handles.join(' · ')}` : 'No Instagram given'}</div>
+          {p.siblings && (
+            <div className="text-[11px] font-bold text-indigo-700 flex items-center gap-1 min-w-0">
+              <Users size={11} className="shrink-0" />
+              <span className="truncate" title={`${p.siblings.title.toLowerCase()}: ${p.siblings.names.join(', ')}`}>{p.siblings.title.charAt(0) + p.siblings.title.slice(1).toLowerCase()} · {p.siblings.names.filter((_, i) => p.siblings!.ids[i] !== p.id).join(', ')}</span>
+              <button type="button" onClick={() => { const ids = p.siblings!.ids; const list = ids.map(id => players.find(x => x.id === id)).filter((x): x is ClearedPlayer => !!x); onSquad(list, list.map(() => SIBLING_STYLE)) }} disabled={!canPost || !!busy} className="shrink-0 text-pink-700 hover:underline disabled:opacity-40" title="Squad Reel of the siblings, each in the Siblings look">Reel</button>
+              {onUnlinkSibling && <button type="button" onClick={() => onUnlinkSibling(p.id)} className="shrink-0 text-slate-400 hover:text-rose-700" aria-label={`Unlink ${p.playerName} from the siblings`} title="Not siblings? Unlink"><X size={11} /></button>}
+            </div>
+          )}
+          {!p.siblings && p.maybeSiblings?.length && onLinkSiblings ? (
+            <div className="text-[11px] text-indigo-700 flex items-center gap-1 min-w-0">
+              <span className="truncate">Sibling of {p.maybeSiblings.map(id => firstOf(players.find(x => x.id === id)?.playerName || '')).filter(Boolean).join(', ')}?</span>
+              <button type="button" onClick={() => link([p.id, ...p.maybeSiblings!].slice(0, 4), '')} disabled={linking} className="shrink-0 font-bold hover:underline disabled:opacity-40">Link</button>
+            </div>
+          ) : null}
           {draftIds.has(p.id) && <div className="text-[11px] font-bold text-pink-700 truncate inline-flex items-center gap-1"><Film size={11} />Reel draft saved · Reel opens it</div>}
           {p.posts.length ? (
             <button type="button" onClick={() => setLogOpen(o => o === p.id ? null : p.id)} aria-expanded={logOpen === p.id} title="Every post this player is in"
@@ -165,6 +185,7 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
             </ol>
           )}
           <select value={look} onChange={e => setLooks({ ...looks, [p.id]: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700" aria-label="Look">
+            {p.siblings && <option value={SIBLING_STYLE}>Siblings · {p.siblings.title.charAt(0) + p.siblings.title.slice(1).toLowerCase()}</option>}
             <optgroup label="Favorites">{FAVS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
             <optgroup label="More looks">{MORE.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
           </select>
@@ -207,7 +228,16 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
       <span className="font-bold text-pink-900">Squad Reel · {picked.map(p => firstOf(p.playerName)).join(', ')}</span>
       <span className="text-pink-800/80">{!sameEvent ? 'Pick players from the same event.' : picked.length < 2 ? 'Tick 1–3 more players (2–4 in all).' : picked.length > 4 ? 'Four players at most.' : `${picked.length <= 2 ? '15' : '30'} seconds, one look each (change them in the next step), then an end card naming everyone.`}</span>
       <span className="ml-auto inline-flex gap-1.5">
-        <button onClick={() => { setFull(false); onSquad(picked, picked.map((p, i) => looks[p.id] || lookFor(p.event.daysOut, i))) }} disabled={!squadOk || !canPost || !!busy} className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Film size={12} /> Make Squad Reel</button>
+        <button onClick={() => { setFull(false); onSquad(picked, picked.map((p, i) => looks[p.id] || (picked.every(x => x.siblings && x.siblings.ids.length === picked.length && picked.every(y => x.siblings!.ids.includes(y.id))) ? SIBLING_STYLE : lookFor(p.event.daysOut, i)))) }} disabled={!squadOk || !canPost || !!busy} className="rounded-lg bg-pink-600 hover:bg-pink-700 text-white font-bold px-3 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Film size={12} /> Make Squad Reel</button>
+        {onLinkSiblings && picked.length >= 2 && picked.length <= 4 && sameEvent && (
+          // Siblings get their own look: one card each, naming the others (lib/siblings).
+          <span className="inline-flex items-center rounded-lg border border-indigo-300 bg-white overflow-hidden">
+            <select value={sibRel} onChange={e => setSibRel(e.target.value)} aria-label="Sibling title" className="text-[11px] font-semibold text-indigo-900 bg-white pl-1.5 py-1.5 border-r border-indigo-200">
+              <option value="">Title from their info</option><option value="brothers">Brothers</option><option value="sisters">Sisters</option><option value="mixed">Brother &amp; Sister</option>
+            </select>
+            <button onClick={() => link(picked.map(p => p.id), sibRel)} disabled={linking} className="text-indigo-800 hover:bg-indigo-50 font-bold px-2.5 py-1.5 inline-flex items-center gap-1 disabled:opacity-40"><Users size={12} /> {linking ? 'Linking…' : 'Link as siblings'}</button>
+          </span>
+        )}
         <button onClick={() => setSel([])} className="rounded-lg text-pink-800 font-bold px-2 py-1.5 inline-flex items-center gap-1"><X size={12} /> Clear</button>
       </span>
     </div>

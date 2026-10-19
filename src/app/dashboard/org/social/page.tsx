@@ -19,7 +19,7 @@ import MusicDrawer from './MusicDrawer'
 import PlayersTray, { planList, type ClearedData, type ReelDraft } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
 import ReelMaker, { type ReelSetup } from '@/components/ReelMaker'
-import { POST_STYLES } from '@/lib/socialPosts'
+import { POST_STYLES, styleLabel } from '@/lib/socialPosts'
 import { lookFor, daysUntil, playerCaption, rollCallCaption, squadCaption, squadHandles, collabFor, firstOf, baseLook, type ClearedPlayer, type PostPlayerLink } from '@/lib/playerPostText'
 import ChirpAvatar from '@/components/ChirpAvatar'
 import { buildIdeas, localDayKey, LEAGUES, AUDIENCE_LABEL, PHASE_LABEL, leagueName, type Idea, type IdeaEvent, type DayIdeas } from '@/lib/socialIdeas'
@@ -257,7 +257,7 @@ function SocialInner() {
   }
   const daysAt = (p: ClearedPlayer, when: Date) => { const n = daysUntil(localDayKey(when), p.event.start); return n != null && n >= 0 ? n : null }
   const storySub = (p: ClearedPlayer) => [p.event.dates, p.event.location].filter(Boolean).join(' · ')
-  const lookLabel = (s: string) => POST_STYLES.find(x => x.id === s)?.label || s
+  const lookLabel = (s: string) => styleLabel(s)
   const fileSlug = (p: ClearedPlayer, s: string) => `${firstOf(p.playerName)}-${s}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-')
   const seedFor = (p: ClearedPlayer, look: string, when: Date, days: number | null, kind: PostPlayerLink['kind'], slides: Media[], extra: Partial<ComposeSeed> = {}): ComposeSeed => ({
     key: `${p.id}-${look}-${kind}-${Date.now()}`,
@@ -369,6 +369,18 @@ function SocialInner() {
     if (!liveAccounts.length) { toast.error('Connect an account first'); return }
     const when = whenFor(players[0])
     setReel({ p: players[0], look: d.look || d.looks?.[0] || 'countdown-photo', when, days: daysAt(players[0], when), ...(players.length > 1 ? { squad: players, looks: d.looks || players.map(() => d.look) } : {}), setup: d.setup as Partial<ReelSetup>, draftId: d.id })
+  }
+  /** Siblings (lib/siblings): link players so each gets the Siblings look naming the others. */
+  async function linkSiblings(ids: string[], rel: string) {
+    try {
+      await api('/api/social/siblings', { method: 'POST', body: JSON.stringify({ ids, rel }) })
+      const cl = await api('/api/social/players'); setCleared(cl)
+      toast.success('Linked as siblings — pick "Siblings" as their look, or Reel to make them a set')
+    } catch (e: any) { toast.error(e.message) }
+  }
+  async function unlinkSibling(id: string) {
+    try { await api(`/api/social/siblings?id=${encodeURIComponent(id)}`, { method: 'DELETE' }); const cl = await api('/api/social/players'); setCleared(cl) }
+    catch (e: any) { toast.error(e.message) }
   }
   /** "Start over" on a reopened draft: drop it and open a fresh Reel maker for the same players. */
   async function startReelOver() {
@@ -526,7 +538,7 @@ function SocialInner() {
         )}
 
         {/* cleared players */}
-        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} drafts={reelDrafts} onOpenDraft={openReelDraft} onDeleteDraft={id => deleteReelDraft(id)} />}
+        {view === 'week' && cleared && <PlayersTray data={cleared} canPost={liveAccounts.length > 0} busy={playerBusy} onPost={(p, l) => composePlayer(p, l, 'post')} onReel={reelPlayer} onSquad={squadReel} onStory={(p, l) => composePlayer(p, l, 'story')} onPlanAll={planAll} drafts={reelDrafts} onOpenDraft={openReelDraft} onDeleteDraft={id => deleteReelDraft(id)} onLinkSiblings={linkSiblings} onUnlinkSibling={unlinkSibling} />}
 
         {/* calendar */}
         {view === 'week' && (

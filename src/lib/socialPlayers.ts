@@ -5,6 +5,8 @@ import { eventDates } from '@/lib/vendorApproval'
 import { startFacts } from '@/lib/socialPosts'
 import { instagramHandle } from '@/lib/photoConsent'
 import { cleanCollaborators, cleanHandles, type PostPlayerLink, type ClearedPlayer } from '@/lib/playerPostText'
+import { genderOf, getSiblingGroupsMany } from '@/lib/siblings'
+import { siblingTitle } from '@/lib/socialPosts'
 
 // Cleared players on the social scheduler (Bo, Oct 18 2026: "can we put the yes's on
 // the social scheduler as potential posts ... just a few clicks to post a reel or add
@@ -99,15 +101,6 @@ export async function getPostCollabMany(postIds: string[]): Promise<Record<strin
 
 /** Boys or girls: the waiver's gender answer when the form asked, else the division or
  *  team name ("Girls U14", "Boys 2030"). '' when nothing says. */
-function genderOf(d: any, division: string): 'boys' | 'girls' | '' {
-  const g = String(d?.gender || '').trim().toLowerCase()
-  if (/^(f|female|girl)/.test(g)) return 'girls'
-  if (/^(m|male|boy)/.test(g)) return 'boys'
-  const text = `${division} ${d?.teamName || ''}`.toLowerCase()
-  if (/\b(girls?|women'?s?|womens|lady|ladies)\b/.test(text)) return 'girls'
-  if (/\b(boys?|men'?s?|mens)\b/.test(text)) return 'boys'
-  return ''
-}
 
 /** Every player with a family Yes at the org's upcoming events (still running or
  *  not yet started), with what's already been scheduled for each. Also counts the
@@ -192,6 +185,24 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
       })
     }
   }
+  // Siblings linked on the scheduler: names, title and order for the Siblings look.
+  const sibGroups = await getSiblingGroupsMany(players.map(p => p.id)).catch(() => ({} as Record<string, { ids: string[]; rel: string }>))
+  const byId = new Map(players.map(p => [p.id, p]))
+  for (const p of players) {
+    const g = sibGroups[p.id]; if (!g) continue
+    const members = g.ids.map(id => byId.get(id)).filter((x): x is ClearedPlayer => !!x)
+    if (members.length < 2) continue   // a sibling who isn't cleared to post (yet)
+    p.siblings = { ids: members.map(m => m.id), names: members.map(m => (m.playerName.split(/\s+/)[0] || 'Player')), rel: g.rel, title: siblingTitle(members.map(m => m.gender), g.rel) }
+  }
+  // Possible siblings: same last name and same club at the same event, not yet linked.
+  const fam = new Map<string, ClearedPlayer[]>()
+  for (const p of players) {
+    const last = p.playerName.trim().split(/\s+/).slice(1).join(' ').toLowerCase()
+    if (!last || p.siblings) continue
+    const k = `${p.tournamentId}|${last}|${p.club.trim().toLowerCase()}`
+    fam.set(k, [...(fam.get(k) || []), p])
+  }
+  fam.forEach(list => { if (list.length > 1) for (const p of list) p.maybeSiblings = list.filter(x => x !== p).map(x => x.id) })
   // Newest yes first within an event, soonest event first.
   players.sort((a, b) => a.event.start.localeCompare(b.event.start) || b.okAt.localeCompare(a.okAt))
   return { players, waiting, passOn }

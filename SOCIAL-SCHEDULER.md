@@ -322,3 +322,18 @@ Make a Reel uses 120 BPM for cuts on these tracks.
 Country was added as a category, and each org can make its own categories (Music library →
 "+ New category..."; AppSetting `reelMusicCats:{orgId}`, ids "c-<slug>"). Removing one moves
 its tracks to Other. The scheduler header's Music button opens the library (MusicDrawer).
+
+## Photo crops and the Siblings look (Oct 18 2026)
+
+Satori (next/og) ignores object-position and always center-crops a cover image, so photos
+in wide boxes (Main Event's 1080x640 strip) lost the top of the head. The post route now
+reads the photo's pixel size (imageSize in lib/socialPosts) and topCrop() scales it to
+cover and keeps the top. Every photo look uses it.
+
+Siblings: staff tick 2-4 players at one event and "Link as siblings" (squad bar), or accept
+the "Sibling of ...? Link" hint (same last name and club). lib/siblings stores the group per
+player (AppSetting `siblings:{submissionId}`) so /pass/<token>/post/siblings.png can name the
+others. Each sibling gets their own card: title BROTHERS / SISTERS / BROTHER & SISTER (from
+waiver genders, or set when linking), everyone's first name with this one lit, "1 OF 2".
+Only siblings whose family said yes are named. The card's "Reel" makes a Squad Reel of the set.
+
