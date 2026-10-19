@@ -106,6 +106,10 @@ export async function DELETE(req: Request, { params }: { params:{id:string} }) {
   const where = { tournamentId: params.id, ...(date ? { date } : {}) }
   const assigned = await prisma.assignment.count({ where: { game: where } })
   const gone = await prisma.game.deleteMany({ where })
+  // The event's stored game days go with them, so an emptied event shows only its own
+  // dates again, not days a bad import made up (LuvLax showed a "Feb 1" tab from 2001).
+  const left = await prisma.game.findMany({ where: { tournamentId: params.id }, select: { date: true }, distinct: ['date'] })
+  await prisma.tournament.update({ where: { id: params.id }, data: { dates: JSON.stringify(left.map(g => g.date).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort()) } })
   await prisma.auditLog.create({ data: {
     tournamentId: params.id, action: 'DELETE_GAMES', deletedBy: String(b.deletedBy || gate.session?.user?.name || gate.session?.user?.email || gate.userId || ''),
     detail: `Deleted ${gone.count} games${date ? ` on ${date}` : ' (whole event)'} and ${assigned} assignments`,

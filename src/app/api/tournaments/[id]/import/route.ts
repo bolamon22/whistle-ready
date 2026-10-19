@@ -63,6 +63,11 @@ export async function POST(req: Request, { params }: { params:{id:string} }) {
       const refCount=refsFor(division)
       return { tournamentId:params.id, gameNumber:String(r[mapping.gameNumber]??''), date, startTime, division, pool:mapping.pool?String(r[mapping.pool]??'')||null:null, location:String(r[mapping.location]??''), team1:String(r[mapping.team1]??''), team2:String(r[mapping.team2]??''), refCount }
     })
+    // Refuse a file whose columns didn't map to real games instead of filling the board
+    // with junk (LuvLax's grid came in as "K-2" games on 1 Feb 2001 at "5th-6th").
+    const real = (g: { date: string; startTime: string }) => /^20[2-9]\d-\d{2}-\d{2}$/.test(g.date) && /^\d{2}:\d{2}$/.test(g.startTime)
+    const bad = games.filter(g => !real(g)).length
+    if (!games.length || bad > games.length / 2) return NextResponse.json({ error: `${bad} of ${games.length} rows don't have a real date and start time in the columns you picked, so nothing was imported. If the file is laid out as a grid of fields and times, use Build a schedule.` }, { status: 400 })
     await prisma.game.deleteMany({ where:{tournamentId:params.id} })
     await prisma.game.createMany({ data:games })
     await prisma.tournament.update({ where:{id:params.id}, data:{dates:JSON.stringify([...dateSet].sort())} })

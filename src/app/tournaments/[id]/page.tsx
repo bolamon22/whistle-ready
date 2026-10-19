@@ -710,6 +710,12 @@ export default function GridPage({ params }: { params:{id:string} }) {
             ):(
             <div className="px-6 py-4 space-y-3">
               {grids.length>0&&<button type="button" className="text-xs font-semibold text-teal-700 hover:underline" onClick={()=>setGridMode(true)}>This file is a field grid (times down, fields across): import it that way</button>}
+              {!grids.length&&FIELD_LABELS.every(f=>!mapping[f.key])&&(
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-600">
+                  None of this file&apos;s columns look like a game list (one game per row, with a game number, date, time, field and teams). If you were given the day as a grid or a picture, lay it out with <b>Build a schedule</b> instead.
+                  <div className="mt-2"><button type="button" className="btn-primary inline-flex items-center gap-1.5" onClick={()=>{closeImport();setShowBuilder(true)}}><LayoutGrid size={15}/> Build a schedule</button></div>
+                </div>
+              )}
               {FIELD_LABELS.map(f=>(
                 <div key={f.key} className="flex items-center gap-4">
                   <div className="w-44 shrink-0"><span className="text-sm font-semibold text-slate-700">{f.label}</span>{f.required&&<span className="ml-1 text-red-400 text-xs">*</span>}</div>
