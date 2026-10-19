@@ -5,6 +5,7 @@ import PublicChirp from '@/components/PublicChirp'
 import Link from 'next/link'
 import { Star, Clock, MapPin, Navigation, AlertTriangle, Megaphone, Map, ParkingCircle, Calendar, ChevronRight, CalendarDays, Users, ScrollText, ShoppingBag } from 'lucide-react'
 import { Game } from '@/lib/standings'
+import { time12 } from '@/lib/time12'
 
 type T = { id: string; name: string; startDate: string; endDate: string; location: string; logoUrl: string }
 
@@ -96,12 +97,12 @@ export default function TodayPage() {
               </div>
               <div className="text-[17px] font-bold text-slate-900">{next.g.team1} <span className="text-slate-400 font-normal">vs</span> {next.g.team2}</div>
               <div className="flex gap-3.5 mt-2 text-sm text-slate-600 flex-wrap">
-                <span className="inline-flex items-center gap-1"><Clock size={14} /> {fmtDay(next.g.date)} · {next.g.startTime || 'TBD'}</span>
+                <span className="inline-flex items-center gap-1"><Clock size={14} /> {fmtDay(next.g.date)} · {time12(next.g.startTime)}</span>
                 {next.g.location && <span className="inline-flex items-center gap-1"><MapPin size={14} /> {next.g.location}</span>}
               </div>
               {next.g.division && <div className="text-xs text-slate-400 mt-0.5">{next.g.division}</div>}
               <Link href={`/tournaments/${id}/public`} className="mt-3 w-full bg-teal-600 hover:bg-teal-700 text-white rounded-xl py-2.5 text-sm font-semibold flex items-center justify-center gap-1.5"><Calendar size={15} /> View full schedule</Link>
-              {after && <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-xs text-slate-500">Then {after.g.startTime}{after.g.location ? ` · ${after.g.location}` : ''} · {after.g.team1} vs {after.g.team2}</div>}
+              {after && <div className="mt-2.5 pt-2.5 border-t border-slate-100 text-xs text-slate-500">Then {time12(after.g.startTime)}{after.g.location ? ` · ${after.g.location}` : ''} · {after.g.team1} vs {after.g.team2}</div>}
             </div>
           ) : (
             <div className="bg-white border border-slate-200 rounded-2xl p-4 text-sm text-slate-500">{live.length ? 'No upcoming games — the tournament may be complete.' : 'The schedule hasn’t been posted yet.'}</div>

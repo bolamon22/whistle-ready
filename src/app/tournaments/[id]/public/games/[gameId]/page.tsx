@@ -9,6 +9,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Trophy, MapPin, Calendar, Clock, Share2, CalendarPlus } from 'lucide-react'
 import { poolLabel } from '@/lib/poolNames'
+import { time12 } from '@/lib/time12'
 
 interface Game { id:string; gameNumber:string; date:string; startTime:string; division:string; pool:string|null; location:string; team1:string; team2:string; score1:number|null; score2:number|null; isCanceled:boolean; isChampionship:boolean }
 import { liveClockText, livePenalties, useNowTicking, type LiveScore } from '@/components/LiveTicker'
@@ -127,7 +128,7 @@ export default function PublicGamePage(){
         {/* Matchup card */}
         <div className="bg-white border border-slate-200 rounded-xl overflow-hidden">
           <div className="px-4 py-2.5 border-b border-slate-100 flex items-center justify-between gap-2 text-[11px] uppercase tracking-wide text-slate-400 font-semibold">
-            <span className="inline-flex items-center gap-1.5"><Calendar size={12}/>{fmtDate(game.date)||'TBD'}<Clock size={12} className="ml-1"/>{game.startTime||'TBD'}</span>
+            <span className="inline-flex items-center gap-1.5"><Calendar size={12}/>{fmtDate(game.date)||'TBD'}<Clock size={12} className="ml-1"/>{time12(game.startTime)}</span>
             <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full normal-case tracking-normal ${status!.cls}`}>{status!.label}</span>
             <span className="inline-flex items-center gap-1"><MapPin size={12}/>{field||'TBD'}</span>
           </div>

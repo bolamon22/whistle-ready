@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState, useMemo, useCallback, useContext, useRef, createContext, Fragment } from 'react'
+import { time12 } from '@/lib/time12'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
 import LiveTicker from '@/components/LiveTicker'
@@ -1026,7 +1027,7 @@ export default function PublicTournamentPage() {
                           <button onClick={()=>setSelectedDiv(teamMeta?.division||division)} className="font-bold text-sm text-gray-800 hover:text-blue-700 hover:underline text-left truncate block">{team} <span className="font-normal text-xs text-gray-400">· {division}</span></button>
                           {nextGame ? (
                             <div className="text-xs text-gray-500 mt-0.5">
-                              Next: <span className="font-medium">{fmtDate(nextGame.date)} {nextGame.startTime}</span> vs <span className="font-medium">{nextGame.team1===team?nextGame.team2:nextGame.team1}</span> · {nextGame.location}
+                              Next: <span className="font-medium">{fmtDate(nextGame.date)} {time12(nextGame.startTime)}</span> vs <span className="font-medium">{nextGame.team1===team?nextGame.team2:nextGame.team1}</span> · {nextGame.location}
                             </div>
                           ) : <div className="text-xs text-gray-400">{pubVis.schedule==='live'?'No upcoming games':'Schedule coming soon'}</div>}
                         </div>

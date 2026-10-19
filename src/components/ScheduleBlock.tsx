@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { Clock, MapPin, ArrowRight } from 'lucide-react'
 import { Game } from '@/lib/standings'
+import { time12 } from '@/lib/time12'
 
 function startMs(date: string, t: string): number | null {
   if (!date || !t) return null
@@ -47,7 +48,7 @@ export default function ScheduleBlock() {
               <div key={g.id} className="flex items-center gap-3 text-sm border border-slate-100 rounded-lg px-3 py-2">
                 <div className="w-24 shrink-0">
                   <div className="font-medium text-slate-700">{fmtDay(g.date)}</div>
-                  <div className="text-xs text-slate-400 inline-flex items-center gap-1"><Clock size={11} /> {g.startTime || 'TBD'}</div>
+                  <div className="text-xs text-slate-400 inline-flex items-center gap-1"><Clock size={11} /> {time12(g.startTime)}</div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="truncate text-slate-800">{g.team1} <span className="text-slate-400">vs</span> {g.team2}</div>
