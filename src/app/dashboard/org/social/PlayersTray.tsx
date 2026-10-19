@@ -296,9 +296,11 @@ export default function PlayersTray({ data, canPost, busy, onPost, onReel, onSto
         </div>
       )}
 
-      {/* Every match, full screen. The post drawer and the Reel maker open above it. */}
+      {/* Every match, full screen. z-40 like the app's top bar, which comes earlier on the page,
+          so this covers it (at z-30 the bar hid this header: title, close, filters). The post
+          drawer and the Reel maker come later at z-40 and up, so they still open above it. */}
       {full && (
-        <div className="fixed inset-0 z-30 bg-slate-50 flex flex-col" role="dialog" aria-modal="true" aria-label="Cleared players">
+        <div className="fixed inset-0 z-40 bg-slate-50 flex flex-col" role="dialog" aria-modal="true" aria-label="Cleared players">
           <div className="border-b border-slate-200 bg-white px-4 sm:px-6 py-3 flex flex-col gap-2.5" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top, 0px))' }}>
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="flex items-center gap-2 flex-wrap">
