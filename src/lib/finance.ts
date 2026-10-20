@@ -10,6 +10,7 @@
 // next to what has actually been PAID; profit uses committed, cash uses paid.
 
 import { costTotal, lastOrder, paidSoFar, round2, type CostPayment, type CostView } from '@/lib/costTypes'
+import { expenseTotals, owedByPerson, type ExpenseView } from '@/lib/expenseTypes'
 
 export type FinReg = { id: string; clubName: string; invoiceAmount: number; discountAmount: number; paymentMethod?: string; teams?: unknown[]; payments?: { amount: number }[] }
 export type FinIndividual = { feeTierAmount: number; paymentStatus: string }
@@ -17,6 +18,8 @@ export type FinVendor = { id: string; status?: string; amountDue?: number; payme
 export type FinStaff = { worker: { id: string; name: string; payMethod?: string | null }; games?: { role?: string; pay?: number }[]; timeEntries?: unknown[]; totalPay: number }
 export type FinTx = { id: string; type: 'income' | 'expense'; category: string; description: string; amount: number; method: string; date: string; notes: string }
 export type FinDoc = { id: string; name: string; category: string; size?: number }
+/** A receipt staff turned in (lib/expenseTypes); it costs once the office approves it. */
+export type FinExpense = ExpenseView
 
 /** Budget-only lines (income, and the staff plan) kept per event. `planned` null = not planned yet. */
 export type PlanLine = { kind: 'income' | 'cost'; key: string; name: string; planned: number | null }
@@ -50,13 +53,15 @@ export function projectedCost(c: CostView): number {
 export const committedCost = (c: CostView) => c.status === 'budget' ? 0 : costTotal(c)
 
 export type BillRow = {
-  id: string; kind: 'vendor' | 'staff' | 'manual'
+  id: string; kind: 'vendor' | 'staff' | 'manual' | 'expense'
   name: string; sub: string
   status: string; tone: 'waiting' | 'owed' | 'deposit' | 'paid'
   committed: number; paid: number; owed: number
   projected: number; planned: number | null
   last: { total: number; label: string; change: number | null } | null
   cost?: CostView; tx?: FinTx
+  /** The receipts row (kind 'expense'): what the Expenses tab still has to do. */
+  receipts?: { count: number; waiting: number; waitingAmount: number; owed: number; owedPeople: number }
 }
 
 export type StaffRow = { id: string; name: string; role: string; games: number; method: string; pay: number; paid: boolean; dup: boolean }
@@ -88,6 +93,9 @@ export function buildFinance(o: {
   staff: FinStaff[]; staffPaidIds: Set<string>
   txs: FinTx[]; costs: CostView[]
   labelFor: (c: CostView) => string
+  /** Receipts (the Expenses tab): approved ones are committed; paid when the company
+   *  paid at the register or the buyer has been paid back. */
+  expenses?: FinExpense[]
 }): Finance {
   const sum = (xs: number[]) => round2(xs.reduce((s, x) => s + (Number(x) || 0), 0))
 
@@ -175,6 +183,21 @@ export function buildFinance(o: {
     })
   }
 
+  const receipts = (o.expenses || []).filter(e => e.tournamentId === o.tournamentId)
+  const rt = expenseTotals(receipts)
+  if (rt.count > 0) {
+    const owe = rt.owed > 0.005
+    bills.push({
+      id: 'expenses', kind: 'expense', name: 'Receipts & purchases',
+      sub: `${rt.count} receipt${rt.count === 1 ? '' : 's'} from ${rt.people} ${rt.people === 1 ? 'person' : 'people'}${rt.waiting.count ? ` · ${rt.waiting.count} waiting for approval` : ''} · from Expenses`,
+      status: rt.waiting.count ? `${rt.waiting.count} to approve` : owe ? 'To pay back' : 'Paid',
+      tone: rt.waiting.count || owe ? 'owed' : 'paid',
+      committed: rt.spent, paid: round2(rt.spent - rt.owed), owed: rt.owed,
+      projected: rt.spent, planned: null, last: null,
+      receipts: { count: rt.count, waiting: rt.waiting.count, waitingAmount: rt.waiting.amount, owed: rt.owed, owedPeople: owedByPerson(receipts).length },
+    })
+  }
+
   const committed = sum(bills.map(b => b.committed))
   const paidOut = sum(bills.map(b => b.paid))
   return {
@@ -243,7 +266,7 @@ export function projectPL(f: Finance, plan: PlanLine[], costs: CostView[], tourn
     const planned = sp ? sp.planned : null
     rows.push({ id: 'staff', name: 'Referees & game staff', sub: `From the game schedule · ${f.staff.rows.length} pay lines`, planned, committed: f.staff.owed, paid: f.staff.paid, projected: planned ?? f.staff.owed, left: planned === null ? null : round2(planned - f.staff.owed), staff: true })
   }
-  for (const b of f.bills.filter(b => b.kind === 'manual')) {
+  for (const b of f.bills.filter(b => b.kind === 'manual' || b.kind === 'expense')) {
     rows.push({ id: b.id, name: b.name, sub: b.sub, planned: null, committed: b.committed, paid: b.paid, projected: b.committed, left: null })
   }
   const incomeTotal = round2(income.reduce((s, i) => s + i.projected, 0))

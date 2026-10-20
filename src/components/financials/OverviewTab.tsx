@@ -24,7 +24,7 @@ const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(
 
 type Filter = 'all' | 'owed' | 'waiting' | 'paid'
 
-export default function OverviewTab({ tournamentId, fin, docs, costs, costEvents, contacts, taskTournaments, contactsToday, onSaveCost, onRemoveCost, onAddIncome, onOpenOther, onPatchContact }: {
+export default function OverviewTab({ tournamentId, fin, docs, costs, costEvents, contacts, taskTournaments, contactsToday, onSaveCost, onRemoveCost, onAddIncome, onOpenOther, onOpenExpenses, onPatchContact }: {
   tournamentId: string
   fin: Finance
   docs: FinDoc[]
@@ -37,6 +37,7 @@ export default function OverviewTab({ tournamentId, fin, docs, costs, costEvents
   onRemoveCost: (id: string) => Promise<void>
   onAddIncome: () => void
   onOpenOther: () => void
+  onOpenExpenses?: () => void
   onPatchContact: (c: ContactRow, body: Record<string, unknown>) => void
 }) {
   const [open, setOpen] = useState<Record<string, boolean>>({})
@@ -247,6 +248,13 @@ export default function OverviewTab({ tournamentId, fin, docs, costs, costEvents
                         onEmail={k => setEmailing(k)} />
                     )}
                     {b.kind === 'staff' && <StaffDetail fin={fin} tournamentId={tournamentId} />}
+                    {b.kind === 'expense' && b.receipts && (
+                      <p className="text-sm text-slate-700">
+                        {b.receipts.waiting > 0 && <>{b.receipts.waiting} waiting for approval ({fmt(b.receipts.waitingAmount)}). </>}
+                        {b.receipts.owed > 0 ? <>{fmt(b.receipts.owed)} to pay back to {b.receipts.owedPeople} {b.receipts.owedPeople === 1 ? 'person' : 'people'}. </> : b.receipts.waiting === 0 ? <>Everyone is paid back. </> : null}
+                        {onOpenExpenses && <button type="button" onClick={onOpenExpenses} className="font-semibold text-teal-700 hover:underline">Open Expenses</button>}
+                      </p>
+                    )}
                     {b.kind === 'manual' && b.tx && (
                       <p className="text-sm text-slate-700">{showDay(b.tx.date)} · {method(b.tx.method)}{b.tx.notes ? ` · ${b.tx.notes}` : ''} · <button type="button" onClick={onOpenOther} className="font-semibold text-teal-700 hover:underline">Edit on Other entries</button></p>
                     )}

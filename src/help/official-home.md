@@ -3,7 +3,7 @@ title: Your staff home page on game day
 category: Game day
 order: 500
 routes: /dashboard/staff, /dashboard/ref, /dashboard/scorekeeper
-keywords: confirm my games confirm your games can't work a game my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck
+keywords: confirm my games confirm your games can't work a game my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck receipt receipts pay me back
 ---
 When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page with their events, their next game and the game day tools.
 
@@ -30,6 +30,8 @@ A reminder email from the assigner has an **Answer for my 2 days** button (the n
 - Tap **My games** for your full list, or **All games** and pick an event to see every game.
 
 **To open the scorer:** on a game where you're the scorekeeper, tap **Open scorer**. See [Keep score live during a game](/tournaments/*/scoring).
+
+**To turn in a receipt:** bought something for the event? Under **Receipts**, tap **Turn in a receipt** and snap the receipt. See "Turn in a receipt to get paid back".
 
 **To clock in (field ops and athletic trainers):** under **Time clock**, tap **Clock In** when you start and **Clock Out** when you finish.
 

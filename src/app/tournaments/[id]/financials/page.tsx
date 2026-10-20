@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import toast, { Toaster } from 'react-hot-toast'
-import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2, Calculator } from 'lucide-react'
+import { BarChart3, Wallet, ClipboardList, Store, Users, Plus, Pencil, Trash2, Calculator, Receipt } from 'lucide-react'
 import type { CostView } from '@/lib/costTypes'
 import type { ContactRow } from '@/lib/contactTypes'
 import type { TaskTournament } from '@/lib/taskTemplate'
@@ -12,6 +12,9 @@ import { buildFinance, type FinDoc, type PlanLine } from '@/lib/finance'
 import { costLabel, type CostEvent } from '@/components/costs/useCosts'
 import OverviewTab from '@/components/financials/OverviewTab'
 import BudgetTab from '@/components/financials/BudgetTab'
+import ExpensesTab from '@/components/financials/ExpensesTab'
+import type { FormPerson } from '@/components/expenses/ExpenseForm'
+import { expenseState, type ExpenseView } from '@/lib/expenseTypes'
 import TournamentNav from '../TournamentNav'
 import { Card } from '@/components/ui'
 
@@ -93,7 +96,7 @@ export default function FinancialsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<'summary' | 'budget' | 'other'>('summary')
+  const [activeTab, setActiveTab] = useState<'summary' | 'budget' | 'expenses' | 'other'>('summary')
   // The redesign's data (Oct 5 2026): vendor bills (cost lines), the event's
   // documents, its budget plan and its contacts (for the vendor emails).
   const [costs, setCosts] = useState<CostView[]>([])
@@ -103,6 +106,10 @@ export default function FinancialsPage() {
   const [contacts, setContacts] = useState<ContactRow[]>([])
   const [taskTournaments, setTaskTournaments] = useState<TaskTournament[]>([])
   const [contactsToday, setContactsToday] = useState('')
+  // Receipts staff turned in, and the ones added here (the Expenses tab, Oct 20 2026).
+  const [expenses, setExpenses] = useState<ExpenseView[]>([])
+  const [expensePeople, setExpensePeople] = useState<FormPerson[]>([])
+  const [expenseToday, setExpenseToday] = useState(today())
 
   const load = () => {
     Promise.all([
@@ -136,6 +143,12 @@ export default function FinancialsPage() {
     fetch(`/api/tournaments/${tournamentId}/documents`).then(r => r.ok ? r.json() : []).then(d => setDocs(Array.isArray(d) ? d : [])).catch(() => {})
     fetch(`/api/plan?tournamentId=${q}`).then(r => r.ok ? r.json() : null).then(d => { if (d) setPlan(d.lines || []) }).catch(() => {})
     fetch(`/api/contacts?tournamentId=${q}`).then(r => r.ok ? r.json() : null).then(d => { if (d) { setContacts(d.contacts || []); setTaskTournaments(d.tournaments || []); setContactsToday(d.today || '') } }).catch(() => {})
+    loadExpenses()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tournamentId])
+  const loadExpenses = useCallback(() => {
+    fetch(`/api/expenses?tournamentId=${encodeURIComponent(String(tournamentId))}`, { cache: 'no-store' }).then(r => r.ok ? r.json() : null)
+      .then(d => { if (d && Array.isArray(d.expenses)) { setExpenses(d.expenses); setExpensePeople(d.people || []); if (d.today) setExpenseToday(d.today) } }).catch(() => {})
   }, [tournamentId])
 
   async function saveCost(id: string | null, body: Record<string, unknown>): Promise<boolean> {
@@ -167,6 +180,11 @@ export default function FinancialsPage() {
   }
 
   useEffect(() => { load() }, [tournamentId])
+  // ?tab=expenses (or budget, other) opens that tab.
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'expenses' || t === 'budget' || t === 'other') setActiveTab(t)
+  }, [])
   // A Budget line marked Paid adds (or changes) an expense here.
   useEffect(() => {
     const again = () => load()
@@ -215,13 +233,15 @@ export default function FinancialsPage() {
   const vendorCount  = vendors.filter(v => v.status === 'approved').length
   const fin = useMemo(() => buildFinance({
     tournamentId: String(tournamentId), regs: registrations, individuals: individualRegs, vendors,
-    staff: staffSummary, staffPaidIds, txs: transactions, costs, labelFor: c => costLabel(c, costEvents),
-  }), [tournamentId, registrations, individualRegs, vendors, staffSummary, staffPaidIds, transactions, costs, costEvents])
+    staff: staffSummary, staffPaidIds, txs: transactions, costs, labelFor: c => costLabel(c, costEvents), expenses,
+  }), [tournamentId, registrations, individualRegs, vendors, staffSummary, staffPaidIds, transactions, costs, costEvents, expenses])
+  const expensesWaiting = expenses.filter(e => expenseState(e) === 'waiting').length
 
   const tabs = [
-    { key: 'summary', label: 'Overview', Icon: BarChart3 },
-    { key: 'budget',  label: 'Budget', Icon: Calculator },
-    { key: 'other',   label: `Other entries (${otherTxs.length})`, Icon: Wallet },
+    { key: 'summary', label: 'Overview', Icon: BarChart3, badge: 0 },
+    { key: 'budget',  label: 'Budget', Icon: Calculator, badge: 0 },
+    { key: 'expenses', label: `Expenses (${expenses.length})`, Icon: Receipt, badge: expensesWaiting },
+    { key: 'other',   label: `Other entries (${otherTxs.length})`, Icon: Wallet, badge: 0 },
   ] as const
 
   return (
@@ -241,6 +261,7 @@ export default function FinancialsPage() {
             <button key={tab.key} onClick={() => setActiveTab(tab.key)}
               className={`flex-1 sm:flex-none inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${activeTab === tab.key ? 'bg-teal-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}>
               <tab.Icon size={15} /> {tab.label}
+              {tab.badge > 0 && <span className="ml-0.5 min-w-[20px] h-5 px-1.5 rounded-full bg-amber-500 text-white text-[11px] font-bold inline-flex items-center justify-center" title={`${tab.badge} waiting for approval`}>{tab.badge}</span>}
             </button>
           ))}
           <Link href={`/tournaments/${tournamentId}/registrations`}
@@ -264,13 +285,19 @@ export default function FinancialsPage() {
           <OverviewTab tournamentId={String(tournamentId)} fin={fin} docs={docs} costs={costs} costEvents={costEvents}
             contacts={contacts} taskTournaments={taskTournaments} contactsToday={contactsToday}
             onSaveCost={saveCost} onRemoveCost={removeCost} onPatchContact={patchContact}
-            onAddIncome={() => { setActiveTab('other'); openNew('income') }} onOpenOther={() => setActiveTab('other')} />
+            onAddIncome={() => { setActiveTab('other'); openNew('income') }} onOpenOther={() => setActiveTab('other')} onOpenExpenses={() => setActiveTab('expenses')} />
         )}
 
         {/* ── BUDGET: the projected P&L ── */}
         {activeTab === 'budget' && (
           <BudgetTab tournamentId={String(tournamentId)} fin={fin} plan={plan} costs={costs} costEvents={costEvents} contacts={contacts}
             onSavePlan={savePlan} onSaveCost={saveCost} onRemoveCost={removeCost} />
+        )}
+
+        {/* ── EXPENSES: receipts staff turned in, approvals, who to pay back ── */}
+        {activeTab === 'expenses' && (
+          <ExpensesTab tournamentId={String(tournamentId)} eventName={tournamentName} expenses={expenses} people={expensePeople}
+            today={expenseToday} onChanged={loadExpenses} />
         )}
 
         {/* ── OTHER INCOME & EXPENSES TAB ── */}
@@ -329,6 +356,7 @@ export default function FinancialsPage() {
               </Card>
             )}
 
+            <p className="text-sm text-slate-600 mb-3">Receipts for things someone bought for the event go on <button type="button" onClick={() => setActiveTab('expenses')} className="font-semibold text-teal-700 hover:underline">Expenses</button>. Don’t add them here too.</p>
             {linkedTx.size > 0 && <p className="text-sm text-slate-600 mb-3">{linkedTx.size} payment{linkedTx.size === 1 ? '' : 's'} on vendor bills {linkedTx.size === 1 ? 'is' : 'are'} on the Overview tab, with {linkedTx.size === 1 ? 'its' : 'their'} bill{linkedTx.size === 1 ? '' : 's'}.</p>}
             {otherTxs.length === 0 ? (
               <Card className="text-center py-16">

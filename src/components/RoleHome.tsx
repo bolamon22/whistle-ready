@@ -5,6 +5,7 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Globe, Search, ChevronDown, ChevronRight, Shield, type LucideIcon } from 'lucide-react'
+import StaffReceipts from '@/components/expenses/StaffReceipts'
 
 // The landing page for a role that works across tournaments (scheduler, assigner):
 // the soonest event as one large card with that role's buttons, the rest of what's
@@ -193,6 +194,9 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
           <ChevronRight size={16} aria-hidden className="flex-shrink-0 text-slate-400" />
         </Link>
       )}
+
+      {/* Receipts for what they bought for an event (components/expenses); hidden when there's nothing to show */}
+      <StaffReceipts compact />
 
       {tournaments.length === 0 ? (
         <div className="text-center py-20 text-slate-400">{emptyText ?? 'No tournaments yet.'}</div>

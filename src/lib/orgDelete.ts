@@ -55,10 +55,12 @@ export async function orgImpact(orgId: string): Promise<OrgImpact | null> {
   const logins = await rawCount(`SELECT COUNT(*) AS n FROM (SELECT id FROM "User" WHERE orgId = ? AND role <> 'admin' UNION SELECT "userId" FROM "OrgMember" WHERE "orgId" = ?)`, orgId, orgId)
     || await rawCount(`SELECT COUNT(*) AS n FROM "User" WHERE orgId = ? AND role <> 'admin'`, orgId)
   const forms = await rawCount(`SELECT COUNT(*) AS n FROM "OrgFormSubmission" WHERE "orgId" = ?`, orgId)
-  const payments = teamPay + staffPay + ledger
+  // Approved receipts are money spent (lib/eventExpenses).
+  const receipts = await rawCount(`SELECT COUNT(*) AS n FROM "EventExpense" WHERE "orgId" = ? AND "deletedAt" = '' AND "status" = 'approved'`, orgId)
+  const payments = teamPay + staffPay + ledger + receipts
   const elsewhere = elsewhereGames + elsewherePay
   const blocked = org.slug === MAIN_ORG_SLUG ? 'Sunshine Events Group can’t be deleted.'
-    : payments ? `Its events have ${payments} payment${payments === 1 ? '' : 's'} on record (team payments, staff pay or event income and expenses). Archive it instead.`
+    : payments ? `Its events have ${payments} payment${payments === 1 ? '' : 's'} on record (team payments, staff pay, receipts or event income and expenses). Archive it instead.`
     : elsewhere ? `${elsewhere} game${elsewhere === 1 ? '' : 's'} or pay record${elsewhere === 1 ? '' : 's'} of its Staff Pool belong to other organizations' events. Archive it instead.`
     : null
   return { org, events: tids.length, games, registrations, staffPool: workers.length, logins, forms, payments, elsewhere, blocked }
@@ -133,7 +135,7 @@ export async function deleteOrg(orgId: string, confirm: string, by: string): Pro
   for (const tid of tids) await raw(`DELETE FROM "AppSetting" WHERE key LIKE ? OR key LIKE ?`, `%:${tid}`, `%:${tid}:%`)
   await step('Staff Pool', () => each(workers, p => prisma.worker.deleteMany({ where: { id: { in: p } } })))
   if (failed.length) return { ok: false, status: 500, error: `Not everything could be deleted, so the organization is still here. Try again. (${failed.join('; ')})` }
-  for (const table of ['EventCost', 'EventPlanLine', 'GalleryMedia', 'OrgContact', 'OrgFormSubmission', 'OrgTask', 'ParentWaiverLink', 'ScheduledPost', 'SocialAccount', 'StaffInvite', 'OrgMember']) {
+  for (const table of ['EventCost', 'EventPlanLine', 'EventExpense', 'ExpenseReceipt', 'GalleryMedia', 'OrgContact', 'OrgFormSubmission', 'OrgTask', 'ParentWaiverLink', 'ScheduledPost', 'SocialAccount', 'StaffInvite', 'OrgMember']) {
     await raw(`DELETE FROM "${table}" WHERE "orgId" = ?`, orgId)
   }
   // Its logins stay, out of it; an admin's is never touched.

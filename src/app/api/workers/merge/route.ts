@@ -72,6 +72,7 @@ export async function POST(req: Request) {
   await client.execute({ sql: `UPDATE "TimeEntry" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   await client.execute({ sql: `UPDATE "PaymentRecord" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] })
   try { await client.execute({ sql: `UPDATE "StaffInvite" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] }) } catch { /* raw column may not exist */ }
+  try { await client.execute({ sql: `UPDATE "EventExpense" SET workerId = ? WHERE workerId = ?`, args: [keepId, removeId] }) } catch { /* no receipts table yet */ }
   // Training videos they've watched (api/training, keyed by the record their login
   // matched) and the training emails sent to them (lib/trainingSends) move to the kept
   // record. A video watched under both adds the plays together. Before Oct 15 2026 a

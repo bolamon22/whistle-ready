@@ -60,6 +60,13 @@ body.gd-dark [data-avail] :is(.text-amber-700, .text-amber-800, .text-amber-900)
 body.gd-dark [data-avail] :is(.text-teal-700, .text-teal-800, .text-teal-900) { color:#5eead4 !important; }
 body.gd-dark [data-avail] :is(.text-rose-700, .text-rose-800) { color:#fda4af !important; }
 body.gd-dark [data-avail] .border-rose-200 { border-color:rgba(244,63,94,0.35) !important; }
+/* Receipts (the staff home's Receipts card and its form, Financials > Expenses): the
+   status pills and the amber notes keep light text on dark tints, here only. */
+body.gd-dark [data-expenses] .bg-amber-100 { background:rgba(245,158,11,0.18) !important; }
+body.gd-dark [data-expenses] .bg-red-100 { background:rgba(239,68,68,0.18) !important; }
+body.gd-dark [data-expenses] :is(.text-amber-700, .text-amber-800, .text-amber-900) { color:#fcd34d !important; }
+body.gd-dark [data-expenses] :is(.text-teal-700, .text-teal-800, .text-teal-900, .text-emerald-800) { color:#5eead4 !important; }
+body.gd-dark [data-expenses] :is(.text-red-700, .text-red-800) { color:#fca5a5 !important; }
 /* The header and admin tabs: readable teal and red text and plain role badges on the dark bar. */
 body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-teal-700 { color:#5eead4 !important; }
 body.gd-dark :is([data-app-chrome], [data-admin-tabs]) .text-red-700 { color:#fca5a5 !important; }

@@ -3,13 +3,14 @@ import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
+import { approvedExpenseTotal } from '@/lib/eventExpenses'
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   const id = params.id
 
-  const [tournament, games, registrations, rosterEntries, allAssignments, timeEntries, staffPayments, transactions, playerCount] = await Promise.all([
+  const [tournament, games, registrations, rosterEntries, allAssignments, timeEntries, staffPayments, transactions, playerCount, receipts] = await Promise.all([
     prisma.tournament.findUnique({ where: { id } }),
     prisma.game.findMany({ where: { tournamentId: id }, select: { id: true, division: true, isCanceled: true, assignments: { select: { id: true } } } }),
     prisma.teamRegistration.findMany({
@@ -22,6 +23,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     prisma.paymentRecord.findMany({ where: { tournamentId: id }, select: { amount: true } }),
     prisma.tournamentTransaction.findMany({ where: { tournamentId: id }, select: { type: true, category: true, amount: true } }),
     prisma.playerRegistration.count({ where: { tournamentId: id, deletedAt: null } }),
+    approvedExpenseTotal(id),   // approved receipts (Financials > Expenses); 0 when none
   ])
 
   if (!tournament) return NextResponse.json({ error: 'Not found' }, { status: 404 })
@@ -45,7 +47,7 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
   // Other income & expenses (transactions)
   const otherIncome   = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0)
-  const otherExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0)
+  const otherExpenses = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0) + receipts
   const txByCategory  = transactions.reduce((acc, t) => {
     acc[t.category] = (acc[t.category] || 0) + t.amount
     return acc

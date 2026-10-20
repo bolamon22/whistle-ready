@@ -750,6 +750,32 @@ matches: the event's own record (lib/eventClient) is a name, email and phone, an
   line. Income plan + the staff plan live in raw-SQL `EventPlanLine` (`lib/eventPlan.ts`,
   `/api/plan` GET/PUT replaces the event's lines). A blank planned box projects billed (income) or
   committed (costs). `components/costs/EventBudget.tsx` is superseded by BudgetTab (unused).
+- **Receipts and paying people back (Oct 20).** Bo: "Sometimes we have people run out and buy ... water for
+  the event, or I had to buy paint to paint the goals": who bought it, what, from where, whether they were paid
+  back, and a photo of the receipt. Staff turn one in from the **Receipts** card on their home
+  (`components/expenses/StaffReceipts`: /dashboard/staff and RoleHome, so field director, assigner, scheduler);
+  the office approves it and marks it paid back on **Financials → Expenses** (`components/financials/ExpensesTab`).
+  One form for both (`components/expenses/ExpenseForm`, mode staff | office). Raw tables in `lib/eventExpenses.ts`
+  (libsql client, made on first use): `EventExpense` (status pending | approved | declined; paidWith own |
+  company_card | company_cash; paidBackOn/Method/Note; JSON `log`; soft delete) and `ExpenseReceipt` (the photo or
+  PDF as a BLOB, type sniffed from its bytes, 4 MB). Receipts are private: served only by
+  `/api/expenses/receipts/[id]` to the uploader, the person it's for, the event's office and admins
+  (`lib/expenseGate` canSeeReceipt), never through `/api/upload`. Pure half: `lib/expenseTypes.ts` (states,
+  totals, `owedByPerson`, `possibleDuplicates`, CSV); browser half: `lib/receiptClient.ts`. API: `/api/expenses`
+  (GET the office's list plus the roster with payout handles; POST: the office adds anyone's, approved unless
+  told otherwise; staff only their own, always pending, the buyer taken from their Staff Pool record by login
+  email), `/api/expenses/[id]` (PATCH fields or `action` approve | decline | reopen | paidBack | unpay; staff change
+  only their own while pending; DELETE refused once paid back), `/api/expenses/pay-back` (several at once),
+  `/api/expenses/mine` (the card: their organizations' events from 60 days back to 120 ahead, the ones they work
+  first; a field director only theirs; empty where the plan has Event money off), `/api/expenses/receipts`
+  (upload) and `.../[id]/read` (`lib/receiptAi`: Haiku with a forced tool reads store, date, total, what and
+  category; kept on the receipt, so the office sees "Receipt says $…" when the typed total differs). Money: an
+  approved receipt is committed, and paid when it was company money or once paid back (`lib/finance` bill row
+  kind `expense`, "Receipts & purchases", also in `projectPL` and the event dashboard's otherExpenses through
+  `approvedExpenseTotal`). Never also typed on Other entries. A Staff Pool merge moves receipts; deleting an
+  organization counts approved receipts as payments and deletes both tables. Dark mode: `[data-expenses]` rules
+  in globals.css. Help: expenses, staff-receipts, financials, official-home. Tests: 77 route checks on real
+  libsql, 36 pure, 62 in the browser (scratch). Not built: telling the office when one comes in, QuickBooks.
 
 - **Club portal access is per registration, by email (Oct 4).** `src/lib/clubAccess.ts`: raw-SQL
   table `ClubRegAccess (userId, registrationId)`, created lazily; the first call carried every old

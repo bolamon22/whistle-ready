@@ -8,6 +8,7 @@ import toast from 'react-hot-toast'
 import MyAvailability, { type AvDay } from '@/components/MyAvailability'
 import { availLocked, dayTitle } from '@/lib/availabilityAnswers'
 import StaffW9Card from '@/components/StaffW9Card'
+import StaffReceipts from '@/components/expenses/StaffReceipts'
 import { Radio, Target, Users, ClipboardCheck, TriangleAlert, Timer, Clock, Play, Square, CalendarDays, CheckCircle2, GraduationCap, ChevronRight, BookOpen, Phone, MessageSquare, Search, MapPin, Siren, Bell, ArrowRight, Trophy } from 'lucide-react'
 import { videosFor } from '@/lib/training'
 import StaffAlerts from '@/components/StaffAlerts'
@@ -440,6 +441,9 @@ export default function RefDashboard() {
 
       {/* W-9: upload it here instead of emailing it (components/StaffW9Card) */}
       {portal?.worker && <StaffW9Card />}
+
+      {/* Receipts: turn in what you bought for an event, see when it's paid back (components/expenses) */}
+      <StaffReceipts />
 
       {/* Time clock — hourly staff (field ops & athletic trainers) */}
       {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {
