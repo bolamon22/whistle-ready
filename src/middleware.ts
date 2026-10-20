@@ -103,8 +103,18 @@ function previewOf(req: NextRequest, realRole: unknown): Preview | null {
   return { role, orgId, planOff }
 }
 
+// iOS reads this file to trust the Whistle Ready app (5CNAB4SY4E.app.whistleready)
+// with this site's saved passwords, so the app's login screen offers them behind
+// Face ID like Safari does. Apple fetches it with no cookies and follows no
+// redirects, so it is answered here before any host rewrite or login check.
+const APPLE_APP_SITE_ASSOCIATION = { webcredentials: { apps: ['5CNAB4SY4E.app.whistleready'] } }
+
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
+
+  if (pathname === '/.well-known/apple-app-site-association') {
+    return NextResponse.json(APPLE_APP_SITE_ASSOCIATION, { headers: { 'Cache-Control': 'public, max-age=3600' } })
+  }
 
   // --- Event vanity domains (jinglebrawllax.com → the Jingle Brawl event page) ---
   // Everything on the host goes to the one page, permanently.
