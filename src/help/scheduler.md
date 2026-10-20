@@ -12,7 +12,7 @@ The **Scheduler** puts every pool and bracket game on a field, date and time. Ga
 **Days and views:** the big day buttons under the top bar pick the day you're working on (the one you're on is solid teal, with its game count and open slots; **+** adds a day). Next to them, switch between **Grid** (fields across, time down), **Board** (the grid with drop hints and an issues panel), **Timeline** (fields down, time across) and **Teams** (one row per team, so rest and conflicts show as a shape). A **1 uneven pool** tag at the top means some teams have fewer games than the rest of their pool; click it for which pools and **Fix in Divisions**.
 
 **To place games by hand:**
-1. Click **Filter** and pick a **Division**, **Pool**, **Team** or **Game type** to narrow the Parking Lot. The number on **Filter** is how many are on; the dark tag next to it clears the division.
+1. Click **Filter** to open the filter bar under the toolbar, and pick a **Division**, **Pool** or **Game type** to narrow the Parking Lot. Once a division is picked, its teams show as buttons in that bar: click one, or press the **down** and **up** arrows to step team by team and watch each one light up on the board. The number on **Filter** is how many are on; **Clear** or the dark tag next to it clears them.
 2. Drag a game onto a field and time. Drag a placed game back to the Parking Lot to unschedule it.
 3. **Scratch** holds up to 4 games while you rearrange.
 4. To swap two placed games, tick **Swap Games**, then click both games.

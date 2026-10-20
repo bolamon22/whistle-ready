@@ -1339,6 +1339,27 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       .filter(t => !isPlaceholder(t))   // teams only, as in the parking lot's list
   )].sort()
 
+  // Down / up arrow steps through the filtered division's teams (Bo, Oct 19 2026), anywhere
+  // on the page except while typing or in a menu. The ref keeps the listener on fresh values.
+  const teamStep = useRef<(d: number) => boolean>(() => false)
+  teamStep.current = (d: number) => {
+    if (gridDiv === '__all__' || gridTeams.length === 0) return false
+    const list = ['__all__', ...gridTeams]
+    const i = Math.max(0, list.indexOf(gridTeam))
+    setGridTeam(list[(i + d + list.length) % list.length])
+    return true
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey || (e.key !== 'ArrowDown' && e.key !== 'ArrowUp')) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return
+      if (teamStep.current(e.key === 'ArrowDown' ? 1 : -1)) e.preventDefault()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   function gameMatchesGridFilter(g: Game) {
     if (gridDiv !== '__all__' && g.division !== gridDiv) return false
     if (gridPool !== '__all__' && g.pool !== gridPool) return false
@@ -2361,41 +2382,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
           return (
             <div className="relative">
               <button onClick={() => setFilterOpen(o => !o)} aria-expanded={filterOpen}
-                title="Division, pool, team and game type"
+                title="Show or hide the filter bar: division, pool, game type and teams"
                 className={`inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-lg border transition-colors ${nFilters ? 'bg-teal-50 text-teal-800 border-teal-300' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-50'}`}>
                 <Filter size={13} /> Filter
                 {nFilters > 0 && <span className="min-w-[18px] h-[18px] rounded-full bg-teal-600 text-white text-[11px] font-bold inline-flex items-center justify-center px-1">{nFilters}</span>}
               </button>
-              {filterOpen && (<>
-                <div className="fixed inset-0 z-40" onClick={() => setFilterOpen(false)} />
-                <div className="absolute left-0 top-full mt-1 z-50 w-72 bg-white border border-slate-200 rounded-xl shadow-lg p-3 space-y-2.5">
-                  <div><label className={lbl}>Division</label>
-                    <select value={gridDiv} onChange={e => { setGridDiv(e.target.value); setGridPool('__all__'); setGridTeam('__all__') }} className={sel}>
-                      <option value="__all__">All divisions</option>
-                      {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
-                    </select></div>
-                  <div><label className={lbl}>Pool</label>
-                    <select value={gridPool} onChange={e => { setGridPool(e.target.value); setGridTeam('__all__') }} className={sel}>
-                      <option value="__all__">All pools</option>
-                      {gridPools.map(p => <option key={p} value={p}>{p}</option>)}
-                    </select></div>
-                  <div><label className={lbl}>Team</label>
-                    <select value={gridTeam} onChange={e => setGridTeam(e.target.value)} className={sel}>
-                      <option value="__all__">All teams</option>
-                      {gridTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select></div>
-                  <div><label className={lbl}>Game type</label>
-                    <select value={gridType} onChange={e => setGridType(e.target.value)} className={sel}>
-                      <option value="__all__">All</option>
-                      <option value="pool">Pool</option>
-                      <option value="bracket">Bracket</option>
-                    </select></div>
-                  <div className="flex items-center pt-1">
-                    {nFilters > 0 && <button onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__'); setGridType('__all__') }} className="text-xs text-slate-500 hover:text-slate-800 underline">Clear filters</button>}
-                    <button onClick={() => setFilterOpen(false)} className="ml-auto text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-900 text-white">Done</button>
-                  </div>
-                </div>
-              </>)}
             </div>
           )
         })()}
@@ -2413,14 +2404,19 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
-      {/* ── Team strip (Bo, Oct 19 2026): the Filter popover covered the board, so picking a
-          team hid the very games it highlighted. With a division picked, its teams sit in a
-          row under the toolbar; click one, or Tab / arrow keys through them, and the board
-          highlights that team as focus lands on it. ── */}
-      {gridDiv !== '__all__' && gridTeams.length > 0 && (
-        <div className="bg-white border-b border-slate-200 px-3 sm:px-4 py-1.5 flex items-center gap-1.5 flex-wrap flex-shrink-0" role="toolbar" aria-label="Teams in this division"
+      {/* ── Filter bar (Bo, Oct 19 2026). It was a pop-over that sat on top of the board, so
+          the games a team pick lit up were hidden under it, and its Team list only highlighted
+          on a click. Now it's a row under the toolbar: Division, Pool and Game type, then the
+          division's teams as buttons. Click a team, or press the down / up arrow anywhere on
+          the page (not while typing) to step to the next team and watch it light up. A pick
+          in these menus lets go of focus, so the arrows go to the teams, not the menu. ── */}
+      {(filterOpen || gridDiv !== '__all__') && (() => {
+        const sel = 'text-xs bg-white text-slate-700 border border-slate-300 rounded-lg px-2 h-7'
+        const nFilters = [gridDiv, gridPool, gridTeam, gridType].filter(v => v !== '__all__').length
+        return (
+        <div className="bg-white border-b border-slate-200 px-3 sm:px-4 py-1.5 flex items-center gap-1.5 flex-wrap flex-shrink-0" role="toolbar" aria-label="Filters and teams"
           onKeyDown={e => {
-            const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }
+            const keys: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1 }
             if (!(e.key in keys)) return
             const btns = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-team]'))
             const i = btns.indexOf(document.activeElement as HTMLButtonElement)
@@ -2428,20 +2424,41 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             e.preventDefault()
             btns[(i + keys[e.key] + btns.length) % btns.length].focus()
           }}>
-          <span className="text-[11px] font-semibold text-slate-500 mr-1">Teams</span>
-          {['__all__', ...gridTeams].map(t => {
-            const on = gridTeam === t
-            const n = t === '__all__' ? 0 : games.filter(g => g.date === activeDate && (g.team1 === t || g.team2 === t)).length
-            return (
-              <button key={t} type="button" data-team={t} aria-pressed={on}
-                onClick={() => setGridTeam(t)} onFocus={() => setGridTeam(t)}
-                className={`text-xs font-semibold h-7 px-2.5 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${on ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
-                {t === '__all__' ? 'All' : t}{t !== '__all__' && <span className={`ml-1 font-medium ${on ? 'text-slate-300' : 'text-slate-400'}`}>{n}</span>}
-              </button>
-            )
-          })}
+          <select aria-label="Division" value={gridDiv} onChange={e => { setGridDiv(e.target.value); setGridPool('__all__'); setGridTeam('__all__'); e.target.blur() }} className={sel}>
+            <option value="__all__">All divisions</option>
+            {divisions.map(d => <option key={d} value={d}>{d} ({divGameCounts[d] ?? 0})</option>)}
+          </select>
+          {gridPools.length > 0 && (
+            <select aria-label="Pool" value={gridPool} onChange={e => { setGridPool(e.target.value); setGridTeam('__all__'); e.target.blur() }} className={sel}>
+              <option value="__all__">All pools</option>
+              {gridPools.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          )}
+          <select aria-label="Game type" value={gridType} onChange={e => { setGridType(e.target.value); e.target.blur() }} className={sel}>
+            <option value="__all__">Pool and bracket</option>
+            <option value="pool">Pool games</option>
+            <option value="bracket">Bracket games</option>
+          </select>
+          {nFilters > 0 && <button type="button" onClick={() => { setGridDiv('__all__'); setGridPool('__all__'); setGridTeam('__all__'); setGridType('__all__') }} className="text-xs text-slate-500 hover:text-slate-800 underline mx-1">Clear</button>}
+          {gridDiv !== '__all__' && gridTeams.length > 0 && (<>
+            <span className="w-px h-5 bg-slate-200 mx-1" />
+            <span className="text-[11px] font-semibold text-slate-500 mr-0.5" title="The down and up arrows step through the teams">Teams <span className="font-normal text-slate-400">↑↓</span></span>
+            {['__all__', ...gridTeams].map(t => {
+              const on = gridTeam === t
+              const n = t === '__all__' ? 0 : games.filter(g => g.date === activeDate && (g.team1 === t || g.team2 === t)).length
+              return (
+                <button key={t} type="button" data-team={t} aria-pressed={on}
+                  onClick={() => setGridTeam(t)} onFocus={() => setGridTeam(t)}
+                  className={`text-xs font-semibold h-7 px-2.5 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${on ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                  {t === '__all__' ? 'All' : t}{t !== '__all__' && <span className={`ml-1 font-medium ${on ? 'text-slate-300' : 'text-slate-400'}`}>{n}</span>}
+                </button>
+              )
+            })}
+          </>)}
+          {filterOpen && <button type="button" onClick={() => setFilterOpen(false)} aria-label="Hide the filter bar" title="Hide the filter bar" className="ml-auto w-7 h-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 inline-flex items-center justify-center"><X size={14} /></button>}
         </div>
-      )}
+        )
+      })()}
 
       {/* ── Grid ── */}
       {fields.length === 0 ? (
