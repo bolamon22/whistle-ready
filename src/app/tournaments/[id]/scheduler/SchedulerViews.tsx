@@ -824,6 +824,16 @@ export function TimelineView(p: ViewsProps) {
     onDragLeave: (e: React.DragEvent) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setLotOver(false) },
     onDrop: (e: React.DragEvent) => { e.preventDefault(); setLotOver(false); const id = dropTarget(e); setDragId(null); if (id && p.dayGames.some(g => g.id === id)) { setSelId(null); p.onUnschedule(id) } },
   }
+  // With a placed game picked up (the black tile), clicking the parking lot takes it off the
+  // board, same as dragging it there or Unschedule on the moving bar (Bo, Oct 19 2026).
+  const selPlaced = !!sel && !!sel.date && !!sel.startTime && !!sel.location
+  const unscheduleSel = () => { if (!sel) return; const id = sel.id; setSelId(null); setSwapArmed(false); p.onUnschedule(id) }
+  const lotClick = selPlaced && !draggingPlaced ? (
+    <button type="button" onClick={unscheduleSel} title={`Take ${sel!.gameNumber} off the board`}
+      className="absolute inset-1.5 z-10 rounded-xl border-2 border-dashed border-orange-400 bg-white/85 hover:bg-orange-50 flex items-center justify-center text-xs font-bold text-orange-800 px-2 text-center">
+      Click here to unschedule {sel!.gameNumber}
+    </button>
+  ) : null
   // One unscheduled game, in the rail (full width) or the top strip (fixed width).
   const lotCard = (g: SGame, c: string, size: string, mini = false) => {
     const on = selId === g.id
@@ -859,6 +869,7 @@ export function TimelineView(p: ViewsProps) {
   function renderLotStrip() {
     return (
       <div {...lotDrop} className={`relative flex-shrink-0 border-b border-slate-200 transition-colors ${lotOver ? 'bg-orange-50' : 'bg-white'}`}>
+        {lotClick}
         {draggingPlaced && (
           <div className={`absolute inset-1.5 z-10 rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-bold pointer-events-none ${lotOver ? 'border-orange-500 bg-orange-100/80 text-orange-800' : 'border-orange-300 bg-white/70 text-orange-600'}`}>
             Drop here to unschedule
@@ -983,6 +994,7 @@ export function TimelineView(p: ViewsProps) {
       {/* Left rail: unscheduled (or docked on top, see renderLotStrip) */}
       {lotTop ? null : leftOpen ? (
         <div {...lotDrop} className={`relative w-[232px] flex-shrink-0 flex flex-col border-r border-slate-200 min-h-0 transition-colors ${lotOver ? 'bg-orange-50' : 'bg-white'}`}>
+          {lotClick}
           {draggingPlaced && (
             <div className={`absolute inset-1.5 z-10 rounded-xl border-2 border-dashed flex items-center justify-center text-xs font-bold pointer-events-none ${lotOver ? 'border-orange-500 bg-orange-100/80 text-orange-800' : 'border-orange-300 bg-white/70 text-orange-600'}`}>
               Drop here to unschedule
@@ -1040,7 +1052,7 @@ export function TimelineView(p: ViewsProps) {
           </div>
         </div>
       ) : (
-        <button {...lotDrop} onClick={() => setRails(true, rightOpen)} aria-label="Show the unscheduled list" title={draggingPlaced ? 'Drop here to unschedule' : undefined} className={`w-10 flex-shrink-0 border-r flex flex-col items-center pt-3 gap-2 hover:bg-slate-50 ${lotOver ? 'bg-orange-50 border-orange-300' : draggingPlaced ? 'bg-orange-50/50 border-orange-200' : 'bg-white border-slate-200'}`}>
+        <button {...lotDrop} onClick={() => selPlaced ? unscheduleSel() : setRails(true, rightOpen)} aria-label={selPlaced ? `Unschedule ${sel!.gameNumber}` : 'Show the unscheduled list'} title={draggingPlaced ? 'Drop here to unschedule' : selPlaced ? `Click to unschedule ${sel!.gameNumber}` : undefined} className={`w-10 flex-shrink-0 border-r flex flex-col items-center pt-3 gap-2 hover:bg-slate-50 ${lotOver ? 'bg-orange-50 border-orange-300' : draggingPlaced ? 'bg-orange-50/50 border-orange-200' : 'bg-white border-slate-200'}`}>
           <span className="text-[11px] font-bold px-1.5 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200">{p.unscheduled.length}</span>
           <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400" style={{ writingMode: 'vertical-rl' }}>Unscheduled</span>
         </button>
