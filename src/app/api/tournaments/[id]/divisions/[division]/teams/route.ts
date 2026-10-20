@@ -174,7 +174,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       })
     }
 
-    return NextResponse.json({ ok: true })
+    // Its games in the old division stay as they were (Bo, Oct 20 2026: Madskillz 2034
+    // moved to Lower School but still played P1 and P7 in Middle School, and nothing
+    // said so). Deleting them would quietly take games off its opponents, so they're
+    // named for the mover to fix: change those matchups or rebuild the pool games.
+    const leftGames = team ? await prisma.game.findMany({
+      where: { tournamentId: params.id, division, OR: [{ team1: team.teamName }, { team2: team.teamName }] },
+      select: { gameNumber: true },
+    }).catch(() => [] as { gameNumber: string }[]) : []
+    return NextResponse.json({ ok: true, leftGames: leftGames.map(g => g.gameNumber) })
   } catch (e) {
     console.error(e)
     return NextResponse.json({ error: 'Failed to move team' }, { status: 500 })

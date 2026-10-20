@@ -515,6 +515,8 @@ export default function DivisionsPage() {
     }))
     setMovingTeam(null)
     toast.success(`${team.teamName} moved to ${newDivision}`)
+    const left: string[] = (await res.json().catch(() => ({})))?.leftGames ?? []
+    if (left.length) toast.error(`${team.teamName} still plays ${left.join(', ')} in ${activeDiv}. Change those matchups, or rebuild ${activeDiv}'s games.`, { duration: 12000 })
   }
 
   // Trade places with a team in another division: each takes the other's pool
