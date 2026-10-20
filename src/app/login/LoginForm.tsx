@@ -94,7 +94,7 @@ export default function LoginForm({ brandName, brandLogo }: { brandName?: string
         <form onSubmit={handleSubmit} className="space-y-3">
           <input required type="email" value={email} onChange={e => setEmail(e.target.value)}
             className="w-full bg-gray-800 border border-gray-700 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="you@email.com" autoComplete="email" />
+            placeholder="you@email.com" autoComplete="username" />
           <div className="relative">
             <input required type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
               className="w-full bg-gray-800 border border-gray-700 rounded-xl pl-4 pr-12 py-3 text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
