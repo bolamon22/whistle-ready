@@ -1263,6 +1263,8 @@ export function TimelineView(p: ViewsProps) {
     // (2:10, 3:20) on every other field, or a slot on that game's own field it
     // would overlap. Shown like a closed cell and never takes a game; "Time" on
     // the placing bar can still put a game anywhere on purpose.
+    // Blacked out (Bo, Oct 19 2026): the light hatching read as an open slot once 2A/2B ran
+    // on their own 2:10 / 3:00 / 4:10 times, so people tried to schedule into it.
     const dead = g ? null : deadAt(f.fullName, s)
     const closed = closedAt(f.fullName, s) || !!dead
     const status = sel && !g && !closed ? placementStatus(sel, si, p.dayGames, p.slots, p.increment) : null
@@ -1286,7 +1288,7 @@ export function TimelineView(p: ViewsProps) {
           setDragId(null)
         }}
         onClick={() => { if (!g && sel && status !== 'blocked') place(sel, s, f.fullName) }}
-        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: dead ? 'repeating-linear-gradient(135deg,#f8fafc 0 6px,#e2e8f0 6px 7px)' : closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
+        style={{ cursor: !g && status && status !== 'blocked' ? 'copy' : undefined, background: dead ? 'repeating-linear-gradient(135deg,#334155 0 6px,#1e293b 6px 12px)' : closed && !g ? 'repeating-linear-gradient(135deg,#ffffff 0 8px,#fef2f2 8px 10px)' : undefined }}>
         {g ? renderGameCard(g, mini) : h ? (
           <div className={`absolute ${mini ? 'inset-0.5 rounded' : 'inset-1 rounded-lg'} flex items-center justify-center text-[10px] font-bold overflow-hidden`} style={{ border: `1.5px dashed ${h.border}`, background: h.bg, color: h.text }} title={h.label}>{mini ? null : h.label}</div>
         ) : null}
