@@ -2,6 +2,7 @@
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AlertTriangle, ArrowLeftRight, Repeat, Check, Clock, Zap, ChevronDown, ChevronUp, Ban, ChevronsLeft, ChevronsRight, FoldHorizontal, FoldVertical, GripVertical, UnfoldHorizontal, UnfoldVertical, Maximize2, Minimize2, Search, X, PanelLeft, PanelTop, Ruler } from 'lucide-react'
 import { isRealTeam, teamKey } from '@/lib/autoSchedule'
+import { gameGender } from '@/lib/gameGender'
 import { BracketView, type BkBracket } from '@/components/BracketDiagram'
 import { bracketWaits, brokenWait, type BracketWait } from '@/lib/bracketOrder'
 
@@ -84,6 +85,8 @@ export interface ViewsProps {
    *  and drop from the parking lot ('__all__' or missing = no filter). */
   filterPool?: string
   filterTeam?: string
+  /** Boys or girls only (page Filter bar): the other side grays out and leaves the parking lot. */
+  filterSide?: 'all' | 'boys' | 'girls'
   /** The day's regular start times (the grid, before off-grid game times are
    *  added). Rows that exist only because one game was set to an odd time are
    *  not open for other fields. */
@@ -733,7 +736,10 @@ export function TimelineView(p: ViewsProps) {
   // same way as another division.
   const teamF = p.filterTeam && p.filterTeam !== '__all__' ? p.filterTeam : null
   const poolF = p.filterPool && p.filterPool !== '__all__' ? p.filterPool : null
-  const divOut = (g: SGame) => (!!focusDivs && !focusDivs.has(g.division)) || (!!poolF && g.pool !== poolF) || (!!teamF && g.team1 !== teamF && g.team2 !== teamF)
+  const sideF = p.filterSide && p.filterSide !== 'all' ? p.filterSide : null
+  // A division that says neither (coed, unnamed) counts as both, so it never hides.
+  const sideOut = (div: string) => { if (!sideF) return false; const s = gameGender(div); return s !== 'both' && s !== sideF }
+  const divOut = (g: SGame) => (!!focusDivs && !focusDivs.has(g.division)) || sideOut(g.division) || (!!poolF && g.pool !== poolF) || (!!teamF && g.team1 !== teamF && g.team2 !== teamF)
   // Flight filter: only offered while the divisions in view have flighted brackets.
   const [flightF, setFlightF] = useState('')
   const flightsShown = useMemo(() => Array.from(new Set(p.games.filter(g => g.bracketFlight && (!focusDivs || focusDivs.has(g.division))).map(g => g.bracketFlight!))).sort(), [p.games, focusDivs])
@@ -803,12 +809,12 @@ export function TimelineView(p: ViewsProps) {
   // unscheduled, grouped by division, filtered by search, in placing order
   const lot = useMemo(() => {
     const ql = q.trim().toLowerCase()
-    const divs = focusDivs ? p.divisions.filter(d => focusDivs.has(d)) : p.divisions
+    const divs = (focusDivs ? p.divisions.filter(d => focusDivs.has(d)) : p.divisions).filter(d => !sideOut(d))
     return divs.map(d => ({
       div: d,
       items: p.unscheduled.filter(g => g.division === d && matchesType(g, typeFilter) && !flightOut(g) && !divOut(g) && (!ql || [g.gameNumber, g.team1, g.team2, g.pool ?? ''].some(x => x.toLowerCase().includes(ql)))).sort(placeOrder),
     })).filter(x => x.items.length > 0)
-  }, [p.unscheduled, p.divisions, focusDivs, poolF, teamF, typeFilter, flightF, q, placeOrder])
+  }, [p.unscheduled, p.divisions, focusDivs, poolF, teamF, sideF, typeFilter, flightF, q, placeOrder])
   const lotCounts = useMemo(() => {
     const inDiv = p.unscheduled.filter(g => !focusDivs || focusDivs.has(g.division))
     return { pool: inDiv.filter(g => !isBracket(g)).length, bracket: inDiv.filter(isBracket).length }
