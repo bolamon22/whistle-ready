@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/db'
 import { requireStaff, isStaffRequest } from '@/lib/apiAuth'
-import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { getPublicVisibility, applyPublicView, publishedOnly } from '@/lib/publicView'
 import { refsLookup } from '@/lib/refRules'
 
 // GET – list existing pool games for this division
@@ -18,7 +18,9 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string;
   })
   if (await isStaffRequest()) return NextResponse.json(games)
   // Not staff: only what the public schedule is allowed to show.
-  return NextResponse.json(applyPublicView(games, await getPublicVisibility(params.id)))
+  const vis = await getPublicVisibility(params.id)
+  const gone = publishedOnly(vis, new Set(games.map(g => g.id)), params.id, scope === 'bracket' ? { division, bracket: true } : { division, pool: true })
+  return NextResponse.json([...applyPublicView(games, vis), ...gone])
 }
 
 // Circle rotation round-robin: returns game pairings grouped by scheduling round.

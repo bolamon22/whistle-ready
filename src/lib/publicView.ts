@@ -24,6 +24,9 @@ export interface PublicVisibility {
   publishedAt: string | null
   ended: boolean
   snapshot: Record<string, { date: string; startTime: string; location: string }> | null
+  /** The published games themselves (lib/publish snapshot), for games rebuilt or
+   *  deleted since: see publishedOnly(). */
+  snapshotGames?: SnapGame[]
   /** Waitlisted teams per division (lib/poolMembership). Staff may place one in a
    *  pool to plan around it; its games stay off every public surface until the
    *  flag is cleared in Registrations. */
@@ -79,12 +82,14 @@ export async function getPublicVisibility(tournamentId: string): Promise<PublicV
   const pools: Vis = r.publicPools === 'live' || r.publicPools === 'hidden' ? r.publicPools : schedule
 
   let snapshot: PublicVisibility['snapshot'] = null
+  let snapshotGames: SnapGame[] | undefined
   if (publishedAt && !ended) {
     try {
       const parsed = JSON.parse(r.scheduleSnapshot || '{}')
       if (Array.isArray(parsed?.games)) {
         snapshot = {}
         for (const g of parsed.games) snapshot[g.id] = { date: g.date ?? '', startTime: g.startTime ?? '', location: g.location ?? '' }
+        snapshotGames = parsed.games
       }
     } catch { /* bad snapshot -> fall back to live */ }
   }
@@ -99,7 +104,7 @@ export async function getPublicVisibility(tournamentId: string): Promise<PublicV
     pools, schedule,
     poolsAuto: !(r.publicPools === 'live' || r.publicPools === 'hidden'),
     scheduleAuto: !(r.publicSchedule === 'live' || r.publicSchedule === 'hidden'),
-    publishedAt, ended, snapshot,
+    publishedAt, ended, snapshot, snapshotGames,
   }
 }
 
@@ -108,6 +113,9 @@ export async function setPublicVisibility(tournamentId: string, patch: { pools?:
   if (patch.pools) await prisma.$executeRawUnsafe(`UPDATE "Tournament" SET "publicPools" = ? WHERE id = ?`, patch.pools, tournamentId)
   if (patch.schedule) await prisma.$executeRawUnsafe(`UPDATE "Tournament" SET "publicSchedule" = ? WHERE id = ?`, patch.schedule, tournamentId)
 }
+
+/** A game as the last Publish saved it. */
+export type SnapGame = { id: string; gameNumber?: string | null; date?: string | null; startTime?: string | null; location?: string | null; division?: string | null; team1?: string | null; team2?: string | null; isCanceled?: boolean | null; pool?: string | null }
 
 type GameLike = { id: string; gameNumber?: string | null; pool?: string | null; date: string; startTime: string; location: string; division?: string | null; team1?: string | null; team2?: string | null }
 
@@ -129,4 +137,26 @@ export function applyPublicView<T extends GameLike>(games: T[], vis: PublicVisib
   // draft matchups in the club portal (Bo, Oct 4 2026). Pool lists come from
   // the Pool rows instead (/api/tournaments/[id]/pools), not from games.
   return []
+}
+
+// Games the public saw at the last Publish that the working copy no longer has
+// (Bo, Oct 20 2026). Rebuilding a division's pool games or bracket deletes its games
+// and makes new ones; the new ones stay off the public page until Publish (they're
+// not in the snapshot), so without this the whole division vanished from the public
+// schedule the moment it was rebuilt, though nothing had been published. Pass the ids
+// of every game the caller loaded and, for a one-division list, that division; the
+// published copies of the missing ones come back as plain, unscored games.
+export function publishedOnly(vis: PublicVisibility, presentIds: Set<string>, tournamentId: string, opts: { division?: string; bracket?: boolean; pool?: boolean } = {}) {
+  if (vis.schedule !== 'live' || !vis.snapshotGames) return []
+  return vis.snapshotGames
+    .filter(g => g && g.id && !presentIds.has(g.id))
+    .filter(g => !opts.division || g.division === opts.division)
+    .filter(g => opts.bracket === undefined || isBracketGame(g) === opts.bracket)
+    .filter(g => !opts.pool || !isBracketGame(g))
+    .filter(g => !involvesWaitlisted(g, vis.waitlisted))
+    .map(g => ({
+      id: g.id, tournamentId, gameNumber: String(g.gameNumber || ''), date: String(g.date || ''), startTime: String(g.startTime || ''),
+      location: String(g.location || ''), division: String(g.division || ''), pool: g.pool ?? null, team1: String(g.team1 || ''), team2: String(g.team2 || ''),
+      score1: null, score2: null, isCanceled: !!g.isCanceled, isChampionship: false, refCount: 2, fromPublished: true,
+    }))
 }

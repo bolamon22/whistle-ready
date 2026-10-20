@@ -81,7 +81,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const games = await prisma.game.findMany({
     where: { tournamentId: params.id },
-    select: { id: true, gameNumber: true, date: true, startTime: true, location: true, division: true, team1: true, team2: true, isCanceled: true },
+    select: { id: true, gameNumber: true, date: true, startTime: true, location: true, division: true, pool: true, team1: true, team2: true, isCanceled: true },
   })
 
   const publishedAt = new Date().toISOString()

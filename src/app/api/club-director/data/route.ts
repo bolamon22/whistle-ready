@@ -5,7 +5,7 @@ import { prisma } from '@/lib/db'
 import { viewAs } from '@/lib/clubDirectorView'
 import { rosterLock } from '@/lib/rosterLock'
 import { viewerRole } from '@/lib/apiAuth'
-import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { getPublicVisibility, applyPublicView, publishedOnly } from '@/lib/publicView'
 import { readConfirmMany } from '@/lib/changeRequest'
 import { eventInfo, divisionFull, addPolicy, addBlock } from '@/lib/clubPortal'
 import { parsePricing } from '@/lib/regPricing'
@@ -106,7 +106,9 @@ export async function GET(req: NextRequest) {
   // tournament director, who build it, see the draft here.
   const clubView = as.viewingOther || !['admin', 'director'].includes(await viewerRole())
   const vis = await getPublicVisibility(tournamentId)
-  const games = clubView ? applyPublicView(rawGames, vis) : rawGames
+  // Plus the published copies of the club's games rebuilt or deleted since the last Publish.
+  const games = clubView ? [...applyPublicView(rawGames, vis), ...(publishedOnly(vis, new Set(rawGames.map(g => g.id)), tournamentId)
+    .filter(g => teamNames.includes(g.team1) || teamNames.includes(g.team2)) as typeof rawGames)] : rawGames
 
   // The actual signed waivers.
   //

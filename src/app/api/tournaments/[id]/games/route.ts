@@ -4,7 +4,7 @@ import { requireStaff, isStaffRequest, viewer } from '@/lib/apiAuth'
 import { redactWorker, redactWorkerPay } from '@/lib/roleScope'
 import { assignmentPayGroups, seesPay } from '@/lib/payGroups'
 import { payScopeFor } from '@/lib/payScope'
-import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { getPublicVisibility, applyPublicView, publishedOnly } from '@/lib/publicView'
 import { getIfNeeded, withIfNeeded, bracketMeta } from '@/lib/ifNeeded'
 import { refsLookup } from '@/lib/refRules'
 import { syncBracketPlaceholders } from '@/lib/bracketPlaceholders'
@@ -65,7 +65,10 @@ export async function GET(req: Request, { params }: { params:{id:string} }) {
     getIfNeeded(params.id),
     bracketMeta(params.id),
   ])
-  const out = withIfNeeded(applyPublicView(games, vis), ifNeeded, meta).map(g => ({ ...g, assignments: [] as unknown[] }))
+  // Plus the published copies of games rebuilt or deleted since the last Publish.
+  const kept = [...applyPublicView(games, vis), ...publishedOnly(vis, new Set(games.map(g => g.id)), params.id) as typeof games]
+    .sort((a, b) => `${a.date} ${a.startTime} ${a.location}`.localeCompare(`${b.date} ${b.startTime} ${b.location}`))
+  const out = withIfNeeded(kept, ifNeeded, meta).map(g => ({ ...g, assignments: [] as unknown[] }))
   return NextResponse.json(out, {
     headers: { 'Cache-Control': publicView ? 'public, s-maxage=5, stale-while-revalidate=30' : 'private, no-store' },
   })

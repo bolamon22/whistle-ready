@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db'
 import { parsePricing, feeScheduleLines } from '@/lib/regPricing'
-import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
+import { getPublicVisibility, applyPublicView, publishedOnly } from '@/lib/publicView'
 import { PUBLIC_HELP } from '@/lib/helpArticles'
 import { pickArticles } from '@/lib/chirp'
 import { orgById, orgBySlug, tournamentOrgId, type Org } from '@/lib/org'
@@ -140,7 +140,7 @@ export async function tournamentScope(tournamentId: string, userTeam?: string): 
   ])
   if (!t) return null
   const tt: any = t
-  const games = applyPublicView(allGames, vis)   // only what the public schedule shows
+  const games = [...applyPublicView(allGames, vis), ...publishedOnly(vis, new Set(allGames.map(g => g.id)), tournamentId).filter(g => !g.isCanceled) as typeof allGames]   // only what the public schedule shows
   // Not released = staff are still building it. Say so plainly, so Chirp doesn't
   // hand out "search for your team" steps for games nobody can see yet.
   const released = vis.schedule === 'live' && games.length > 0
