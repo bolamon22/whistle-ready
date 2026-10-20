@@ -148,12 +148,15 @@ export async function POST(req: Request) {
   }
 
   const { name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payRateOverride, hourlyRate, payMethod, payHandle, notes, association } = body
+  // Worker.association is TEXT NOT NULL DEFAULT '' in production (added Jun 9), and the Staff
+  // Pool's Add form sends none when its Association box is empty: inserting null made those
+  // adds fail with "Failed" (Oct 20 2026).
   const id = crypto.randomUUID()
 
   await client.execute({
     sql: `INSERT INTO "Worker" (id, name, email, phone, certLevel, defaultRole, roles, isAssigner, gender, payRateOverride, hourlyRate, payMethod, payHandle, notes, association, orgId, createdAt, updatedAt)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    args: [id, name, email ?? null, phone ?? null, certLevel ?? 'youth', defaultRole ?? 'ref', JSON.stringify(roles ?? [defaultRole ?? 'ref']), isAssigner ? 1 : 0, gender ?? 'both', payRateOverride ?? null, hourlyRate ?? null, payMethod ?? 'check', payHandle ?? null, notes ?? null, association ?? null, orgId],
+    args: [id, name, email ?? null, phone ?? null, certLevel ?? 'youth', defaultRole ?? 'ref', JSON.stringify(roles ?? [defaultRole ?? 'ref']), isAssigner ? 1 : 0, gender ?? 'both', payRateOverride ?? null, hourlyRate ?? null, payMethod ?? 'check', payHandle ?? null, notes ?? null, String(association ?? '').trim().slice(0, 120), orgId],
   })
 
   if (body.referredBy) {
