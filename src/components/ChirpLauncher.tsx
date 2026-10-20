@@ -79,23 +79,40 @@ export function ChirpLauncher({ open, onToggle, sub = 'Help desk · answers 24/7
  *  session per `key`, and never again that session once dismissed or once the
  *  chat is opened. With `capDays`, also at most once every that many days on
  *  this device, so regular visitors aren't greeted every time. */
-export function useGreeting(key: string, open: boolean, enabled = true, delayMs = 4000, capDays = 0) {
+export function useGreeting(key: string, open: boolean, enabled = true, delayMs = 4000, capDays = 0, opts: { oncePerVisit?: boolean; autoHideMs?: number } = {}) {
   const storeKey = `chirp-greeted-${key}`
+  // One greeting per visit (Bo, Oct 20 2026): on a phone the card covers the
+  // page, and it came back on every page because it was only marked seen when
+  // dismissed. Now it's marked seen the moment it shows.
+  const visitKey = 'chirp-greeted-visit'
   const [show, setShow] = useState(false)
   useEffect(() => {
     if (!enabled) return
     let skip = false
     try {
-      skip = sessionStorage.getItem(storeKey) === '1'
+      skip = sessionStorage.getItem(storeKey) === '1' || (!!opts.oncePerVisit && sessionStorage.getItem(visitKey) === '1')
       if (!skip && capDays > 0) skip = Date.now() - Number(localStorage.getItem('chirp-greeted-last') || 0) < capDays * 86400000
     } catch {}
     if (skip) return
     const t = setTimeout(() => {
       setShow(true)
-      try { if (capDays > 0) localStorage.setItem('chirp-greeted-last', String(Date.now())) } catch {}
+      try {
+        sessionStorage.setItem(storeKey, '1')
+        if (opts.oncePerVisit) sessionStorage.setItem(visitKey, '1')
+        if (capDays > 0) localStorage.setItem('chirp-greeted-last', String(Date.now()))
+      } catch {}
     }, delayMs)
     return () => clearTimeout(t)
-  }, [enabled, storeKey, delayMs, capDays])
+  }, [enabled, storeKey, delayMs, capDays, opts.oncePerVisit])
+  // On a phone the card gets out of the way by itself.
+  useEffect(() => {
+    if (!show || !opts.autoHideMs) return
+    let small = false
+    try { small = window.matchMedia('(max-width: 640px)').matches } catch {}
+    if (!small) return
+    const t = setTimeout(() => setShow(false), opts.autoHideMs)
+    return () => clearTimeout(t)
+  }, [show, opts.autoHideMs])
   const dismiss = () => { setShow(false); try { sessionStorage.setItem(storeKey, '1') } catch {} }
   useEffect(() => { if (open && show) dismiss() })   // opening the chat counts as seen
   return { show: show && !open, dismiss }

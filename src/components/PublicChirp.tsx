@@ -60,7 +60,7 @@ export default function PublicChirp({ tournamentId, tournamentName, orgSlug }: {
   const nudge = pickNudge({ path, event: info.event, orgName: info.orgName, returning: (visitorRef.current?.n || 0) > 0, audience })
   // Not told who they are yet: a general greeting asks that instead.
   const askWho = !audience && !nudge.pageSpecific
-  const greeting = useGreeting(`${scopeKey}-${nudge.id}`, open, info.loaded && !!path, 6000, nudge.pageSpecific ? 0 : 2)
+  const greeting = useGreeting(`${scopeKey}-${nudge.id}`, open, info.loaded && !!path, 6000, nudge.pageSpecific ? 0 : 2, { oncePerVisit: true, autoHideMs: 10000 })
   // Held back while the champions' photo is on screen (lib/chirpKeepClear), so it doesn't cover its buttons.
   const keepClear = useChirpKeepClear()
 
