@@ -3,7 +3,7 @@ title: Field board: who's on every field
 category: Game day
 order: 546
 routes: /tournaments/*/field-board
-keywords: field board table view grid refs scorekeepers who is on what field missing ref open spot field director tournament director view only crew by field
+keywords: print printable printout paper field board table view grid refs scorekeepers who is on what field missing ref open spot field director tournament director view only crew by field
 ---
 The Field board shows every game on every field with its refs and scorekeeper by name. Nobody can change anything here, so it's safe to keep open at the fields. It's for field directors, tournament directors, assigners and schedulers.
 
@@ -25,6 +25,8 @@ The Field board shows every game on every field with its refs and scorekeeper by
 - Tap the red **open spots** button to show only the games still missing someone.
 
 **On a phone:** pick a time along the top. Each field is a card. Times with an open spot are outlined in red.
+
+**To print it:** set the day and filters you want (**Refs** or **Scorekeepers**, **Boys** or **Girls**, open spots only), then click **Print**. It prints the table sideways (landscape) with the event, the day and the filters at the top, on a phone too.
 
 The page refreshes every minute. To move or add someone, use the Assigner.
 

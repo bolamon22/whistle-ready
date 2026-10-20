@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { LayoutGrid, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react'
+import { LayoutGrid, RefreshCw, ChevronDown, ChevronUp, Printer } from 'lucide-react'
 import EventBackLink from '@/components/EventBackLink'
 import { useRole } from '@/lib/role-context'
 import { roleCanAccess } from '@/lib/routeAccess'
@@ -64,6 +64,8 @@ export default function FieldBoardPage() {
   const [err, setErr] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [stamp, setStamp] = useState<Date | null>(null)
+  const [eventName, setEventName] = useState('')
+  useEffect(() => { fetch(`/api/tournaments/${encodeURIComponent(tid)}`).then(r => r.ok ? r.json() : null).then(t => t?.name && setEventName(t.name)).catch(() => {}) }, [tid])
 
   // Picking refs or scorekeepers folds the games down to names; Everyone opens them.
   function setShow(s: Show) { setShowRaw(s); setTeams(s === 'all'); setOpened(new Set()) }
@@ -134,7 +136,10 @@ export default function FieldBoardPage() {
       <EventBackLink id={tid} />
       <div className="flex items-start justify-between gap-3 mb-1">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><LayoutGrid size={22} className="text-teal-600" /> Field board</h1>
-        <button type="button" onClick={load} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 px-2 py-1"><RefreshCw size={14} /> Refresh</button>
+        <div className="flex items-center gap-1">
+          <button type="button" onClick={() => window.print()} disabled={!shown.length} title="Print what's showing: the day, Refs or Scorekeepers, Boys or Girls" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-40"><Printer size={14} /> Print</button>
+          <button type="button" onClick={load} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 px-2 py-1"><RefreshCw size={14} /> Refresh</button>
+        </div>
       </div>
       <p className="text-sm text-slate-500 mb-4">
         Who&apos;s on every field, view only. Red is a spot nobody has yet. Tap a name to call them.
@@ -168,9 +173,32 @@ export default function FieldBoardPage() {
 
         {shown.length === 0 && <p className="text-sm text-slate-400 py-6">{onlyOpen ? `Every game has its ${showLabel === 'spots' ? 'crew' : showLabel}.` : 'No games this day.'}</p>}
 
+        {/* Print (Bo, Oct 20 2026: refs print it and bring it to the field): only this block
+            prints, landscape, the table whatever the screen size, with a heading that says
+            which day and filters it shows. */}
+        <style>{`@media print {
+          @page { size: landscape; margin: 0.35in }
+          body * { visibility: hidden !important }
+          #fb-print, #fb-print * { visibility: visible !important }
+          #fb-print { position: absolute; left: 0; top: 0; width: 100% }
+          #fb-print .fb-table { display: block !important; max-height: none !important; overflow: visible !important; border: 0 !important; border-radius: 0 !important }
+          #fb-print .fb-table table { min-width: 0 !important; font-size: 10px }
+          #fb-print .fb-table th, #fb-print .fb-table td { position: static !important }
+          #fb-print .fb-phone { display: none !important }
+          #fb-print tr { break-inside: avoid }
+          #fb-print .truncate { white-space: normal !important; overflow: visible !important; text-overflow: clip !important }
+          #fb-print a { text-decoration: none !important; color: inherit !important }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact }
+        }`}</style>
+        <div id="fb-print">
+        <div className="hidden print:block mb-2">
+          <div className="text-base font-bold text-slate-900">{eventName || 'Field board'} · {dayDate(day)}</div>
+          <div className="text-[11px] text-slate-600">{show === 'refs' ? 'Refs only' : show === 'sk' ? 'Scorekeepers only' : 'Refs and scorekeepers'}{side !== 'all' ? ` · ${side === 'boys' ? 'Boys' : 'Girls'} games` : ''}{onlyOpen ? ' · only games with open spots' : ''} · printed {new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+        </div>
+
         {/* Desktop and tablets: fields across, times down. */}
         {shown.length > 0 && (
-          <div className="hidden md:block rounded-xl border border-slate-200 bg-white overflow-auto max-h-[calc(100vh-220px)]">
+          <div className="fb-table hidden md:block rounded-xl border border-slate-200 bg-white overflow-auto max-h-[calc(100vh-220px)]">
             {/* Fixed columns so every field gets the same width and fits the screen where it can. */}
             <table className="border-collapse w-full table-fixed" style={{ minWidth: 96 + fields.length * 150 }}>
               <colgroup><col style={{ width: 96 }} />{fields.map(f => <col key={f} />)}</colgroup>
@@ -214,7 +242,7 @@ export default function FieldBoardPage() {
 
         {/* Phones: one time slot at a time. */}
         {shown.length > 0 && (
-          <div className="md:hidden">
+          <div className="fb-phone md:hidden">
             <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1">
               {shownTimes.map(t => {
                 const c = crewed(t)
@@ -253,6 +281,7 @@ export default function FieldBoardPage() {
             })()}
           </div>
         )}
+        </div>
       </>)}
     </div>
   )
