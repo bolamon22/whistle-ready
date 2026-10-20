@@ -53,10 +53,14 @@ function staffRank(w:Worker):number{
 }
 
 // Searchable dropdown component
-function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip }: {
+function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip, offList }: {
   value: string; onChange: (v:string)=>void
   options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string;level?:number|null}[]
   placeholder: string; assigned: boolean; disabled: boolean
+  /** Name of whoever holds this slot when they aren't in the pick list (off this event's
+   *  roster). Without it the box read "unassigned" while someone was on the game, and
+   *  their games flagged double-booked with no name to go on (Zuri, Oct 20 2026). */
+  offList?: string
   /** Compact board: a one-line chip (role · last name · games) instead of the row select. */
   chip?: { short:string; color:string; display:string; count?:number; danger?:boolean; tone:'ref'|'sk'; title?:string
     /** Officials' confirmations (lib/officialConfirm): they confirmed this game; or, on an
@@ -135,7 +139,7 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
         {open?(
           <input ref={inputRef} className="w-full bg-transparent outline-none text-[10px] text-slate-800" value={search} onChange={e=>setSearch(e.target.value)} placeholder="type to search…" onClick={e=>e.stopPropagation()}/>
         ):(
-          <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}<RefLevelPill level={selected?.level} small/>{selected?.label||placeholder}</span>
+          <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}<RefLevelPill level={selected?.level} small/>{selected?.label||(assigned?<span className="text-amber-700" title="On this game but not on the event's staff roster. Take them off or add them to the roster.">⚠ {offList||'Not on the roster'}</span>:placeholder)}</span>
         )}
       </div>
       {open&&(
@@ -1957,7 +1961,7 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       <span className="text-[9px] font-bold w-5 shrink-0" style={{color:roleObj.color}}>{roleObj.short}</span>
       <div className="flex-1 relative" title={!existing&&mark?.declined?`${mark.declined.name} can't work it${mark.declined.note?`: “${mark.declined.note}”`:''}`:undefined}>
         {isDoubledAssigned&&<div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full z-10"/>}
-        <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder={!existing&&mark?.declined?`${lastWord(mark.declined.name)} can't work`:'unassigned'} assigned={!!existing} disabled={disabled}/>
+        <SearchSelect value={existing?.workerId??''} onChange={onAssign} options={options} placeholder={!existing&&mark?.declined?`${lastWord(mark.declined.name)} can't work`:'unassigned'} assigned={!!existing} disabled={disabled} offList={existing?`${existing.worker?.name??'Someone'} · not on roster`:undefined}/>
       </div>
       {existing&&mark?.st==='yes'&&<span className="text-emerald-600 text-[10px] font-black shrink-0" title="Confirmed">✓</span>}
     </div>
