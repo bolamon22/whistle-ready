@@ -2413,6 +2413,36 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         )}
       </div>
 
+      {/* ── Team strip (Bo, Oct 19 2026): the Filter popover covered the board, so picking a
+          team hid the very games it highlighted. With a division picked, its teams sit in a
+          row under the toolbar; click one, or Tab / arrow keys through them, and the board
+          highlights that team as focus lands on it. ── */}
+      {gridDiv !== '__all__' && gridTeams.length > 0 && (
+        <div className="bg-white border-b border-slate-200 px-3 sm:px-4 py-1.5 flex items-center gap-1.5 flex-wrap flex-shrink-0" role="toolbar" aria-label="Teams in this division"
+          onKeyDown={e => {
+            const keys: Record<string, number> = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }
+            if (!(e.key in keys)) return
+            const btns = Array.from(e.currentTarget.querySelectorAll<HTMLButtonElement>('button[data-team]'))
+            const i = btns.indexOf(document.activeElement as HTMLButtonElement)
+            if (i < 0) return
+            e.preventDefault()
+            btns[(i + keys[e.key] + btns.length) % btns.length].focus()
+          }}>
+          <span className="text-[11px] font-semibold text-slate-500 mr-1">Teams</span>
+          {['__all__', ...gridTeams].map(t => {
+            const on = gridTeam === t
+            const n = t === '__all__' ? 0 : games.filter(g => g.date === activeDate && (g.team1 === t || g.team2 === t)).length
+            return (
+              <button key={t} type="button" data-team={t} aria-pressed={on}
+                onClick={() => setGridTeam(t)} onFocus={() => setGridTeam(t)}
+                className={`text-xs font-semibold h-7 px-2.5 rounded-full border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 ${on ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                {t === '__all__' ? 'All' : t}{t !== '__all__' && <span className={`ml-1 font-medium ${on ? 'text-slate-300' : 'text-slate-400'}`}>{n}</span>}
+              </button>
+            )
+          })}
+        </div>
+      )}
+
       {/* ── Grid ── */}
       {fields.length === 0 ? (
         <div className="flex-1 flex items-center justify-center flex-col gap-4 text-slate-400 py-20">
