@@ -76,7 +76,7 @@ export default function CoachDashboard() {
   if (!profile) return (
     <div className="max-w-lg mx-auto py-16">
       <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center">
-        <div className="text-4xl mb-4">🏒</div>
+        <img src="/org-icons/sunshine-events-group/icon-192.png" alt="Sunshine Events Group" className="w-16 h-16 mx-auto mb-4 rounded-xl object-contain" />
         <h1 className="text-xl font-bold text-gray-800 mb-2">Welcome, Coach {session?.user?.name}!</h1>
         <p className="text-gray-500 text-sm mb-6">Select your tournament and team to get started.</p>
         <div className="space-y-3 text-left">
