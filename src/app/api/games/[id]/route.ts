@@ -55,9 +55,9 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (before && ((b.score1 !== undefined && asScore(b.score1) !== before.score1) || (b.score2 !== undefined && asScore(b.score2) !== before.score2))) {
     const refused = await ownClubRefusal(gate, before.tournamentId, [before.team1, before.team2, b.team1, b.team2]); if (refused) return refused
   }
-  // A move, cancel or renumber is told to the officials on it once their crew is
-  // published (lib/officialChangeAlerts). Score saves skip the extra read.
-  const moves = ['date', 'startTime', 'location', 'isCanceled', 'gameNumber'].some(k => b[k] !== undefined)
+  // A move, cancel, renumber or new teams is told to the officials on it once their
+  // crew is published (lib/officialChangeAlerts). Score saves skip the extra read.
+  const moves = ['date', 'startTime', 'location', 'isCanceled', 'gameNumber', 'team1', 'team2'].some(k => b[k] !== undefined)
   const was = moves ? await prisma.game.findUnique({ where: { id: params.id }, include: { assignments: { select: { workerId: true, role: true } } } }) : null
   const updated = await prisma.game.update({ where:{id:params.id}, data:{
     // null and '' both mean "no score". Number(null) is 0, so the old ''-only check

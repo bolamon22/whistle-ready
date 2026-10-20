@@ -45,9 +45,20 @@ type GameLike = { id: string; date: string; startTime: string; location: string;
 export function spotOf(g: GameLike): Spot {
   return { gameId: g.id, date: g.date || '', time: g.startTime || '', field: g.location || '', num: g.gameNumber || '', division: g.division || '', teams: `${g.team1} vs ${g.team2}`, canceled: !!g.isCanceled }
 }
-const sameSpot = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field && a.num === b.num && a.canceled === b.canceled
+const sameSpot = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field && a.num === b.num && a.canceled === b.canceled && a.teams === b.teams
+const samePlace = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field
 
-/** One 'moved' change per official on a game whose day, time, field, number or canceled state changed. */
+// Girls or boys, from the division name. Bo (Oct 20 2026): for officials, a game
+// going from girls to boys (or back) matters more than which teams are playing, so
+// the alert calls it out on top. Teams changing is still noted, just lower down.
+export function genderOf(division: string): 'girls' | 'boys' | '' {
+  const d = String(division || '').toLowerCase()
+  if (/\bgirls?\b|\bwomen'?s?\b/.test(d)) return 'girls'
+  if (/\bboys?\b|\bmen'?s?\b/.test(d)) return 'boys'
+  return ''
+}
+
+/** One 'moved' change per official on a game whose day, time, field, number, teams or canceled state changed. */
 export function gameMoveChanges(before: GameLike & { assignments: { workerId: string; role: string }[] }, after: GameLike): OfficialChange[] {
   const b = spotOf(before), a = spotOf(after)
   if (sameSpot(a, b)) return []
@@ -72,7 +83,40 @@ function line(c: OfficialChange): string {
   if (c.after.canceled && !c.before.canceled) return `#${c.after.num} (${c.after.division}, ${c.after.teams}) is canceled. It was ${when(c.before)}.`
   if (!c.after.canceled && c.before.canceled) return `#${c.after.num} (${c.after.division}, ${c.after.teams}) is back on: ${when(c.after)}.`
   const renum = c.before.num !== c.after.num ? ` (was #${c.before.num})` : ''
+  if (samePlace(c.before, c.after)) return `#${c.after.num}${renum}, ${when(c.after)}, is now ${c.after.teams} (${c.after.division}). It was ${c.before.teams}.`
   return `#${c.after.num}${renum} (${c.after.division}, ${c.after.teams}) moved from ${when(c.before)} to ${when(c.after)}.`
+}
+
+type DayGame = { gameId: string; date: string; time: string; field: string; division: string }
+
+/** Girls/boys switches these changes cause in one official's day: a game that is a
+ *  different side than the game they had in the same slot before, or than their
+ *  game just before or after it that day. */
+export function genderSwitches(mine: OfficialChange[], day: DayGame[]): string[] {
+  const out: string[] = []
+  const cap = (g: string) => g.toUpperCase()
+  for (const c of mine) {
+    if (c.kind === 'removed') continue
+    const s = c.kind === 'moved' ? c.after : c.spot
+    if (!s.date || !s.time || s.canceled) continue
+    const g = genderOf(s.division); if (!g) continue
+    const at = `${dayShort(s.date)} ${time12(s.time)}, ${fieldName(s.field)}`
+    // Same slot, other side: they were on a girls game here and now it's boys.
+    const gone = mine.some(o => {
+      if (o === c || o.kind === 'added') return false
+      const b = o.kind === 'removed' ? o.spot : o.before
+      const bg = genderOf(b.division)
+      return b.date === s.date && b.time === s.time && !!bg && bg !== g
+    })
+    if (gone) { out.push(`${at} is now a ${cap(g)} game. It was ${g === 'boys' ? 'girls' : 'boys'}.`); continue }
+    // Next to their other games that day.
+    const same = day.filter(d => d.date === s.date && d.gameId !== s.gameId).sort((x, y) => mins(x.time) - mins(y.time))
+    const prev = same.filter(d => mins(d.time) < mins(s.time)).pop()
+    const next = same.find(d => mins(d.time) > mins(s.time))
+    const other = [prev && genderOf(prev.division) && genderOf(prev.division) !== g ? `before it (${time12(prev.time)})` : '', next && genderOf(next.division) && genderOf(next.division) !== g ? `after it (${time12(next.time)})` : ''].filter(Boolean)
+    if (other.length) out.push(`${at} is a ${cap(g)} game. Your ${other.length > 1 ? `games ${other.join(' and ')} are` : `game ${other[0]} is`} ${g === 'boys' ? 'girls' : 'boys'}.`)
+  }
+  return Array.from(new Set(out))
 }
 
 type Sent = Record<string, { sig: string; sentAt: string }>
@@ -102,12 +146,21 @@ export async function sendOfficialChanges(tournamentId: string, changes: Officia
     const links = ask ? await confirmLinks(tournamentId, ids).catch(() => new Map<string, string>()) : new Map<string, string>()
     const base = 'https://whistleready.app'
     const now = new Date().toISOString()
+    // Their games as they stand now: for girls/boys switches, then for "last sent".
+    const games = await prisma.game.findMany({
+      where: { tournamentId, isCanceled: false, assignments: { some: { workerId: { in: ids } } } },
+      include: { assignments: { where: { workerId: { in: ids } }, select: { workerId: true, role: true } } },
+    })
+    const dayOf = (wid: string): DayGame[] => games.filter(g => g.startTime && g.assignments.some(a => a.workerId === wid)).map(g => ({ gameId: g.id, date: g.date, time: g.startTime, field: g.location, division: g.division }))
+    const flips = new Map<string, string[]>()
 
     // ── The officials ──
     for (const wid of ids) {
       const w = byId.get(wid); if (!w) continue
       const mine = keep.filter(c => c.workerId === wid)
       const lines = mine.map(line)
+      const warn = genderSwitches(mine, dayOf(wid))
+      flips.set(wid, warn)
       const first = String(w.name || '').split(/\s+/)[0] || 'Hi'
       const email = String(w.email || '').trim()
       const token = links.get(wid) || ''
@@ -116,17 +169,17 @@ export async function sendOfficialChanges(tournamentId: string, changes: Officia
         const html = renderEmail({
           orgName: (org as any)?.name || 'Sunshine Events Group',
           eyebrow: t.name,
-          title: `${first}, your games changed`,
-          body: `<ul style="margin:0 0 6px;padding-left:18px">${lines.map(l => `<li style="margin:0 0 6px">${esc(l)}</li>`).join('')}</ul>
+          title: warn.length ? `${first}, heads up: a girls/boys switch` : `${first}, your games changed`,
+          body: `${warn.length ? `<div style="margin:0 0 14px;padding:10px 12px;border-radius:8px;background:#fff7ed;border:1px solid #fdba74;color:#7c2d12"><b>Girls/boys switch</b><ul style="margin:6px 0 0;padding-left:18px">${warn.map(l => `<li style="margin:0 0 4px">${esc(l)}</li>`).join('')}</ul></div>` : ''}<ul style="margin:0 0 6px;padding-left:18px">${lines.map(l => `<li style="margin:0 0 6px">${esc(l)}</li>`).join('')}</ul>
             <div style="margin-top:20px">${button(confirmUrl || `${base}/dashboard/ref`, confirmUrl ? 'See and confirm my games' : 'Open My games')}</div>
             <p style="margin:14px 0 0;font-size:12px;color:#64748b">Can't make a change work? Reply to this email or call your assigner.</p>`,
           footerNote: 'You get this because you’re on the officials’ schedule for this event.',
         })
-        const text = `${first}, your games at ${t.name} changed:\n\n${lines.map(l => `- ${l}`).join('\n')}\n\n${confirmUrl || `${base}/dashboard/ref`}`
-        await sendEmail({ to: email, subject: `Your games changed · ${t.name}`, html, text, ...orgSender(org as any) }).catch(() => null)
+        const text = `${first}, your games at ${t.name} changed:\n\n${warn.map(l => `GIRLS/BOYS SWITCH: ${l}\n`).join('')}${warn.length ? '\n' : ''}${lines.map(l => `- ${l}`).join('\n')}\n\n${confirmUrl || `${base}/dashboard/ref`}`
+        await sendEmail({ to: email, subject: `${warn.length ? 'Girls/boys switch · ' : ''}Your games changed · ${t.name}`, html, text, ...orgSender(org as any) }).catch(() => null)
       }
       if (email) {
-        await pushToStaffEmails([email], { title: 'Your games changed', body: lines.length === 1 ? lines[0] : `${lines.length} changes at ${t.name}. Tap to see them.`, url: confirmUrl ? `/confirm-games/${token}` : '/dashboard/ref', tag: `chg:${tournamentId}:${wid}:${now}` }).catch(() => 0)
+        await pushToStaffEmails([email], { title: warn.length ? 'Heads up: girls/boys switch' : 'Your games changed', body: warn.length ? warn[0] : lines.length === 1 ? lines[0] : `${lines.length} changes at ${t.name}. Tap to see them.`, url: confirmUrl ? `/confirm-games/${token}` : '/dashboard/ref', tag: `chg:${tournamentId}:${wid}:${now}` }).catch(() => 0)
       }
     }
 
@@ -143,6 +196,7 @@ export async function sendOfficialChanges(tournamentId: string, changes: Officia
           const l = `${who} (${roleLabel(c.role)}): ${line(c).replace(/^You're on /, 'now on ').replace(/^You're off /, 'off ')}`
           const e = perEmail.get(to) || { name: a.name, lines: [] }
           if (!e.lines.includes(l)) e.lines.push(l)
+          for (const w of flips.get(c.workerId) || []) { const fl = `${who}: GIRLS/BOYS SWITCH. ${w}`; if (!e.lines.includes(fl)) e.lines.push(fl) }
           perEmail.set(to, e)
         }
       }
@@ -166,10 +220,6 @@ export async function sendOfficialChanges(tournamentId: string, changes: Officia
     }
 
     // ── Move their "last sent" up to now, so Notify officials doesn't resend this ──
-    const games = await prisma.game.findMany({
-      where: { tournamentId, isCanceled: false, assignments: { some: { workerId: { in: ids } } } },
-      include: { assignments: { where: { workerId: { in: ids } }, select: { workerId: true, role: true } } },
-    })
     type Row = { date: string; time: string; field: string; num: string; teams: string; role: string; roleKey: string; division: string }
     let fresh: Sent = {}
     try { const r = await prisma.appSetting.findUnique({ where: { key: noticeKey } }); if (r?.value) fresh = JSON.parse(r.value) || {} } catch {}
