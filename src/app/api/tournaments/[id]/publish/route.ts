@@ -6,6 +6,7 @@ import { setPublicVisibility } from '@/lib/publicView'
 import { followerCounts, followerPhoneCounts, sendPushToFollowers } from '@/lib/follows'
 import { affectedTeams, teamDigest, type DigestGame } from '@/lib/scheduleDigest'
 import { waitlistedKeys, involvesWaitlisted } from '@/lib/poolMembership'
+import { readDivisionEdits } from '@/lib/divisionEdits'
 
 function getClient() {
   return createClient({
@@ -45,9 +46,15 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     const [f, ph] = await Promise.all([followerCounts(params.id), followerPhoneCounts(params.id)])
     for (const t of new Set([...Object.keys(f), ...Object.keys(ph)])) followers[t] = { follows: f[t] || 0, phones: ph[t] || 0 }
   } catch { followers = {} }
+  // When each division's games last changed (lib/divisionEdits), so the Scheduler
+  // can say which divisions are ahead of what the public sees.
+  const divisionEdits = await readDivisionEdits(prisma as any, params.id)
   return NextResponse.json({
     snapshot,
     publishedAt: row.schedulePublishedAt as string || null,
+    // Who pressed Publish (kept in the snapshot from Oct 20 2026 on).
+    publishedBy: typeof snapshot?.by === 'string' ? snapshot.by : '',
+    divisionEdits,
     followers,
   })
 }
@@ -70,12 +77,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   })).rows[0]
   const tournamentName = String(prevRow?.name || 'The tournament')
   const firstPublish = !prevRow?.schedulePublishedAt
-  let before: Record<string, { date: string; startTime: string; location: string }> | null = null
+  let before: Record<string, { date: string; startTime: string; location: string; team1: string; team2: string; division: string }> | null = null
   if (!firstPublish) {
     try {
       const snap = JSON.parse((prevRow?.scheduleSnapshot as string) || '{}')
       before = {}
-      for (const g of (snap.games || []) as any[]) before[g.id] = { date: g.date || '', startTime: g.startTime || '', location: g.location || '' }
+      for (const g of (snap.games || []) as any[]) before[g.id] = { date: g.date || '', startTime: g.startTime || '', location: g.location || '', team1: g.team1 || '', team2: g.team2 || '', division: g.division || '' }
     } catch { before = {} }
   }
 
@@ -85,7 +92,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   })
 
   const publishedAt = new Date().toISOString()
-  const snapshot = JSON.stringify({ publishedAt, games })
+  const by = String(gate.session?.user?.name || gate.session?.user?.email || '')
+  const snapshot = JSON.stringify({ publishedAt, by, games })
 
   await client.execute({
     sql: 'UPDATE "Tournament" SET scheduleSnapshot = ?, schedulePublishedAt = ? WHERE id = ?',
@@ -117,5 +125,5 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     } catch (e) { console.error('[publish] follower alerts failed (non-blocking):', e) }
   }
 
-  return NextResponse.json({ ok: true, publishedAt, gamesCount: games.length, notified })
+  return NextResponse.json({ ok: true, publishedAt, publishedBy: by, gamesCount: games.length, notified })
 }

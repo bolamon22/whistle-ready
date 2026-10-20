@@ -69,30 +69,44 @@ const sortKey = (g: DigestGame) => `${g.date} ${String(toMinutes(g.startTime)).p
  * affected -- that is the "schedule is out" moment.
  */
 export function affectedTeams(
-  before: Record<string, { date: string; startTime: string; location: string }> | null,
+  // The published games by id. Teams (and division) are optional: when the snapshot
+  // has them, a new matchup in the same slot (a team swap, Bo Oct 20 2026) and a
+  // published game since deleted count too, for the old teams as well as the new.
+  before: Record<string, { date: string; startTime: string; location: string; team1?: string; team2?: string; division?: string }> | null,
   after: DigestGame[],
 ): DigestTeam[] {
   const teams = new Map<string, DigestTeam>()
+  const add = (division: string, t: string) => {
+    if (!t || isPlaceholder(t)) return
+    const k = teamRefKey(division, t)
+    if (!teams.has(k)) teams.set(k, { division: (division || '').trim(), team: t.trim() })
+  }
+  const present = new Set<string>()
   for (const g of after) {
+    present.add(g.id)
     if (g.isCanceled) continue
     const now = scheduled(g)
-    const was = before ? scheduled(before[g.id] || {}) : false
+    const b = before ? before[g.id] : undefined
+    const was = before ? scheduled(b || {}) : false
     let changed: boolean
+    let newTeams = false
     if (!before) changed = now
-    else if (now && was) { const b = before[g.id]; changed = b.date !== g.date || b.startTime !== g.startTime || b.location !== g.location }
+    else if (now && was) {
+      newTeams = typeof b!.team1 === 'string' && (b!.team1 !== g.team1 || b!.team2 !== g.team2)
+      changed = b!.date !== g.date || b!.startTime !== g.startTime || b!.location !== g.location || newTeams
+    }
     else changed = now !== was
     if (!changed) continue
-    for (const t of [g.team1, g.team2]) {
-      if (isPlaceholder(t)) continue
-      const k = teamRefKey(g.division, t)
-      if (!teams.has(k)) teams.set(k, { division: (g.division || '').trim(), team: t.trim() })
-    }
+    add(g.division, g.team1); add(g.division, g.team2)
+    // The teams that were in this slot lost it.
+    if (newTeams) { add(b!.division || g.division, b!.team1 || ''); add(b!.division || g.division, b!.team2 || '') }
   }
-  // A game that was published and has since been deleted outright: its teams
-  // are affected too, but the game is not in `after` to tell us who they were.
-  // The snapshot only stores times, not teams, so that case is invisible here;
-  // deleting a team's games (lib/teamRename.removeTeamRefs) is the usual cause,
-  // and that team has no followers to tell.
+  // A game that was published and has since been deleted outright: its teams lost
+  // a game. Older snapshots without teams can't say who they were.
+  if (before) for (const [id, b] of Object.entries(before)) {
+    if (present.has(id) || !scheduled(b) || !b.division) continue
+    add(b.division, b.team1 || ''); add(b.division, b.team2 || '')
+  }
   return Array.from(teams.values()).sort((a, b) => a.division.localeCompare(b.division) || a.team.localeCompare(b.team))
 }
 

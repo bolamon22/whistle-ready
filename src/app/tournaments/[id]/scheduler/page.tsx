@@ -107,6 +107,21 @@ function fmtTime(t: string) {
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h >= 12 ? 'PM' : 'AM'}`
 }
 
+// When something happened, short: "4:12 PM" today, otherwise "Oct 20, 4:12 PM".
+function fmtStamp(iso: string | null | undefined) {
+  if (!iso) return ''
+  const d = new Date(iso); if (isNaN(d.getTime())) return ''
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  return d.toDateString() === new Date().toDateString() ? time : `${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}, ${time}`
+}
+
+type SnapInfo = { date: string; startTime: string; location: string; team1: string; team2: string; gameNumber: string; division: string }
+const snapInfoOf = (list: any[]): Record<string, SnapInfo> => {
+  const out: Record<string, SnapInfo> = {}
+  for (const g of list || []) out[g.id] = { date: g.date || '', startTime: g.startTime || '', location: g.location || '', team1: g.team1 || '', team2: g.team2 || '', gameNumber: g.gameNumber || '', division: g.division || '' }
+  return out
+}
+
 function fmtDate(d: string) {
   if (!d) return d
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', {
@@ -243,6 +258,12 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [checkpoint, setCheckpoint] = useState<Record<string, {date:string,startTime:string,location:string}> | null>(null)
   const [viewingCheckpoint, setViewingCheckpoint] = useState(false)
   const [publishedAt,    setPublishedAt]    = useState<string | null>(null)
+  // Who last published, the full published games (to spot new matchups and deleted
+  // games, not just moves) and when each division's games last changed (server:
+  // lib/divisionEdits). Bo, Oct 20 2026: timestamp the publish and changes by division.
+  const [publishedBy,    setPublishedBy]    = useState('')
+  const [snapInfo,       setSnapInfo]       = useState<Record<string, SnapInfo>>({})
+  const [divEdits,       setDivEdits]       = useState<Record<string, string>>({})
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
   // Who a Publish reaches, per team, from GET /publish: follows and phones with
@@ -310,8 +331,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       const pData = await pRes.json()
       const cData = await cRes.json()
       if (pData.followers) setFollowers(pData.followers)
+      if (pData.divisionEdits) setDivEdits(pData.divisionEdits)
       if (pData.publishedAt) {
         setPublishedAt(pData.publishedAt)
+        setPublishedBy(pData.publishedBy || '')
+        setSnapInfo(snapInfoOf(pData.snapshot?.games ?? []))
         const snap: Record<string, {date:string,startTime:string,location:string}> = {}
         ;(pData.snapshot?.games ?? []).forEach((g: any) => {
           snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location }
@@ -832,6 +856,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       if (data.ok) {
         const nt = data.notified || { teams: 0, sent: 0, failed: 0 }
         setPublishedAt(data.publishedAt)
+        setPublishedBy(data.publishedBy || '')
+        setSnapInfo(snapInfoOf(games))
         const snap: Record<string, {date:string,startTime:string,location:string}> = {}
         games.forEach(g => { snap[g.id] = { date: g.date, startTime: g.startTime, location: g.location } })
         setSnapshot(snap)
@@ -954,6 +980,8 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     const moved: {game: Game, from: {date:string,startTime:string,location:string}, to: {date:string,startTime:string,location:string}}[] = []
     const newlyScheduled: Game[] = []
     const nowUnscheduled: Game[] = []
+    const edited: { game: Game; was: SnapInfo }[] = []
+    const removed: ({ id: string } & SnapInfo)[] = []
     const snapIds = Object.keys(snapshot)
     games.forEach(g => {
       const snap = snapshot[g.id]
@@ -967,8 +995,31 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       } else if (!curScheduled && wasScheduled) {
         nowUnscheduled.push(g)
       }
+      // Same time and field, but different teams or game number (a team swap, a
+      // rebuilt pool): the public still shows the old matchup until Publish.
+      const info = snapInfo[g.id]
+      if (curScheduled && wasScheduled && info && snap.date === g.date && snap.startTime === g.startTime && snap.location === g.location
+        && (info.team1 !== g.team1 || info.team2 !== g.team2 || info.gameNumber !== g.gameNumber)) edited.push({ game: g, was: info })
     })
-    return { moved, newlyScheduled, nowUnscheduled, total: moved.length + newlyScheduled.length + nowUnscheduled.length }
+    // Published, then deleted: the public keeps showing it until the next Publish.
+    const present = new Set(games.map(g => g.id))
+    Object.entries(snapInfo).forEach(([id, info]) => { if (!present.has(id) && info.date && info.startTime && info.location) removed.push({ id, ...info }) })
+    return { moved, newlyScheduled, nowUnscheduled, edited, removed, total: moved.length + newlyScheduled.length + nowUnscheduled.length + edited.length + removed.length }
+  })()
+  // Per division: how many of those changes, and when its games last changed.
+  const divStatus = (() => {
+    const n: Record<string, number> = {}
+    const bump = (d: string) => { n[d] = (n[d] || 0) + 1 }
+    diffChanges.moved.forEach(x => bump(x.game.division)); diffChanges.newlyScheduled.forEach(g => bump(g.division))
+    diffChanges.nowUnscheduled.forEach(g => bump(g.division)); diffChanges.edited.forEach(x => bump(x.game.division)); diffChanges.removed.forEach(x => bump(x.division))
+    const all = divEdits['*'] || ''
+    const names = [...new Set([...divisions, ...Object.keys(n)])].sort()
+    return names.map(d => {
+      const own = divEdits[d] || ''
+      const last = own > all ? own : all
+      const changed = (n[d] || 0) > 0 || (!!publishedAt && !!last && last > publishedAt)
+      return { division: d, changes: n[d] || 0, last, changed }
+    })
   })()
   const hasChanges = publishedAt ? diffChanges.total > 0 : games.some(g => g.date && g.startTime && g.location)
   // Publish also puts a hidden schedule back in front of the public, so it stays
@@ -980,7 +1031,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   // that were placed, pulled or moved since the last Publish. Drives both the toolbar
   // button (ask only when somebody would actually hear about it) and the dialog toggle.
   const notifyPlan = (() => {
-    const teams = digestAffectedTeams(publishedAt ? snapshot : null, games)
+    const teams = digestAffectedTeams(publishedAt ? (Object.keys(snapInfo).length ? snapInfo : snapshot) : null, games)
     const follows = teams.reduce((a, t) => a + (followers[teamRefKey(t.division, t.team)]?.follows || 0), 0)
     const phones  = teams.reduce((a, t) => a + (followers[teamRefKey(t.division, t.team)]?.phones  || 0), 0)
     return { teams, follows, phones }
@@ -1584,10 +1635,26 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4" onClick={() => setShowDiff(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-lg font-semibold text-slate-900">{publishedAt ? 'Unpublished Changes' : 'Publish schedule'}</h2>
+              <h2 className="text-lg font-semibold text-slate-900">{!publishedAt ? 'Publish schedule' : hasChanges ? 'Unpublished Changes' : 'Publish status'}</h2>
               <button onClick={() => setShowDiff(false)} className="text-slate-400 hover:text-slate-600 text-xl leading-none"><X size={15} /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+              {publishedAt && (
+                <div>
+                  <p className="text-sm text-slate-600">Last published <span className="font-semibold text-slate-800">{new Date(publishedAt).toLocaleString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>{publishedBy ? <> by <span className="font-semibold text-slate-800">{publishedBy}</span></> : null}.</p>
+                  <div className="mt-2 rounded-lg border border-slate-200 divide-y divide-slate-100 text-xs">
+                    <div className="grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-1.5 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500"><span>Division</span><span>Last change</span><span className="w-32 text-right">Public sees</span></div>
+                    {divStatus.map(d => (
+                      <div key={d.division} className="grid grid-cols-[1fr_auto_auto] gap-3 px-3 py-1.5 items-center">
+                        <span className="font-medium text-slate-800 truncate">{d.division}</span>
+                        <span className="text-slate-500 tabular-nums">{d.last ? fmtStamp(d.last) : '\u2014'}</span>
+                        <span className={`w-32 text-right font-semibold ${d.changed ? 'text-amber-700' : 'text-green-700'}`}>{d.changed ? (d.changes ? `${d.changes} change${d.changes === 1 ? '' : 's'} not out` : 'Changed since') : 'Up to date'}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">Change times are recorded from Oct 20, 2026 on.</p>
+                </div>
+              )}
               {/* A first publish has no "before" — every scheduled game would list as new, so summarize instead. */}
               {!publishedAt && diffChanges.newlyScheduled.length > 0 && (
                 <div className="flex items-start gap-2 text-sm bg-green-50 border border-green-200 rounded-lg px-4 py-3 text-green-800">
@@ -1602,7 +1669,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     {diffChanges.newlyScheduled.map(g => (
                       <div key={g.id} className="text-xs bg-green-50 border border-green-200 rounded-lg px-3 py-2">
                         <span className="font-semibold">{g.gameNumber}</span> · {g.division} · {g.team1} vs {g.team2}
-                        <span className="ml-2 text-green-700">→ {fmtDate(g.date)} {g.startTime} @ {g.location}</span>
+                        <span className="ml-2 text-green-700">→ {fmtDate(g.date)} {fmtTime(g.startTime)} @ {g.location}</span>
                       </div>
                     ))}
                   </div>
@@ -1616,9 +1683,9 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                       <div key={g.id} className="text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                         <span className="font-semibold">{g.gameNumber}</span> · {g.division} · {g.team1} vs {g.team2}
                         <div className="mt-0.5 text-amber-700">
-                          <span className="line-through opacity-60">{fmtDate(from.date)} {from.startTime} @ {from.location}</span>
+                          <span className="line-through opacity-60">{fmtDate(from.date)} {fmtTime(from.startTime)} @ {from.location}</span>
                           <span className="mx-1">→</span>
-                          <span>{fmtDate(to.date)} {to.startTime} @ {to.location}</span>
+                          <span>{fmtDate(to.date)} {fmtTime(to.startTime)} @ {to.location}</span>
                         </div>
                       </div>
                     ))}
@@ -1632,7 +1699,37 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
                     {diffChanges.nowUnscheduled.map(g => (
                       <div key={g.id} className="text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                         <span className="font-semibold">{g.gameNumber}</span> · {g.division} · {g.team1} vs {g.team2}
-                        <span className="ml-2 text-red-600 line-through opacity-70">{fmtDate(snapshot[g.id]?.date ?? '')} {snapshot[g.id]?.startTime} @ {snapshot[g.id]?.location}</span>
+                        <span className="ml-2 text-red-600 line-through opacity-70">{fmtDate(snapshot[g.id]?.date ?? '')} {fmtTime(snapshot[g.id]?.startTime ?? '')} @ {snapshot[g.id]?.location}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {diffChanges.edited.length > 0 && (
+                <div>
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-sky-700 mb-2"><ArrowLeftRight size={14} /> New matchups ({diffChanges.edited.length})</h3>
+                  <div className="space-y-1">
+                    {diffChanges.edited.map(({ game: g, was }) => (
+                      <div key={g.id} className="text-xs bg-sky-50 border border-sky-200 rounded-lg px-3 py-2">
+                        <span className="font-semibold">{g.gameNumber}</span> · {g.division} · {fmtDate(g.date)} {fmtTime(g.startTime)} @ {g.location}
+                        <div className="mt-0.5 text-sky-800">
+                          <span className="line-through opacity-60">{was.gameNumber !== g.gameNumber ? `${was.gameNumber} ` : ''}{was.team1} vs {was.team2}</span>
+                          <span className="mx-1">→</span>
+                          <span>{g.team1} vs {g.team2}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {diffChanges.removed.length > 0 && (
+                <div>
+                  <h3 className="flex items-center gap-1.5 text-sm font-semibold text-red-700 mb-2"><Trash2 size={14} /> Deleted ({diffChanges.removed.length})</h3>
+                  <div className="space-y-1">
+                    {diffChanges.removed.map(g => (
+                      <div key={g.id} className="text-xs bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        <span className="font-semibold">{g.gameNumber}</span> · {g.division} · {g.team1} vs {g.team2}
+                        <span className="ml-2 text-red-600 line-through opacity-70">{fmtDate(g.date)} {fmtTime(g.startTime)} @ {g.location}</span>
                       </div>
                     ))}
                   </div>
@@ -2010,13 +2107,13 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block" /> Draft
             </span>
           ) : hasChanges ? (
-            <button onClick={() => setShowDiff(true)} className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:underline" title="See what changed since the last publish">
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} change{diffChanges.total === 1 ? '' : 's'}
+            <button onClick={() => setShowDiff(true)} className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:underline" title={`Published ${fmtStamp(publishedAt)}${publishedBy ? ` by ${publishedBy}` : ''}. See what changed since, by division.`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse inline-block" /> {diffChanges.total} change{diffChanges.total === 1 ? '' : 's'} since {fmtStamp(publishedAt)}
             </button>
           ) : (
-            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published
-            </span>
+            <button onClick={() => setShowDiff(true)} className="inline-flex items-center gap-1 text-[11px] font-medium text-green-700 hover:underline" title={`${publishedBy ? `Published by ${publishedBy}. ` : ''}See each division's last change.`}>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" /> Published {fmtStamp(publishedAt)}
+            </button>
           )}
           <button
             onClick={openAutoFill}
