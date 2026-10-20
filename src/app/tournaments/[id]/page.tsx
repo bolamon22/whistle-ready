@@ -2034,10 +2034,16 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
   // Who (Bo, Oct 15 2026): boys officials, girls officials and scorekeepers have
   // their own assigners, so nobody is picked until the sender picks their crew.
   const [crews,setCrews]=useState<Crew[]>([])
-  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string;crews?:{crew:Crew;officials:number;games:number;shown:boolean}[]}|null>(null)
+  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string;crews?:{crew:Crew;officials:number;games:number;shown:boolean}[];people?:{id:string;name:string;games:number;email:boolean;changed:boolean}[]}|null>(null)
   const [sending,setSending]=useState(false)
+  const [testing,setTesting]=useState(false)
   const [primed,setPrimed]=useState(false)
-  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged,note,confirm,confirmBy:confirmBy||undefined,crews,...extra})
+  // Choose who gets it (Bo, Oct 20 2026): everyone in the picked groups, or only the
+  // people ticked here.
+  const [pickMode,setPickMode]=useState(false)
+  const [picked,setPicked]=useState<Set<string>>(new Set())
+  const [pickQ,setPickQ]=useState('')
+  const body=(extra:object)=>JSON.stringify({date:scope==='day'?day:'',onlyChanged:pickMode?false:onlyChanged,note,confirm,confirmBy:confirmBy||undefined,crews,...(pickMode?{pick:Array.from(picked)}:{}),...extra})
   useEffect(()=>{
     let live=true
     fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({preview:true})})
@@ -2048,7 +2054,18 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
       .catch(()=>{})
     return()=>{live=false}
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[scope,onlyChanged,tournamentId,crews.join(',')])
+  },[scope,onlyChanged,tournamentId,crews.join(','),pickMode,Array.from(picked).sort().join(',')])
+  // A test goes to the sender only: the email the official with the most games (or the
+  // one picked) would get. Nothing else changes (api notify-officials, test).
+  const sendTest=async()=>{
+    setTesting(true)
+    try{
+      const r=await fetch(`/api/tournaments/${tournamentId}/notify-officials`,{method:'POST',headers:{'Content-Type':'application/json'},body:body({test:true})})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok||!d.ok){toast.error(d.error||'The test didn’t send. Try again.');return}
+      toast.success(`Test sent to ${d.to}: the email ${d.as} would get (${d.games} game${d.games===1?'':'s'})`)
+    }finally{setTesting(false)}
+  }
   const send=async()=>{
     setSending(true)
     try{
@@ -2064,7 +2081,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
   const last=preview?.lastSentAt?new Date(preview.lastSentAt).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'}):''
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="Notify officials">
-      <div className="card w-full max-w-lg p-6 space-y-4">
+      <div className="card w-full max-w-lg p-6 space-y-4 max-h-[94vh] overflow-y-auto">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="text-lg font-bold text-slate-800">Notify officials</h2>
@@ -2088,11 +2105,40 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
           </div>
           {preview?.crews?.some(c=>crews.includes(c.crew)&&!c.shown)&&<p className="text-xs text-amber-700 flex items-start gap-1.5"><Eye size={13} className="mt-0.5 flex-shrink-0"/>Sending also shows {preview.crews.filter(c=>crews.includes(c.crew)&&!c.shown).map(c=>CREW_LABEL[c.crew].toLowerCase()).join(' and ')} their games on the staff portal.</p>}
         </div>
+        {crews.length>0&&(
+          <div className="space-y-2">
+            <div className="flex items-center gap-4 text-sm">
+              <label className="flex items-center gap-2"><input type="radio" name="npick" checked={!pickMode} onChange={()=>setPickMode(false)} className="accent-teal-600"/> Everyone in {crews.length===1?'this group':'these groups'}</label>
+              <label className="flex items-center gap-2"><input type="radio" name="npick" checked={pickMode} onChange={()=>setPickMode(true)} className="accent-teal-600"/> Only people I pick</label>
+            </div>
+            {pickMode&&(
+              <div className="rounded-lg border border-slate-200">
+                <div className="flex items-center gap-2 px-2 py-1.5 border-b border-slate-100">
+                  <input value={pickQ} onChange={e=>setPickQ(e.target.value)} placeholder="Search a name…" aria-label="Search officials" className="flex-1 text-sm outline-none px-1 py-0.5"/>
+                  <button type="button" className="text-xs font-semibold text-teal-700 hover:underline" onClick={()=>setPicked(new Set((preview?.people??[]).filter(p=>p.name.toLowerCase().includes(pickQ.toLowerCase())).map(p=>p.id)))}>All</button>
+                  <button type="button" className="text-xs font-semibold text-slate-500 hover:underline" onClick={()=>setPicked(new Set())}>None</button>
+                </div>
+                <div className="max-h-44 overflow-y-auto divide-y divide-slate-50">
+                  {(preview?.people??[]).filter(p=>p.name.toLowerCase().includes(pickQ.toLowerCase())).map(p=>(
+                    <label key={p.id} className="flex items-center gap-2 px-3 py-1.5 text-sm cursor-pointer hover:bg-slate-50">
+                      <input type="checkbox" checked={picked.has(p.id)} onChange={e=>setPicked(s=>{const n=new Set(s);e.target.checked?n.add(p.id):n.delete(p.id);return n})} className="accent-teal-600"/>
+                      <span className="flex-1 text-slate-800">{p.name}</span>
+                      {p.changed&&preview?.lastSentAt&&<span className="text-[10px] font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5">changed</span>}
+                      {!p.email&&<span className="text-[10px] text-red-600">no email</span>}
+                      <span className="text-xs text-slate-400 w-14 text-right">{p.games} game{p.games===1?'':'s'}</span>
+                    </label>
+                  ))}
+                  {preview&&!(preview.people??[]).length&&<p className="px-3 py-2 text-xs text-slate-400">Nobody in {crews.length===1?'this group':'these groups'} has games yet.</p>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
         <div className="space-y-2">
           <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Which games</p>
           <label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='all'} onChange={()=>setScope('all')} className="accent-teal-600"/> Every day of the event</label>
           {day&&<label className="flex items-center gap-2 text-sm"><input type="radio" name="nscope" checked={scope==='day'} onChange={()=>setScope('day')} className="accent-teal-600"/> Just {dayLabel}</label>}
-          <label className="flex items-center gap-2 text-sm pt-1"><input type="checkbox" checked={onlyChanged} onChange={e=>setOnlyChanged(e.target.checked)} className="accent-teal-600"/> Only officials whose games changed since the last send</label>
+          {!pickMode&&<label className="flex items-center gap-2 text-sm pt-1"><input type="checkbox" checked={onlyChanged} onChange={e=>setOnlyChanged(e.target.checked)} className="accent-teal-600"/> Only officials whose games changed since the last send</label>}
         </div>
         <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-3 space-y-2">
           <label className="flex items-start gap-2 text-sm"><input type="checkbox" checked={confirm} onChange={e=>setConfirm(e.target.checked)} className="accent-teal-600 mt-0.5"/>
@@ -2113,7 +2159,8 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
             {!preview.emailOn&&<p className="text-xs text-red-600">Email isn’t set up on this server, so only phone alerts will go out.</p>}
           </>}
         </div>
-        <div className="flex justify-end gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button type="button" onClick={sendTest} disabled={testing||!preview||!crews.length||preview.targets===0} title="Sends you the email one of these officials would get. Nobody else gets anything." className="mr-auto text-sm font-semibold text-teal-700 hover:underline disabled:opacity-40 disabled:no-underline">{testing?'Sending test…':'Email me a test'}</button>
           <button type="button" className="btn-secondary" onClick={onClose}>Cancel</button>
           <button type="button" className="btn-primary inline-flex items-center gap-1.5 disabled:opacity-50" disabled={sending||!preview||!crews.length||preview.targets===0} onClick={send}><Send size={14}/>{sending?'Sending…':`Send to ${preview?.targets??0} official${preview?.targets===1?'':'s'}`}</button>
         </div>

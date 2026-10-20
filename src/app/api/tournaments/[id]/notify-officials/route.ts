@@ -38,6 +38,14 @@ import { eventSideOf } from '@/lib/eventTeamsStore'
 // (lib/staffRelease): an official can't be emailed games they can't open. A
 // reminder to picked people (workerIds) covers only crews already shown, and
 // shows nothing new. "Changed since the last send" is remembered per crew.
+//
+// pick (Bo, Oct 20 2026: "choose which refs we send it to"): worker ids within the
+// picked crews; only they are emailed. It still shows the crews' games on the staff
+// portal (the email's links need them) and ignores onlyChanged.
+//
+// test: true emails the sender ONE official's email (the picked one, else whoever has
+// the most games), marked as a test, with nothing else changed: no portal release, no
+// confirm ask saved, no "last sent", no phone alert, and its buttons go to My games.
 
 const ROLE_LABEL: Record<string, string> = { ref1: 'Referee', ref2: 'Referee', ref3: 'Referee', scorekeeper: 'Scorekeeper' }
 const roleLabel = (r: string) => ROLE_LABEL[r] || r.replace(/^\w/, c => c.toUpperCase())
@@ -57,6 +65,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const confirm = !!b.confirm
   const reminder = !!b.reminder
   const only = Array.isArray(b.workerIds) ? new Set((b.workerIds as unknown[]).map(String)) : null
+  const pick = Array.isArray(b.pick) ? new Set((b.pick as unknown[]).map(String)) : null
+  const test = !!b.test
+  const testTo = test ? String(gate.session?.user?.email || '').trim() : ''
+  if (test && !testTo) return NextResponse.json({ error: 'Your login has no email to send the test to.' }, { status: 400 })
   // A division that says neither boys nor girls goes by the event's teams (lib/eventTeams).
   const [release, side] = await Promise.all([getRelease(params.id), eventSideOf(params.id)])
   const crews: Crew[] = Array.isArray(b.crews) ? Array.from(new Set((b.crews as unknown[]).filter(isCrew)))
@@ -116,7 +128,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const all = Array.from(people.values()).sort((a, b) => a.name.localeCompare(b.name))
-  const targets = all.filter(p => only ? only.has(p.id) : !onlyChanged || !unchanged(p))
+  const targets = all.filter(p => only ? only.has(p.id) : pick ? pick.has(p.id) : !onlyChanged || !unchanged(p))
   const noEmail = targets.filter(p => !p.email).map(p => p.name)
   const lastSentAt = Object.values(sent).map(v => v.sentAt).sort().pop() || ''
 
@@ -127,6 +139,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       emailOn: emailEnabled(),
       ask, suggestBy,
       crews: CREWS.map(c => ({ crew: c, officials: crewPeople[c].size, games: crewGames[c], shown: !!release[c], shownAt: release[c]?.at || '', shownBy: release[c]?.by || '' })),
+      // Everyone in the picked crews, for choosing who gets it.
+      people: all.map(p => ({ id: p.id, name: p.name, games: p.rows.length, email: !!p.email, changed: !unchanged(p) })),
     })
   }
 
@@ -136,16 +150,16 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const answers = confirm ? await answersFor(params.id) : null
   // Games from today on only: the confirm page doesn't offer ones that are over.
   const pendingOf = (p: (typeof all)[number]) => answers ? p.rows.filter(r => r.date >= today && stateOf({ gameId: r.gameId, role: r.roleKey, workerId: p.id, sig: r.sig } as any, answers) !== 'yes').length : 0
-  const links = confirm ? await confirmLinks(params.id, targets.map(p => p.id)) : new Map<string, string>()
-  if (confirm) {
+  const links = confirm && !test ? await confirmLinks(params.id, targets.map(p => p.id)) : new Map<string, string>()
+  if (confirm && !test) {
     await writeAsk(params.id, { confirmBy, at: new Date().toISOString(), by: String(gate.session?.user?.name || ''), byUserId: gate.userId || '', byEmail: String(gate.session?.user?.email || '') })
   }
 
   // Show these crews' games on the staff portal first, so the email's "My games"
   // and Confirm links open to the games it lists.
-  if (!only) await setRelease(params.id, crews, true, String(gate.session?.user?.name || gate.session?.user?.email || ''))
+  if (!only && !test) await setRelease(params.id, crews, true, String(gate.session?.user?.name || gate.session?.user?.email || ''))
   // Whoever sends a crew its games is the assigner told of later changes (lib/officialChangeAlerts).
-  if (!only) await rememberCrewAssigner(params.id, crews, { email: String(gate.session?.user?.email || ''), name: String(gate.session?.user?.name || '') })
+  if (!only && !test) await rememberCrewAssigner(params.id, crews, { email: String(gate.session?.user?.email || ''), name: String(gate.session?.user?.name || '') })
 
   const org = await orgForTournament(params.id).catch(() => null)
   const base = 'https://whistleready.app'
@@ -159,10 +173,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const n = p.rows.length, pending = pendingOf(p), nUp = p.rows.filter(r => r.date >= today).length
     const asking = confirm && pending > 0
     const token = links.get(p.id) || ''
-    const confirmUrl = asking && token ? `${base}/confirm-games/${token}` : ''
+    const confirmUrl = asking && test ? myGames : asking && token ? `${base}/confirm-games/${token}` : ''
     const isYes = (r: Row) => !!answers && stateOf({ gameId: r.gameId, role: r.roleKey, workerId: p.id, sig: r.sig } as any, answers) === 'yes'
     const gamesWord = (k: number) => `${k} game${k === 1 ? '' : 's'}`
-    if (p.email && emailEnabled()) {
+    if ((test || p.email) && emailEnabled()) {
       const byDay = new Map<string, Row[]>()
       p.rows.forEach(r => byDay.set(r.date, [...(byDay.get(r.date) || []), r]))
       const tables = Array.from(byDay.entries()).map(([d, rows]) => `
@@ -175,11 +189,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           </tr>`).join('')}
         </table>`).join('')
       const first = p.name.split(/\s+/)[0] || p.name
+      const testNote = test ? `<p style="margin:0 0 14px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;color:#78350f;font-size:13px"><b>Test.</b> This is the email ${esc(p.name)} would get. Nothing was sent to them, and the buttons in a test only open My games.</p>` : ''
       const html = renderEmail({
         orgName: org?.name || 'Sunshine Events Group',
         eyebrow: t.name,
         title: `${first}, here are your games`,
-        body: `<p style="margin:0 0 6px">You're on ${gamesWord(n)} at ${esc(t.name)}${date ? ` on ${esc(dayName(date))}` : ''}.${
+        body: `${testNote}<p style="margin:0 0 6px">You're on ${gamesWord(n)} at ${esc(t.name)}${date ? ` on ${esc(dayName(date))}` : ''}.${
             asking ? ` Please confirm ${pending === nUp ? (nUp === 1 ? 'it' : 'them') : `the ${pending === 1 ? 'one that is' : `${pending} that are`} new or changed`}${confirmBy ? ` by <b>${esc(dayTitle(confirmBy))}</b>` : ''}.`
             : confirm ? ' You’ve confirmed all of them. Thank you!' : ''}</p>
           ${note ? `<p style="margin:12px 0;padding:12px 14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;color:#0f172a">${esc(note).replace(/\n/g, '<br>')}</p>` : ''}
@@ -196,16 +211,23 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const subject = asking
         ? `${reminder ? 'Reminder: please' : 'Please'} confirm ${pending === nUp ? `your ${gamesWord(nUp)}` : `${gamesWord(pending)}`} · ${t.name}${date ? ` · ${dayName(date)}` : ''}`
         : `Your games at ${t.name}${date ? ` · ${dayName(date)}` : ''}`
-      const r = await sendEmail({ to: p.email, subject, html, text, ...orgSender(org as any) })
+      const r = await sendEmail({ to: test ? testTo : p.email, subject: test ? `[Test] ${subject}` : subject, html, text, ...orgSender(org as any) })
       if (r.ok) { emailed++; ok = true } else failed.push(p.name)
     }
-    if (p.email) {
+    if (p.email && !test) {
       const k = await pushToStaffEmails([p.email], asking
         ? { title: reminder ? 'Reminder: confirm your games' : 'Please confirm your games', body: `${t.name}: ${gamesWord(pending)} to confirm${confirmBy ? ` by ${dayTitle(confirmBy, true)}` : ''}.`, url: `/confirm-games/${token}`, tag: `confirm:${params.id}` }
         : { title: `Your games at ${t.name}`, body: `${gamesWord(n)}. First: ${dayName(p.rows[0].date)} ${time12(p.rows[0].time)}, ${p.rows[0].field}.`, url: '/dashboard/ref', tag: `games:${params.id}` })
       if (k) { pushed += k; ok = true }
     }
     if (ok) for (const c of crews) { const rows = crewRows(p, c); if (rows.length) sent[`${p.id}|${c}`] = { sig: sigOf(rows), sentAt: now } }
+  }
+  if (test) {
+    const one = targets.slice().sort((a, b) => b.rows.length - a.rows.length)[0]
+    if (!one) return NextResponse.json({ error: 'Nobody to show: pick a group with games.' }, { status: 400 })
+    if (!emailEnabled()) return NextResponse.json({ error: 'Email isn’t set up on this server.' }, { status: 400 })
+    await sendOne(one)
+    return NextResponse.json({ ok: emailed > 0, test: true, to: testTo, as: one.name, games: one.rows.length })
   }
   for (let i = 0; i < targets.length; i += 8) await Promise.all(targets.slice(i, i + 8).map(sendOne))
   try {

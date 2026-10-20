@@ -39,11 +39,12 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **Tell your officials (Notify officials):**
 1. When the assignments are ready, click **Notify officials** at the top of the Assigner.
-2. Under **Who**, tick **Boys officials**, **Girls officials** or **Scorekeepers** (any mix; nobody is ticked until you pick). Each group's own assigner can send to just their group. A group that is still hidden is shown on the staff portal when you send.
+2. Under **Who**, tick **Boys officials**, **Girls officials** or **Scorekeepers** (any mix; nobody is ticked until you pick). Each group's own assigner can send to just their group. A group that is still hidden is shown on the staff portal when you send. To email only some of them, pick **Only people I pick** and tick names (search, **All**, **None**); the group's games still become visible on the staff portal.
 3. Choose **Every day of the event** or **Just** the day you're on, add an optional **Note** (for example where to check in), and check the count.
 4. Keep **Ask them to confirm their games** ticked to have them confirm, and set **Confirm by**. Each email then gets a **Confirm my games** button that needs no login. Untick it to just send their games with an **Open My games** button.
 5. Click **Send to N officials**. Each official gets an email with only their own games (day, time, field, game, teams and whether they're a referee or scorekeeper). Anyone who turned on Whistle Ready alerts gets a phone alert too.
 6. After you make changes, send again with **Only officials whose games changed since the last send** ticked, so everyone else isn't emailed twice. Games that moved after someone confirmed them need confirming again.
+7. To see the email first, click **Email me a test**. It sends you the email the official with the most games (or the person you picked) would get, marked **Test**. Nobody else gets anything, nothing becomes visible, and its buttons only open My games.
 
 **Changes after you've sent games:** once a group is shown under **Staff portal** and its officials have been sent **Notify officials**, Whistle Ready tells them on its own, by email and phone alert, the moment one of their games moves, is canceled or brought back, or they're put on or taken off a game. When the scheduler or a director moves a game, the assigner who sent that group its games is told too; your own changes go to the official only. Before a group is shown, changes go to nobody.
 
