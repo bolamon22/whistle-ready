@@ -178,7 +178,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [showAutoAssign,setShowAutoAssign]=useState(false)
   const [stickyScorekeeper,setStickyScorekeeper]=useState(true)
   // Which slots Auto-assign fills: scorekeepers, boys' refs, girls' refs, each on its own.
-  const [aaFill,setAaFill]=useState({scorekeepers:true,boysRefs:true,girlsRefs:true})
+  // Nothing ticked to start (Bo, Oct 20 2026): the assigner picks what to fill, so nobody
+  // auto-assigns over another assigner's crew by clicking through.
+  const AA_NONE={scorekeepers:false,boysRefs:false,girlsRefs:false}
+  const [aaFill,setAaFill]=useState(AA_NONE)
   // A scorekeeper picked for each field (optional), per day, remembered in this browser.
   const [aaSkFields,setAaSkFieldsRaw]=useState<Record<string,string>>({})
   const skKey=`wr-sk-fields:${params.id}:${activeDay}`
@@ -802,7 +805,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                           </label>
                         ))}
                       </div>
-                      <p className="text-[11px] text-slate-400 mt-1.5">Unticked ones are left as they are. Tip: run girls&apos; refs first; refs who do both are saved for girls&apos; games when a boys-only ref is free.</p>
+                      <p className="text-[11px] text-slate-400 mt-1.5">{!aaFill.scorekeepers&&!aaFill.boysRefs&&!aaFill.girlsRefs?<span className="font-semibold text-amber-700">Tick what you want filled. </span>:null}Unticked ones are left as they are. Tip: run girls&apos; refs first; refs who do both are saved for girls&apos; games when a boys-only ref is free.</p>
                     </div>
                   )
                 })()}
@@ -1124,7 +1127,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
         {locked&&<button type="button" onClick={()=>toggleLock(false)} className="h-7 px-2.5 rounded-full border border-amber-200 bg-amber-50 text-amber-800 text-xs font-semibold inline-flex items-center gap-1.5"><Lock size={13}/> Locked · click to unlock</button>}
         <div className="flex-1"/>
         {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className={`${barBtn} text-teal-700`}><CheckCheck size={15}/> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
-        {dayGames.length>0&&<button type="button" onClick={()=>{setShowAutoAssign(true);setAutoResult(null)}} className={barBtn}><Zap size={15} className="text-purple-600"/> Auto-assign</button>}
+        {dayGames.length>0&&<button type="button" onClick={()=>{setAaFill(AA_NONE);setShowAutoAssign(true);setAutoResult(null)}} className={barBtn}><Zap size={15} className="text-purple-600"/> Auto-assign</button>}
         {games.length>0&&<button type="button" onClick={()=>setShowNotify(true)} className="h-9 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors"><Send size={15}/> Notify officials</button>}
         <div className="relative">
           <button type="button" aria-label="More actions" title="More actions" aria-expanded={moreOpen} onClick={()=>{setMoreOpen(o=>!o);setLayoutOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><MoreHorizontal size={16}/></button>
