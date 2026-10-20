@@ -16,7 +16,15 @@ let ensured = false
 export async function ensureArchiveCols(): Promise<void> {
   if (ensured) return
   let ok = true
+  // Look first: Prisma logs every failed ALTER as prisma:error even when we swallow it,
+  // and that noise (every cold start) was burying real errors in the Vercel logs.
+  let have = new Set<string>()
+  try {
+    const cols = await prisma.$queryRawUnsafe<{ name: string }[]>(`PRAGMA table_info("Organization")`)
+    have = new Set(cols.map(c => String(c.name)))
+  } catch { /* fall through to the guarded ALTERs */ }
   for (const col of ['archivedAt', 'archivedBy']) {
+    if (have.has(col)) continue
     try { await prisma.$executeRawUnsafe(`ALTER TABLE "Organization" ADD COLUMN "${col}" TEXT`) }
     catch (e) { if (!/duplicate column|already exists/i.test(String((e as Error)?.message ?? e))) ok = false }   // else it's there
   }
