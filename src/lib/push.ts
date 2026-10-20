@@ -5,6 +5,7 @@
 // payment from recording.
 import { prisma } from '@/lib/db'
 import webpush from 'web-push'
+import { isApnsEndpoint, sendApns } from '@/lib/apns'
 
 export type PushSub = {
   endpoint: string
@@ -62,6 +63,15 @@ export async function sendToSubscriptions(
 ): Promise<{ sent: number; failed: number; gone: string[] }> {
   const out = { sent: 0, failed: 0, gone: [] as string[] }
   if (!subs.length) return out
+  // Phones running the iOS app store `apns:<token>` as their endpoint; those go
+  // to Apple, everything else is a browser and goes through web push.
+  const apps = subs.filter(s => isApnsEndpoint(s.endpoint))
+  if (apps.length) {
+    const a = await sendApns(apps.map(s => s.endpoint), payload)
+    out.sent += a.sent; out.failed += a.failed; out.gone.push(...a.gone)
+    subs = subs.filter(s => !isApnsEndpoint(s.endpoint))
+    if (!subs.length) return out
+  }
   try {
     const { publicKey, privateKey } = await getVapid()
     webpush.setVapidDetails('mailto:info@sunshinelax.com', publicKey, privateKey)
