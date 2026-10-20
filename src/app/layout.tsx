@@ -14,6 +14,7 @@ import { Analytics as VercelAnalytics } from '@vercel/analytics/next'
 import { SpeedInsights } from '@vercel/speed-insights/next'
 import ClientErrorReporter from './ClientErrorReporter'
 import GlobalChirp from './GlobalChirp'
+import NativeAppBridge from '@/components/NativeAppBridge'
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <VercelAnalytics />
         <SpeedInsights />
         <ClientErrorReporter />
+        <NativeAppBridge />
         <Providers>
           <ThemeShell />
           <EnvBadge />
