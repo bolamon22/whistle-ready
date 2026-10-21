@@ -6,6 +6,7 @@ import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { allCategories, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
 import { CUSTOM_REELS, drawRookie, drawCountdown, type ReelData, type ReelImages } from './reelCustom'
+import { photoVParam } from '@/lib/postImgVersion'
 import { FAVORITE_STYLES, SEASON_LOOKS, lookMenu, seasonOf, styleLabel } from '@/lib/socialPosts'
 
 // Length (Bo, Oct 18 2026: "choose between 8, 15 seconds ... maybe even 30 if we really
@@ -366,7 +367,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
     const q = qDays
     ;(async () => {
       try { await Promise.all([document.fonts.load('68px Anton'), document.fonts.load('600 34px "Barlow Condensed"')]) } catch {}
-      const imgs = await Promise.all(slots.map(x => loadImg(x.token ? `/pass/${encodeURIComponent(x.token)}/post/${x.style}.png${q}` : src)))
+      const imgs = await Promise.all(slots.map(x => loadImg(x.token ? `/pass/${encodeURIComponent(x.token)}/post/${x.style}.png${q}${photoVParam(x.token) ? (q ? '&' : '?') + photoVParam(x.token) : ''}` : src)))
       if (!alive) return
       const first = imgs.find((x): x is HTMLImageElement => !!x)
       if (!first) { setErr('Could not load the post image.'); setState('error'); return }

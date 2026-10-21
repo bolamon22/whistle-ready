@@ -179,6 +179,7 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
         division: String(d.division || '').trim() || divisionOf.get(`${String(d.clubName || '').trim().toLowerCase()}|${teamOnly(d).toLowerCase()}`) || '',
         gender: genderOf(d, divisionOf.get(`${String(d.clubName || '').trim().toLowerCase()}|${teamOnly(d).toLowerCase()}`) || String(d.division || '')),
         token: s.passToken,
+        photoV: String(d.photoUrl || '').split('/').pop()!.slice(0, 8),
         okAt: String(d.photoOkAt || ''),
         instagram: instagramHandle(d.photoIg),
         clubInstagram: instagramHandle(d.photoClubIg),
@@ -199,6 +200,9 @@ export async function loadClearedPlayers(orgId: string): Promise<{ players: Clea
     const members = bo.order.map(i => found[i])
     p.siblings = { ids: members.map(m => m.id), names: members.map(m => (m.playerName.split(/\s+/)[0] || 'Player')), rel: g.rel, title: bo.title || siblingTitle(members.map(m => m.gender), g.rel) }
   }
+  // Sibling looks draw every sibling's photo, so their version covers all of them.
+  const ownV = new Map(players.map(p => [p.id, p.photoV || '']))
+  for (const p of players) if (p.siblings) p.photoV = p.siblings.ids.map(id => ownV.get(id) || '').join('.')
   // Possible siblings: same last name and same club at the same event, not yet linked.
   const fam = new Map<string, ClearedPlayer[]>()
   for (const p of players) {

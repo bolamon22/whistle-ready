@@ -7,6 +7,8 @@
 // the same way: the post over a blurred copy of itself, the event name above and the
 // family's Instagram handle below. Both go up through /api/upload like any photo.
 
+import { photoVParam } from '@/lib/postImgVersion'
+
 const loadImg = (url: string) => new Promise<HTMLImageElement>((res, rej) => {
   const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error('Could not build the player post — try again')); i.src = url
 })
@@ -26,7 +28,7 @@ function ensureFonts(): Promise<void> {
 }
 
 export const postPngUrl = (token: string, style: string, days: number | null, w?: number) =>
-  `/pass/${encodeURIComponent(token)}/post/${encodeURIComponent(style)}.png?${[w ? `w=${w}` : '', days != null && days >= 0 ? `days=${days}` : ''].filter(Boolean).join('&')}`
+  `/pass/${encodeURIComponent(token)}/post/${encodeURIComponent(style)}.png?${[w ? `w=${w}` : '', days != null && days >= 0 ? `days=${days}` : '', photoVParam(token)].filter(Boolean).join('&')}`
 
 const toJpeg = (c: HTMLCanvasElement) => new Promise<Blob>((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('Could not save the image')), 'image/jpeg', 0.92))
 

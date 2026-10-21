@@ -28,6 +28,9 @@ export type ClearedPlayer = {
   division: string
   gender: 'boys' | 'girls' | ''
   token: string
+  /** Changes when the player's photo (or a linked sibling's) changes, so the post images'
+   *  URLs change too and no browser keeps showing the old photo (lib/postImgVersion). */
+  photoV?: string
   okAt: string
   instagram: string
   clubInstagram: string

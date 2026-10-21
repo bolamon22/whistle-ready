@@ -78,7 +78,10 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     width, height: Math.round(width * POST_H / POST_W),
     ...(fonts ? { fonts } : {}),
     headers: {
-      'Cache-Control': 'private, max-age=120',
+      // Lowercase on purpose: next/og sets 'cache-control: public, immutable, max-age=1 year'
+      // and only a lowercase key replaces it (a capitalized one was sent alongside it, so
+      // browsers kept old images for a year after a family changed the photo).
+      'cache-control': 'private, max-age=120',
       'Content-Disposition': `${q.get('dl') ? 'attachment' : 'inline'}; filename="${name}.png"`,
     },
   })

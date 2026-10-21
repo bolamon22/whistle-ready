@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
       ...(fonts ? { fonts } : {}),
       headers: {
         // Unguessable URL, so caching is safe; short so a new photo shows up.
-        'Cache-Control': 'private, max-age=120',
+        'cache-control': 'private, max-age=120',   // lowercase replaces next/og's 1-year immutable default
         'Content-Disposition': `inline; filename="coach-credential-${pass.card.code.replace('-', '')}.png"`,
       },
     },

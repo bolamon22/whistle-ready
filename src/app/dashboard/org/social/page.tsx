@@ -16,6 +16,7 @@ import InsightsView from './InsightsView'
 import ChirpPanel, { type ChirpMsg } from './ChirpPanel'
 import ReelBuilder from './ReelBuilder'
 import MusicDrawer from './MusicDrawer'
+import { rememberPhotoVersions } from '@/lib/postImgVersion'
 import LooksLibrary from './LooksLibrary'
 import PlayersTray, { planList, type ClearedData, type ReelDraft } from './PlayersTray'
 import { feedJpeg, storyJpeg, uploadJpeg, postPngUrl } from './playerMedia'
@@ -144,6 +145,8 @@ function SocialInner() {
   const [fitFor, setFitFor] = useState<string>('')
   const [chirpMsgs, setChirpMsgs] = useState<ChirpMsg[]>([])
   const [cleared, setCleared] = useState<ClearedData | null>(null)
+  // Post image URLs carry each player's photo version, so a changed photo shows right away.
+  if (cleared?.players) rememberPhotoVersions(cleared.players)
   const [playerBusy, setPlayerBusy] = useState('')
   const [reel, setReel] = useState<{ p: ClearedPlayer; look: string; when: Date; days: number | null; squad?: ClearedPlayer[]; looks?: string[]; setup?: Partial<ReelSetup>; draftId?: string } | null>(null)
   const [reelDrafts, setReelDrafts] = useState<ReelDraft[]>([])

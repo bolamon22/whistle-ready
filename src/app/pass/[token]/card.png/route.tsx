@@ -13,7 +13,8 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   if (!pass) return new NextResponse('Not found', { status: 404 })
   return passCardImage(pass, base, {
     // The URL is unguessable, so caching is fine; keep it short so edits (photo, team) show up.
-    'Cache-Control': 'private, max-age=120',
+    // Lowercase: replaces next/og's 1-year immutable default (a capitalized key didn't).
+    'cache-control': 'private, max-age=120',
     'Content-Disposition': `inline; filename="player-pass-${pass.card.code.replace('-', '')}.png"`,
   })
 }
