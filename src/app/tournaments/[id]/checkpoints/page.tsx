@@ -34,14 +34,18 @@ export default function Checkpoints({ params }: { params: { id: string } }) {
     const j = await r.json().catch(() => null)
     if (!r.ok || !j) { setErr(j?.error || 'That didn’t load. Please try again.'); return }
     setList(j.checkpoints)
-    const want = new URLSearchParams(window.location.search).get('id')
+    const want = new URLSearchParams(window.location.search).get('cp')
     setPick(p => p && j.checkpoints.some((c: Meta) => c.id === p) ? p : want && j.checkpoints.some((c: Meta) => c.id === want) ? want : j.checkpoints[0]?.id || '')
   }, [params.id])
   useEffect(() => { loadList() }, [loadList])
   useEffect(() => {
     if (!pick) { setD(null); return }
-    setD(null)
-    fetch(`/api/tournaments/${params.id}/checkpoints?id=${encodeURIComponent(pick)}`).then(r => (r.ok ? r.json() : null)).then(j => setD(j)).catch(() => {})
+    setD(null); setErr('')
+    // ?cp=, never ?id= (route/checkpoints explains). Only a real answer is shown, so a bad
+    // one says so instead of crashing the page.
+    fetch(`/api/tournaments/${params.id}/checkpoints?cp=${encodeURIComponent(pick)}`).then(r => (r.ok ? r.json() : null))
+      .then(j => { if (j?.checkpoint && Array.isArray(j.diff)) setD(j); else setErr('That checkpoint didn’t load. Please try again.') })
+      .catch(() => setErr('That checkpoint didn’t load. Please try again.'))
   }, [params.id, pick])
 
   async function saveNow() {
@@ -83,7 +87,7 @@ export default function Checkpoints({ params }: { params: { id: string } }) {
             </select>
             {pick && <Link href={`/tournaments/${params.id}/print-schedule?checkpoint=${encodeURIComponent(pick)}`} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"><Printer size={15} aria-hidden />Print it</Link>}
           </div>
-          {!d && <p className="p-6 text-center text-sm text-slate-400">Loading…</p>}
+          {!d && !err && <p className="p-6 text-center text-sm text-slate-400">Loading…</p>}
           {d && (
             <>
               <div className="mb-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">

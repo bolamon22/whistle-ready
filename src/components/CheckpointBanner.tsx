@@ -32,7 +32,7 @@ export default function CheckpointBanner({ tournamentId }: { tournamentId: strin
       <History size={16} className="mt-0.5 flex-shrink-0" aria-hidden />
       <p className="flex-1">
         The schedule changed since {when(latest.at)}: {latest.affected} game{latest.affected === 1 ? '' : 's'} with officials moved, changed teams, were canceled or removed.{' '}
-        <Link href={`/tournaments/${tournamentId}/checkpoints?id=${encodeURIComponent(latest.id)}`} className="font-semibold underline">See who had them</Link>
+        <Link href={`/tournaments/${tournamentId}/checkpoints?cp=${encodeURIComponent(latest.id)}`} className="font-semibold underline">See who had them</Link>
       </p>
       <button type="button" onClick={dismiss} aria-label="Dismiss" className="-m-1 inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded text-amber-700 hover:bg-amber-100 sm:min-h-0 sm:min-w-0 sm:p-1"><X size={15} aria-hidden /></button>
     </div>

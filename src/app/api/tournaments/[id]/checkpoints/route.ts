@@ -12,7 +12,10 @@ export const runtime = 'nodejs'
 // GET           -> { checkpoints: [{ id, at, by, reason, games }], latest: { id, at, affected } | null }
 //                  affected: games with officials that moved, changed teams, were canceled
 //                  or removed since the newest checkpoint (the board's banner).
-// GET ?id=      -> { checkpoint (with data), current, diff }
+// GET ?cp=      -> { checkpoint (with data), current, diff }
+//                  Not ?id=: Next.js on Vercel strips any query key named like a route
+//                  segment ([id]) before the handler sees it, so ?id= arrived empty and the
+//                  list came back instead (Oct 21 2026, the Checkpoints page crashed).
 // POST          -> saves one now ("Save a checkpoint") -> its meta
 async function gate(id: string) {
   const g = await requireFeature('tournament_schedule'); if (!g.ok) return { res: g.res }
@@ -24,7 +27,7 @@ async function gate(id: string) {
 
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const a = await gate(params.id); if ('res' in a) return a.res
-  const cid = new URL(req.url).searchParams.get('id')
+  const cid = new URL(req.url).searchParams.get('cp')
   if (cid) {
     const [cp, current] = await Promise.all([getCheckpoint(prisma, params.id, cid), currentGames(prisma, params.id)])
     if (!cp) return NextResponse.json({ error: 'Not found' }, { status: 404 })

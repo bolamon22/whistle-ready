@@ -35,9 +35,9 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     const cid = new URLSearchParams(window.location.search).get('checkpoint')
     Promise.all([
       fetch(`/api/tournaments/${params.id}`).then(r => (r.ok ? r.json() : null)),
-      cid ? fetch(`/api/tournaments/${params.id}/checkpoints?id=${encodeURIComponent(cid)}`).then(r => (r.ok ? r.json() : null)) : fetch(`/api/tournaments/${params.id}/games`).then(r => (r.ok ? r.json() : null)),
+      cid ? fetch(`/api/tournaments/${params.id}/checkpoints?cp=${encodeURIComponent(cid)}`).then(r => (r.ok ? r.json() : null)) : fetch(`/api/tournaments/${params.id}/games`).then(r => (r.ok ? r.json() : null)),
     ]).then(([tt, g]) => {
-      if (!tt || !g) { setErr('That didn’t load. Please try again.'); return }
+      if (!tt || !g || (cid && !Array.isArray(g.checkpoint?.data))) { setErr('That didn’t load. Please try again.'); return }
       setT(tt)
       if (cid) { setCp(g.checkpoint); setGames(g.checkpoint.data) } else setGames((Array.isArray(g) ? g : []).map(cpGame))
     }).catch(() => setErr('That didn’t load. Please try again.'))
