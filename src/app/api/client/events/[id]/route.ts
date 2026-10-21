@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireClientEvent } from '@/lib/apiAuth'
-import { assigningFeeOf, feeTotal } from '@/lib/assigningFee'
+import { assigningFeeOf, feePaymentsOf, feeStatus, feeTotal } from '@/lib/assigningFee'
 import { clientPay, staffedGames } from '@/lib/clientPay'
 import { clientSections } from '@/lib/clientView'
 import { orgById, tournamentOrgId } from '@/lib/org'
@@ -21,8 +21,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { id: true, name: true, startDate: true, endDate: true, location: true, logoUrl: true } })
   if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const orgId = await tournamentOrgId(params.id)
-  const [org, people, planOff, fee, staffed, pay, games] = await Promise.all([
-    orgById(orgId), orgId ? orgPeople(orgId).catch(() => []) : Promise.resolve([]), planOffFor(orgId), assigningFeeOf(params.id), staffedGames(params.id), clientPay(params.id),
+  const [org, people, planOff, fee, staffed, pay, feePaid, games] = await Promise.all([
+    orgById(orgId), orgId ? orgPeople(orgId).catch(() => []) : Promise.resolve([]), planOffFor(orgId), assigningFeeOf(params.id), staffedGames(params.id), clientPay(params.id), feePaymentsOf(params.id),
     prisma.game.findMany({
       where: { tournamentId: params.id },
       include: { assignments: { include: { worker: { select: { name: true, phone: true } } } } },
@@ -47,6 +47,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     sections,
     schedule,
     pay,
-    fee: { ...fee, games: staffed, total: feeTotal(fee, staffed) },
+    // What they've paid toward the fee, as the head assigner recorded it (Oct 21 2026):
+    // the amount, date and how, never his notes or who typed it in.
+    fee: { ...fee, games: staffed, total: feeTotal(fee, staffed), ...feeStatus(feeTotal(fee, staffed), feePaid), payments: feePaid.map(p => ({ amount: p.amount, on: p.on, method: p.method })) },
   })
 }

@@ -23,6 +23,8 @@ export default function DirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
+  // Assigning fees still due across every event (Assigner plan, Oct 21 2026).
+  const [fees, setFees] = useState<{ due: number; events: number } | null>(null)
   // Each event's buttons are the pages this role and the organization's plan can open.
   // On the Assigner plan Manage, Scores, Field Req and Broadcast all ended at "not
   // allowed", and this is where "not allowed" sends a director home (lib/roleHome).
@@ -35,6 +37,10 @@ export default function DirectorDashboard() {
     if (status !== 'authenticated') return
     fetch('/api/tournaments').then(r => r.json()).then(d => { setTournaments(Array.isArray(d) ? d : []); setLoading(false) })
   }, [status])
+  useEffect(() => {
+    if (status !== 'authenticated' || org?.plan !== 'assigner') return
+    fetch('/api/org/assigning-fees').then(r => (r.ok ? r.json() : null)).then(d => { if (d?.events?.length) setFees({ due: d.totals.due, events: d.events.filter((e: { due: number }) => e.due > 0).length }) }).catch(() => {})
+  }, [status, org?.plan])
 
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
@@ -47,6 +53,17 @@ export default function DirectorDashboard() {
         </div>
         <Link href="/dashboard/org" className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200 px-3 py-2 rounded-lg whitespace-nowrap"><Users size={15} /> Your team</Link>
       </div>
+
+      {fees && (
+        <Link href="/dashboard/org/assigning-fees" className="mb-3 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-teal-300">
+          <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700"><Wallet size={16} aria-hidden /></span>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-800">Assigning fees</p>
+            <p className="text-xs text-slate-500">{fees.due > 0 ? `$${fees.due.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} still due from ${fees.events} event${fees.events === 1 ? '' : 's'}` : 'Every fee is paid'}</p>
+          </div>
+          <ArrowRight size={16} className="flex-shrink-0 text-slate-300" aria-hidden />
+        </Link>
+      )}
 
       {tournaments.length === 0 ? (
         <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">

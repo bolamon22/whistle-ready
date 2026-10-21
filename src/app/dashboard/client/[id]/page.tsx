@@ -26,7 +26,7 @@ type Data = {
   sections: string[]
   schedule: Game[]
   pay: { people: Person[]; total: number; paid: number; owed: number }
-  fee: { amount: number; per: 'game' | 'event'; games: number; total: number }
+  fee: { amount: number; per: 'game' | 'event'; games: number; total: number; paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid'; payments: { amount: number; on: string; method: string }[] }
 }
 
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
@@ -202,12 +202,22 @@ function PayTab({ d, id, reload }: { d: Data; id: string; reload: () => Promise<
         <Stat label="Staff pay" value={money(d.pay.total)} />
         <Stat label="Paid" value={money(d.pay.paid)} tone="green" />
         <Stat label="Still to pay" value={money(d.pay.owed)} tone={d.pay.owed > 0.004 ? 'amber' : undefined} />
-        <Stat label="Assigning fee" value={money(fee.total)} sub={fee.amount ? (fee.per === 'event' ? 'for the event' : `${money(fee.amount)} × ${fee.games} game${fee.games === 1 ? '' : 's'}`) : 'none set'} />
+        <Stat label="Assigning fee" value={money(fee.total)} sub={!fee.amount ? 'none set' : fee.state === 'paid' ? 'paid' : fee.paid > 0 ? `${money(fee.due)} still due` : (fee.per === 'event' ? 'for the event' : `${money(fee.amount)} × ${fee.games} game${fee.games === 1 ? '' : 's'}`)} tone={fee.state === 'paid' ? 'green' : undefined} />
       </div>
       {fee.total > 0 && (
-        <p className="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
-          Staff pay plus the assigning fee: <b>{money(d.pay.total + fee.total)}</b>. The assigning fee goes to {orgName}{d.org?.zelleHandle ? <> (Zelle: <b>{d.org.zelleHandle}</b>)</> : null}.
-        </p>
+        <div className="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
+          <p>Staff pay plus the assigning fee: <b>{money(d.pay.total + fee.total)}</b>. The assigning fee goes to {orgName}{d.org?.zelleHandle ? <> (Zelle: <b>{d.org.zelleHandle}</b>)</> : null}.</p>
+          {/* What they've paid toward it, as the head assigner recorded it (Oct 21 2026). */}
+          <p className="mt-1.5">
+            {fee.state === 'paid'
+              ? <span className="font-semibold text-emerald-700">Assigning fee paid. Thank you!</span>
+              : fee.paid > 0
+                ? <>You've paid <b>{money(fee.paid)}</b> of it; <b className="text-amber-700">{money(fee.due)}</b> is still due.</>
+                : <><b className="text-amber-700">{money(fee.due)}</b> is still due.</>}
+            {fee.payments.length > 0 && <span className="text-slate-500"> {fee.payments.map(p => `${money(p.amount)} on ${new Date(p.on + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric' })}`).join(', ')}.</span>}
+          </p>
+          <p className="mt-1 text-xs text-slate-400">{orgName} marks it paid when they receive it.</p>
+        </div>
       )}
       <div className="mb-2 flex items-center justify-between">
         <h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">Each person</h2>
