@@ -3,7 +3,7 @@ title: Share an event with your tournament director
 category: Organization
 order: 610
 routes: /dashboard/org, /tournaments/*/pay-summary, /tournaments/*/tournament-director, /dashboard/client, /dashboard/org/assigning-fees
-keywords: tournament director client customer share schedule referee schedule officials phone numbers staff pay mark paid unpay assigning fee per game per event head assigner assigner plan see their view sees events td powered by whistle ready add name existing tournament event invite optional stop sharing copy link record payment fee paid part paid still due assigning fees owed who owes me
+keywords: tournament director client customer share schedule referee schedule officials phone numbers staff pay mark paid unpay assigning fee per game per event head assigner assigner plan see their view sees events td powered by whistle ready add name existing tournament event invite optional stop sharing copy link record payment fee paid part paid still due assigning fees owed to you who owes me who pays officials paid by pay back reimburse fronted
 ---
 On the Whistle Ready Assigner plan, each event can have its tournament director: the customer you assign officials for. Their name is enough. With their email, you can also let them log in and see the event: the schedule with who is on each game and their phone numbers, and **Staff pay**, since the tournament director normally pays the staff. They see only the events you share, and the only thing they can change is marking people paid.
 
@@ -26,9 +26,13 @@ On the Whistle Ready Assigner plan, each event can have its tournament director:
 
 **To set your assigning fee:** on **Staff pay**, enter the **Assigning fee**, pick **per game** (each game with at least one official; canceled games don't count) or **for the event**, and click **Save**. Their **Staff pay** shows it next to the staff pay, with your organization's Zelle when it has one.
 
-**To record their payment of your fee:** on **Staff pay**, under the fee, click **Record payment**, enter the **Amount** (it starts at what's still due), **Paid on**, **How** and, if you like, a **Note** such as the check number (only you see notes), then **Save**. The bar shows **Fee paid**, **Part paid** or **Fee not paid yet** with what's still due, and each payment; click its **×**, then **Remove?**, to take one off. Their **Staff pay** shows what they've paid and what's still due. Only you record it; they can't mark your fee paid.
+**Who pays the officials:** most of the time the tournament director pays each official (check, Zelle, Venmo) and marks them paid. Sometimes you pay them and the tournament director pays you back. On **Staff pay**, **Officials are paid by** picks the tournament director (where every event starts) or **You** for this event. When you click **Mark Paid** for someone, **Paid by** starts on that and can be changed for that one payment. Each paid person shows who paid them, here and in the tournament director's **Staff pay**, and the **1099 export** lists each payment under whoever paid it. A tournament director can't undo a payment you made.
 
-**To see every event's fee:** **Assigning fees** on your home page (or **Every event** on the fee bar) lists what each tournament director owes, with **Still due** and **Every event**. Click an event to open its **Staff pay**.
+**What they owe you:** your assigning fee, plus any staff pay you paid for them. The bar says so ("owes you $2,050: your assigning fee $1,450 plus $600 of staff pay you paid for them"), and their **Staff pay** shows the same.
+
+**To record their payment:** on **Staff pay**, click **Record payment**, enter the **Amount** (it starts at what's still due), **Paid on**, **How** and, if you like, a **Note** such as the check number (only you see notes), then **Save**. The bar shows **Paid in full**, **Part paid** or **Not paid yet** with what's still due, and each payment; click its **×**, then **Remove?**, to take one off. Their **Staff pay** shows what they've paid and what's still due. Only you record it; they can't mark it paid.
+
+**To see every event:** **Owed to you** on your home page (or **Owed to you, every event** on the fee bar) lists what each tournament director owes, with **Still due** and **Every event**. Click an event to open its **Staff pay**.
 
 **To check what they see:** click **See their view** on the event's **Tournament director** page or on **Staff pay**.
 

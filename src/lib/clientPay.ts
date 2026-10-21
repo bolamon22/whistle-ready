@@ -11,19 +11,22 @@
 import prisma from '@/lib/db'
 import { entryHours } from '@/lib/payGroups'
 import { roleLabel } from '@/lib/utils'
+import { byLastName } from '@/lib/personName'
+import { effectivePayers, type Payer } from '@/lib/officialsPayer'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
 export type ClientPayGame = { gameNumber: string; date: string; startTime: string; division: string; location: string; role: string; pay: number }
 export type ClientPayHours = { date: string; clockIn: string | null; clockOut: string | null; hours: number; pay: number }
-export type ClientPayRecord = { id: string; amount: number; method: string; paidAt: string; paidBy: string | null }
+// payer: who paid it (lib/officialsPayer), the tournament director or the head assigner's organization.
+export type ClientPayRecord = { id: string; amount: number; method: string; paidAt: string; paidBy: string | null; payer: Payer }
 export type ClientPayPerson = {
   workerId: string; name: string; phone: string; payMethod: string; payHandle: string
   games: ClientPayGame[]; hours: ClientPayHours[]; total: number; isPaid: boolean; records: ClientPayRecord[]
 }
 
 /** Everyone with games or hours at the event, by name, with what they earned and were paid. */
-export async function clientPay(tournamentId: string): Promise<{ people: ClientPayPerson[]; total: number; paid: number; owed: number }> {
+export async function clientPay(tournamentId: string): Promise<{ people: ClientPayPerson[]; total: number; paid: number; owed: number; paidByOrg: number }> {
   const [assignments, entries, records] = await Promise.all([
     prisma.assignment.findMany({
       where: { game: { tournamentId } },
@@ -33,6 +36,7 @@ export async function clientPay(tournamentId: string): Promise<{ people: ClientP
     prisma.timeEntry.findMany({ where: { tournamentId }, include: { worker: { select: { id: true, name: true, phone: true, payMethod: true, payHandle: true, hourlyRate: true } } }, orderBy: [{ date: 'asc' }, { clockIn: 'asc' }] }),
     prisma.paymentRecord.findMany({ where: { tournamentId }, orderBy: { paidAt: 'asc' } }),
   ])
+  const payers = await effectivePayers(records)
   const map = new Map<string, ClientPayPerson>()
   const ensure = (w: { id: string; name: string; phone: string | null; payMethod: string; payHandle: string | null }) => {
     let e = map.get(w.id)
@@ -55,13 +59,14 @@ export async function clientPay(tournamentId: string): Promise<{ people: ClientP
     const e = map.get(r.workerId)
     if (!e) continue   // nothing left to pay them here; the amount still counts in Paid below
     e.isPaid = true
-    e.records.push({ id: r.id, amount: r.amount, method: r.method, paidAt: r.paidAt.toISOString(), paidBy: r.paidBy })
+    e.records.push({ id: r.id, amount: r.amount, method: r.method, paidAt: r.paidAt.toISOString(), paidBy: r.paidBy, payer: payers.get(r.id) ?? 'org' })
   }
   const working = Array.from(map.values()).filter(e => e.games.length || e.hours.length)
   const total = round2(working.reduce((n, p) => n + p.total, 0))   // summed before rounding, as Staff pay does
-  const people = working.map(e => ({ ...e, total: round2(e.total) })).sort((a, b) => a.name.localeCompare(b.name))
+  const people = working.map(e => ({ ...e, total: round2(e.total) })).sort((a, b) => byLastName(a.name, b.name))
   const paid = round2(records.reduce((n, r) => n + r.amount, 0))
-  return { people, total, paid, owed: round2(total - paid) }
+  const paidByOrg = round2(records.filter(r => payers.get(r.id) === 'org').reduce((n, r) => n + r.amount, 0))
+  return { people, total, paid, owed: round2(total - paid), paidByOrg }
 }
 
 /** Games that have at least one official and aren't canceled: what a per-game assigning fee counts. */

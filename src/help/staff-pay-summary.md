@@ -9,7 +9,7 @@ keywords: pay summary pay report staff pay payroll mark paid unpay csv export re
 
 **Where:** **People → Staff pay**, or the **Staff pay** and **Time entries** tabs on **People → Staff roster**. **Staff pay** is also a button on the tournament card and on **Financials**.
 
-**On the Whistle Ready Assigner plan:** above the list, **Tournament director** names the event's tournament director, with **Edit** (or **Add them**) to open their page and **See their view**, and **Assigning fee** sets what they pay you on top (see "Share an event with your tournament director"). Under it, **Record payment** logs what they've paid you toward the fee. People the tournament director marks paid show paid here too.
+**On the Whistle Ready Assigner plan:** above the list, **Tournament director** names the event's tournament director, with **Edit** (or **Add them**) to open their page and **See their view**, and **Assigning fee** sets what they pay you on top (see "Share an event with your tournament director"). **Officials are paid by** says who pays the officials at this event (the tournament director, or **You**), and **Mark Paid** has **Paid by** for one payment; each paid person shows who paid them. **Record payment** logs what the tournament director has paid you: your fee plus any staff pay you paid for them. People the tournament director marks paid show paid here too.
 
 **To pay staff:**
 1. Open **Staff pay**. The header shows **Total**, **Paid** and **Outstanding**.

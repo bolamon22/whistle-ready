@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { orgGate, orgGateFor, requireStaffPay } from '@/lib/apiAuth'
 import { payAccess, payKey, payScopeFor } from '@/lib/payScope'
+import { effectivePayers, isPayer, officialsPaidByOf, recordPayers, setRecordPayer } from '@/lib/officialsPayer'
 // Staff pay records: these had no sign-in check at all (anyone could read, add or
 // delete what each official was paid).
 //
@@ -9,6 +10,11 @@ import { payAccess, payKey, payScopeFor } from '@/lib/payScope'
 // their pay groups (lib/payGroups, Oct 13 2026). A record is one per person per
 // event, so someone with pay in a group the assigner doesn't run shows paid or
 // not, without the amount, and only the director marks them paid.
+//
+// Who paid each record (lib/officialsPayer, Oct 21 2026): GET adds `payer` ('td' or 'org',
+// the record's own pick or its event's setting) and `payerOwn` (the record's own pick, or
+// null). POST takes an optional `payer`: a pick that matches the event's setting is saved
+// as none, so the record keeps following the event.
 //
 // A director or assigner works one organization at a time (lib/orgScope): an event or a
 // Staff Pool record of another organization is not found, and they always ask by one.
@@ -36,10 +42,12 @@ export async function GET(req: Request) {
     include: { tournament: { select: { id: true, name: true, startDate: true } }, worker: { select: { id: true, name: true } } },
     orderBy: { paidAt: 'desc' },
   })
+  const [payers, own] = await Promise.all([effectivePayers(records), recordPayers(records.map(r => r.id))])
+  const withPayer = records.map(r => ({ ...r, payer: payers.get(r.id) ?? 'org', payerOwn: own.get(r.id) ?? null }))
   const scope = await payScopeFor(gate.role, gate.userId)
-  if (scope.all) return NextResponse.json(records)
+  if (scope.all) return NextResponse.json(withPayer)
   const access = await payAccess(scope, records.map(r => ({ workerId: r.workerId, tournamentId: r.tournamentId })))
-  return NextResponse.json(records
+  return NextResponse.json(withPayer
     .map(r => ({ r, a: access.get(payKey(r.workerId, r.tournamentId))?.access ?? 'none' }))
     .filter(x => x.a !== 'none')
     .map(x => (x.a === 'full' ? x.r : { ...x.r, amount: null })))
@@ -66,5 +74,6 @@ export async function POST(req: Request) {
     data: { workerId, tournamentId, amount, method: method ?? 'check', notes, paidBy },
     include: { tournament: { select: { id: true, name: true, startDate: true } } },
   })
+  if (isPayer(body.payer) && tournamentId && body.payer !== await officialsPaidByOf(String(tournamentId))) await setRecordPayer(record.id, body.payer)
   return NextResponse.json(record, { status: 201 })
 }

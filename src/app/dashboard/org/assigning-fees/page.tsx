@@ -4,11 +4,11 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, Wallet } from 'lucide-react'
 
-// Assigning fees across the head assigner's events (lib/assigningFee): what each
-// tournament director owes and has paid. Payments are recorded on each event's Staff
-// pay (AssigningFeeBar).
+// Owed to you: across the head assigner's events, what each tournament director owes
+// him (his assigning fee plus staff pay he paid for them, lib/officialsPayer) and has
+// paid. Payments are recorded on each event's Staff pay (AssigningFeeBar).
 
-type Ev = { id: string; name: string; startDate: string; endDate: string; td: string; total: number; paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid' }
+type Ev = { id: string; name: string; startDate: string; endDate: string; td: string; fee: number; fronted: number; total: number; paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid' }
 type Answer = { events: Ev[]; totals: { total: number; paid: number; due: number } }
 const money = (n: number) => '$' + (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmt = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '')
@@ -25,15 +25,15 @@ export default function AssigningFeesPage() {
     <div className="mx-auto max-w-3xl px-4 pb-16">
       <div className="mb-5 pt-6">
         <Link href="/dashboard/director" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft size={14} aria-hidden /> Home</Link>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Assigning fees</h1>
-        <p className="text-sm text-slate-500">What each tournament director owes you. Record a payment on the event&apos;s <b className="font-semibold">Staff pay</b>.</p>
+        <h1 className="mt-1 text-2xl font-bold text-slate-900">Owed to you</h1>
+        <p className="text-sm text-slate-500">What each tournament director owes you: your assigning fee, plus any staff pay you paid for them. Record a payment on the event&apos;s <b className="font-semibold">Staff pay</b>.</p>
       </div>
       {err && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{err}</p>}
       {!d && !err && <p className="p-10 text-center text-sm text-slate-400">Loading…</p>}
       {d && (
         <>
           <div className="mb-4 grid grid-cols-3 gap-2">
-            <Tile label="Fees" value={money(d.totals.total)} />
+            <Tile label="Owed" value={money(d.totals.total)} />
             <Tile label="Paid" value={money(d.totals.paid)} tone="green" />
             <Tile label="Still due" value={money(d.totals.due)} tone={d.totals.due > 0 ? 'amber' : undefined} />
           </div>
@@ -42,7 +42,7 @@ export default function AssigningFeesPage() {
               <button key={k} type="button" onClick={() => setShow(k)} className={`min-h-[40px] rounded-md px-3 ${show === k ? 'bg-teal-600 font-semibold text-white' : 'text-slate-600'}`}>{k === 'due' ? 'Still due' : 'Every event'}</button>
             ))}
           </div>
-          {list.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">{d.events.length ? 'Every assigning fee is paid.' : 'No event has an assigning fee yet. Set one on an event’s Staff pay.'}</p>}
+          {list.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">{d.events.length ? 'Everything is paid.' : 'Nothing is owed yet. Set an assigning fee on an event’s Staff pay.'}</p>}
           <div className="space-y-2">
             {list.map(e => (
               <Link key={e.id} href={`/tournaments/${e.id}/pay-summary`} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 hover:border-teal-300">
@@ -50,6 +50,7 @@ export default function AssigningFeesPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-900">{e.name}</p>
                   <p className="truncate text-xs text-slate-500">{fmt(e.startDate)}{e.td ? ` · ${e.td}` : ' · No tournament director named'}</p>
+                  {e.fronted > 0 && <p className="truncate text-xs text-slate-500">Fee {money(e.fee)} + staff pay you paid {money(e.fronted)}</p>}
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-slate-900">{money(e.total)}</p>

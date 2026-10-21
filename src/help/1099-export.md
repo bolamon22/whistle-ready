@@ -16,7 +16,7 @@ keywords: 1099 1099-nec tax form taxes year end year-end paid total contractor i
 
 **What counts:** every payment marked on **Staff pay** with **Mark paid** (yours, and your tournament directors' in their area), in the year of the date it was marked paid. Pay that was earned but not yet marked paid isn't in it.
 
-**Who pays them:** whoever pays the staff files their 1099s. When a tournament director marked people paid, those payments are listed under that tournament director's name, separate from yours. With more than one payer, pick one from **Every payer** to see and download just their list. The IRS line is per payer.
+**Who pays them:** whoever pays the staff files their 1099s. Each payment is listed under whoever paid it: on the Assigner plan that's the event's **Officials are paid by** on **Staff pay** (the tournament director unless you change it), or the **Paid by** picked when someone was marked paid. A tournament director with no name yet shows as "Tournament director of" the event. With more than one payer, pick one from **Every payer** to see and download just their list. The IRS line is per payer.
 
 **Address and tax ID:** they aren't in the export. They're on each person's W-9 (open it from their Staff Pool profile). **Of them, no W-9** counts the people who need a 1099 but haven't uploaded one.
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireClientEvent } from '@/lib/apiAuth'
 import { assigningFeeOf, feePaymentsOf, feeStatus, feeTotal } from '@/lib/assigningFee'
+import { officialsPaidByOf } from '@/lib/officialsPayer'
 import { clientPay, staffedGames } from '@/lib/clientPay'
 import { clientSections } from '@/lib/clientView'
 import { orgById, tournamentOrgId } from '@/lib/org'
@@ -21,8 +22,8 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
   const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { id: true, name: true, startDate: true, endDate: true, location: true, logoUrl: true } })
   if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const orgId = await tournamentOrgId(params.id)
-  const [org, people, planOff, fee, staffed, pay, feePaid, games] = await Promise.all([
-    orgById(orgId), orgId ? orgPeople(orgId).catch(() => []) : Promise.resolve([]), planOffFor(orgId), assigningFeeOf(params.id), staffedGames(params.id), clientPay(params.id), feePaymentsOf(params.id),
+  const [org, people, planOff, fee, staffed, pay, feePaid, paidBy, games] = await Promise.all([
+    orgById(orgId), orgId ? orgPeople(orgId).catch(() => []) : Promise.resolve([]), planOffFor(orgId), assigningFeeOf(params.id), staffedGames(params.id), clientPay(params.id), feePaymentsOf(params.id), officialsPaidByOf(params.id),
     prisma.game.findMany({
       where: { tournamentId: params.id },
       include: { assignments: { include: { worker: { select: { name: true, phone: true } } } } },
@@ -49,6 +50,9 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
     pay,
     // What they've paid toward the fee, as the head assigner recorded it (Oct 21 2026):
     // the amount, date and how, never his notes or who typed it in.
-    fee: { ...fee, games: staffed, total: feeTotal(fee, staffed), ...feeStatus(feeTotal(fee, staffed), feePaid), payments: feePaid.map(p => ({ amount: p.amount, on: p.on, method: p.method })) },
+    // Owed to the head assigner (Oct 21 2026): his fee plus the staff pay his organization
+    // paid for them (pay.paidByOrg), against which their payments count.
+    paidBy,
+    fee: { ...fee, games: staffed, total: feeTotal(fee, staffed), fronted: pay.paidByOrg, owed: Math.round((feeTotal(fee, staffed) + pay.paidByOrg) * 100) / 100, ...feeStatus(feeTotal(fee, staffed) + pay.paidByOrg, feePaid), payments: feePaid.map(p => ({ amount: p.amount, on: p.on, method: p.method })) },
   })
 }

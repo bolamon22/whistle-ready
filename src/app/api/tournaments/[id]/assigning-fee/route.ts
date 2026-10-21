@@ -5,6 +5,7 @@ import { staffedGames } from '@/lib/clientPay'
 import { clientsOfEvent } from '@/lib/clientEvents'
 import { eventClientOf } from '@/lib/eventClient'
 import prisma from '@/lib/db'
+import { isPayer, officialsPaidByOf, orgPaidStaffMany, saveOfficialsPaidBy } from '@/lib/officialsPayer'
 
 // The head assigner's assigning fee on an event (lib/assigningFee), shown with Staff pay
 // and in the tournament director's area. GET -> { fee, games, total, clients }: the fee,
@@ -16,14 +17,24 @@ import prisma from '@/lib/db'
 // PUT { amount, per } (the director) -> the same.
 // POST { amount, on, method, note } (the director) records a payment -> the same.
 // DELETE ?paymentId= (the director) removes one -> the same.
+// PATCH { paidBy: 'td' | 'org' } (the director): who pays the officials at this event
+// (lib/officialsPayer) -> the same.
+//
+// What the tournament director owes (Bo, Oct 21 2026): the fee, plus staff pay the head
+// assigner paid for them himself (`fronted`, payments whose payer is the organization).
+// `owed` = total + fronted; payments go against it and `status` is measured on it.
 
 async function answer(id: string, boss: boolean) {
-  const [fee, games, ids, contact, payments] = await Promise.all([assigningFeeOf(id), staffedGames(id), clientsOfEvent(id), eventClientOf(id), boss ? feePaymentsOf(id) : Promise.resolve([])])
+  const [fee, games, ids, contact, payments, paidBy, fronted] = await Promise.all([
+    assigningFeeOf(id), staffedGames(id), clientsOfEvent(id), eventClientOf(id), boss ? feePaymentsOf(id) : Promise.resolve([]),
+    officialsPaidByOf(id), boss ? orgPaidStaffMany([id]).then(m => m[id] || 0) : Promise.resolve(0),
+  ])
   const users = ids.length ? await prisma.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, email: true } }) : []
   const total = feeTotal(fee, games)
+  const owed = Math.round((total + fronted) * 100) / 100
   return {
-    fee, games, total, contact, clients: users.map(u => ({ id: u.id, name: u.name, email: u.email })),
-    ...(boss ? { payments, status: feeStatus(total, payments) } : {}),
+    fee, games, total, contact, clients: users.map(u => ({ id: u.id, name: u.name, email: u.email })), paidBy,
+    ...(boss ? { fronted, owed, payments, status: feeStatus(owed, payments) } : {}),
   }
 }
 
@@ -42,6 +53,17 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const away = await orgGate(gate, params.id); if (away) return away
   const b = await req.json().catch(() => ({}))
   await saveAssigningFee(params.id, normalizeFee(b), byOf(gate))
+  return NextResponse.json(await answer(params.id, true))
+}
+
+export async function PATCH(req: Request, { params }: { params: { id: string } }) {
+  const gate = await requireDirector(); if (!gate.ok) return gate.res
+  const away = await orgGate(gate, params.id); if (away) return away
+  const b = await req.json().catch(() => ({}))
+  if (!isPayer(b?.paidBy)) return NextResponse.json({ error: 'Pick who pays the officials.' }, { status: 400 })
+  const t = await prisma.tournament.findUnique({ where: { id: params.id }, select: { id: true } })
+  if (!t) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  await saveOfficialsPaidBy(params.id, b.paidBy, byOf(gate))
   return NextResponse.json(await answer(params.id, true))
 }
 

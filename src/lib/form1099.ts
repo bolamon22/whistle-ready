@@ -7,8 +7,9 @@
 //   Earned but not yet paid isn't income for the year, so it isn't here.
 // - One row per person per payer. On the Assigner plan the tournament director
 //   normally pays the staff (Bo, Oct 17 2026), so a 1099 is theirs to file, not the
-//   head assigner's. The payer is the event's tournament director when one of their
-//   logins marked the payment, otherwise the organization itself. The IRS threshold
+//   head assigner's. The payer is who paid each payment (lib/officialsPayer: its own
+//   pick on Mark paid, else the event's Officials are paid by, which starts on the
+//   tournament director on the Assigner plan). The IRS threshold
 //   is per payer, so a ref paid $1,500 by two tournament directors needs no 1099.
 // - Threshold: $600 through tax year 2025; $2,000 for payments made in 2026 (the One
 //   Big Beautiful Bill Act, July 2025), indexed for inflation from 2027 (check the IRS
@@ -26,7 +27,7 @@ export function threshold1099(year: number): number {
   return THRESHOLDS[known] ?? 2000
 }
 
-export type Rec1099 = { workerId: string; tournamentId: string; amount: number; paidBy: string | null }
+export type Rec1099 = { id?: string; workerId: string; tournamentId: string; amount: number; paidBy: string | null }
 export type Person1099 = { id: string; name: string; email: string; phone: string; payMethod: string; w9OnFile: boolean }
 export type Payer1099 = { key: string; name: string; kind: 'org' | 'td' }
 export type Row1099 = {

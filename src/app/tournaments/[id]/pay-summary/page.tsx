@@ -19,7 +19,8 @@ interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual
 // them paid, since one pay record covers all of their pay at the event.
 interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;roles?:string;gender?:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number;partial?:boolean}
 interface Data{summary:WS[];tournamentName:string;tournamentLogo:string;scope?:{all:boolean;groups:string[];label:string}}
-interface PayRecord{id:string;workerId:string;amount:number|null;method:string;paidAt:string;notes:string|null}
+// payer: who paid it (lib/officialsPayer): the tournament director or this organization.
+interface PayRecord{id:string;workerId:string;amount:number|null;method:string;paidAt:string;notes:string|null;payer?:'td'|'org'}
 
 const rLabel=(r:string)=>ALL_ROLES.find(x=>x.value===r)?.label??WORKER_ROLES.find(x=>x.value===r)?.label??r
 const pmLabel=(p:string)=>PAY_METHODS.find(x=>x.value===p)?.label??p
@@ -44,6 +45,11 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const org=useOrg()
   const clientBar=setsRates&&org?.plan==='assigner'
   const [showRates,setShowRates]=useState(false)
+  // Assigner plan: who usually pays the officials here, and the tournament director's name,
+  // for Mark Paid's Paid by and the paid badges (Oct 21 2026).
+  const [payInfo,setPayInfo]=useState<{paidBy:'td'|'org';td:string}|null>(null)
+  const [payBy,setPayBy]=useState<'td'|'org'>('td')
+  const [feeRefresh,setFeeRefresh]=useState(0)
 
   async function load(){
     const [dr,pr]=await Promise.all([
@@ -51,8 +57,12 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
       fetch(`/api/payment-records?tournamentId=${params.id}`).then(r=>r.json()),
     ])
     setData(dr);setPayRecords(pr);setLoading(false)
+    if(clientBar){
+      const f=await fetch(`/api/tournaments/${params.id}/assigning-fee`).then(r=>r.ok?r.json():null).catch(()=>null)
+      if(f)setPayInfo({paidBy:f.paidBy==='org'?'org':'td',td:f.contact?.name||f.clients?.[0]?.name||'Tournament director'})
+    }
   }
-  useEffect(()=>{load()},[params.id])
+  useEffect(()=>{load()},[params.id,clientBar])
 
   const toggle=(id:string)=>setExpanded(p=>{const n=new Set(p);n.has(id)?n.delete(id):n.add(id);return n})
 
@@ -60,8 +70,8 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
 
   async function markPaid(ws:WS){
     const method=ws.worker.payMethod||'check'
-    const res=await fetch('/api/payment-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerId:ws.worker.id,tournamentId:params.id,amount:ws.totalPay,method,notes:payNote||null})})
-    if(res.ok){setPayNote('');setErr('');await load()}
+    const res=await fetch('/api/payment-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerId:ws.worker.id,tournamentId:params.id,amount:ws.totalPay,method,notes:payNote||null,...(payInfo?{payer:payBy}:{})})})
+    if(res.ok){setPayNote('');setErr('');await load();setFeeRefresh(n=>n+1)}
     else setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.')
   }
 
@@ -70,7 +80,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
     const res=await fetch(`/api/payment-records/${recordId}`,{method:'DELETE'})
     if(!res.ok)setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.')
     else setErr('')
-    await load()
+    await load();setFeeRefresh(n=>n+1)
   }
 
   function exportCSV(){
@@ -147,7 +157,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
         </div>
       </div>
       {setsRates&&showRates&&<PayRatesPanel id={params.id} onClose={()=>setShowRates(false)} />}
-      {clientBar&&<AssigningFeeBar tournamentId={params.id} />}
+      {clientBar&&<AssigningFeeBar tournamentId={params.id} refresh={feeRefresh} onPaidByChange={load} />}
 
       {data.summary.length===0?<div className="card p-12 text-center text-slate-400"><p className="font-medium">{scoped&&!data.scope!.groups.length?'You don’t see any staff pay yet. Ask the director to pick your pay groups.':scoped?`No pay yet for ${data.scope!.label}`:'No assignments yet'}</p></div>:(
         <div className="space-y-3">
@@ -190,7 +200,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                         <span className="badge bg-slate-100 text-slate-600">{pmLabel(ws.worker.payMethod)}</span>
                         {ws.worker.payHandle&&<span className="text-xs text-slate-400">{ws.worker.payHandle}</span>}
                         {ws.games.length>0&&<span className="text-xs text-slate-400">{ws.games.length} games</span>}
-                        {pr&&<span className="badge bg-emerald-100 text-emerald-700">✓ Paid {new Date(pr.paidAt).toLocaleDateString()}</span>}
+                        {pr&&<span className="badge bg-emerald-100 text-emerald-700">✓ Paid {new Date(pr.paidAt).toLocaleDateString()}{payInfo&&pr.payer?` · by ${pr.payer==='td'?payInfo.td:'you'}`:''}</span>}
                         {ws.partial&&<span className="badge bg-amber-50 text-amber-700" title="This person also has pay in a group you don’t run. The director marks them paid.">Your part only</span>}
                       </div>
                     </div>
@@ -202,13 +212,13 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                     ):pr?(
                       <button onClick={()=>unmarkPaid(pr.id)} className="text-xs text-red-400 hover:text-red-600 font-medium">Unpay</button>
                     ):(
-                      <button onClick={()=>setPaying(p=>p===ws.worker.id?null:ws.worker.id)} className="hidden sm:inline-flex btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">Mark Paid</button>
+                      <button onClick={()=>{setPayBy(payInfo?.paidBy||'td');setPaying(p=>p===ws.worker.id?null:ws.worker.id)}} className="hidden sm:inline-flex btn-secondary btn-sm text-emerald-600 border-emerald-200 hover:bg-emerald-50">Mark Paid</button>
                     )}
                     <button onClick={()=>toggle(ws.worker.id)} className="text-slate-400 p-1 -mr-1" aria-label="Details">{isExpanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
                   </div>
                 </div>
                 {!pr&&!ws.partial&&(
-                  <button onClick={()=>setPaying(p=>p===ws.worker.id?null:ws.worker.id)} className="sm:hidden btn-secondary btn-sm w-full mt-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">{isPaying?'Cancel':'Mark Paid'}</button>
+                  <button onClick={()=>{setPayBy(payInfo?.paidBy||'td');setPaying(p=>p===ws.worker.id?null:ws.worker.id)}} className="sm:hidden btn-secondary btn-sm w-full mt-2 text-emerald-600 border-emerald-200 hover:bg-emerald-50">{isPaying?'Cancel':'Mark Paid'}</button>
                 )}
                 {!pr&&ws.partial&&<p className="sm:hidden text-xs text-slate-400 mt-2">Director marks paid</p>}
                 </div>
@@ -217,6 +227,14 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                 {isPaying&&!pr&&!ws.partial&&(
                   <div className="px-3 sm:px-5 py-3 bg-emerald-50 border-t border-emerald-100 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                     <span className="text-sm font-semibold text-emerald-800">Confirm payment of ${ws.totalPay.toFixed(2)} via {pmLabel(ws.worker.payMethod)}</span>
+                    {payInfo&&(
+                      <label className="flex items-center gap-2 text-sm text-emerald-800">Paid by
+                        <select className="input py-1 text-sm w-auto" value={payBy} onChange={e=>setPayBy(e.target.value==='org'?'org':'td')}>
+                          <option value="td">{payInfo.td}</option>
+                          <option value="org">You</option>
+                        </select>
+                      </label>
+                    )}
                     <input className="input flex-1 py-1 text-sm" placeholder="Notes (optional)" value={payNote} onChange={e=>setPayNote(e.target.value)}/>
                     <div className="flex gap-2">
                       <button onClick={()=>{markPaid(ws);setPaying(null)}} className="btn-primary btn-sm flex-1 sm:flex-none" style={{background:'#059669'}}>✓ Confirm</button>

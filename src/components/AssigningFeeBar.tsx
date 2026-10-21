@@ -15,13 +15,15 @@ import { Check, Eye, Plus, Users, X } from 'lucide-react'
 type Fee = { amount: number; per: 'game' | 'event' }
 type Payment = { id: string; amount: number; on: string; method: string; note: string; by: string }
 type Status = { paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid' }
-type Answer = { fee: Fee; games: number; total: number; contact?: { name: string } | null; clients: { id: string; name: string; email: string }[]; payments?: Payment[]; status?: Status }
+type Answer = { fee: Fee; games: number; total: number; contact?: { name: string } | null; clients: { id: string; name: string; email: string }[]; paidBy: 'td' | 'org'; fronted?: number; owed?: number; payments?: Payment[]; status?: Status }
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
 export const FEE_METHOD_LABELS: Record<string, string> = { check: 'Check', zelle: 'Zelle', venmo: 'Venmo', cash: 'Cash', ach: 'Bank transfer', card: 'Card', other: 'Other' }
 const day = (d: string) => (d ? new Date(d + 'T12:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : '')
 const todayStr = () => new Date().toLocaleDateString('en-CA')
 
-export default function AssigningFeeBar({ tournamentId }: { tournamentId: string }) {
+// onPaidByChange: Staff pay reloads its list, whose Paid by labels follow the event's setting.
+// refresh: bumped by Staff pay after Mark Paid or Unpay, which change what they owe you.
+export default function AssigningFeeBar({ tournamentId, onPaidByChange, refresh = 0 }: { tournamentId: string; onPaidByChange?: () => void; refresh?: number }) {
   const [a, setA] = useState<Answer | null>(null)
   const [amount, setAmount] = useState('')
   const [per, setPer] = useState<'game' | 'event'>('game')
@@ -31,7 +33,7 @@ export default function AssigningFeeBar({ tournamentId }: { tournamentId: string
   function take(d: Answer) { setA(d); setAmount(d.fee.amount ? String(d.fee.amount) : ''); setPer(d.fee.per) }
   useEffect(() => {
     fetch(`/api/tournaments/${tournamentId}/assigning-fee`).then(r => (r.ok ? r.json() : null)).then(d => { if (d) take(d) }).catch(() => {})
-  }, [tournamentId])
+  }, [tournamentId, refresh])
   if (!a) return null
   const changed = (Number(amount) || 0) !== a.fee.amount || per !== a.fee.per
   async function save() {
@@ -62,8 +64,21 @@ export default function AssigningFeeBar({ tournamentId }: { tournamentId: string
       take(d); setRemoving(null); toast.success('Payment removed')
     } finally { setBusy(false) }
   }
+  async function setPaidBy(paidBy: 'td' | 'org') {
+    if (paidBy === a?.paidBy) return
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/tournaments/${tournamentId}/assigning-fee`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ paidBy }) })
+      const d = await r.json().catch(() => null)
+      if (!r.ok || !d) { toast.error(d?.error || 'That didn’t save. Please try again.'); return }
+      take(d); onPaidByChange?.()
+    } finally { setBusy(false) }
+  }
   const st = a.status
   const pays = a.payments || []
+  const owed = a.owed ?? a.total
+  const fronted = a.fronted ?? 0
+  const tdName = a.contact?.name || a.clients[0]?.name || 'The tournament director'
   return (
     <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 sm:p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -93,15 +108,34 @@ export default function AssigningFeeBar({ tournamentId }: { tournamentId: string
             : <span className="text-sm text-slate-500">= <b className="text-slate-800">{money(a.total)}</b>{a.fee.amount && a.fee.per === 'game' ? ` (${a.games} game${a.games === 1 ? '' : 's'} with officials)` : ''}</span>}
         </div>
       </div>
-      {st && (a.total > 0 || pays.length > 0) && (
+      {st && (
+        // Who pays the officials at this event (lib/officialsPayer, Bo Oct 21 2026: usually the
+        // tournament director, sometimes the head assigner).
+        <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3 sm:flex-row sm:items-center" data-paid-by>
+          <span className="whitespace-nowrap text-sm font-semibold text-slate-700">Officials are paid by</span>
+          <div className="inline-flex self-start rounded-lg border border-slate-300 bg-white p-0.5 text-sm" role="radiogroup" aria-label="Officials are paid by">
+            {(['td', 'org'] as const).map(k => (
+              <button key={k} type="button" role="radio" aria-checked={a.paidBy === k} disabled={busy} onClick={() => setPaidBy(k)}
+                className={`min-h-[40px] whitespace-nowrap rounded-md px-3 sm:min-h-0 sm:py-1 ${a.paidBy === k ? 'bg-teal-600 font-semibold text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+                {k === 'td' ? tdName : 'You'}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-slate-500">{a.paidBy === 'td' ? 'They pay each person and mark them paid; you can mark them paid for them.' : 'You pay them, and they pay you back with your fee.'} One payment can say otherwise on Mark Paid.</span>
+        </div>
+      )}
+      {st && (owed > 0 || pays.length > 0) && (
         <div className="mt-3 border-t border-slate-100 pt-3" data-fee-paid>
+          {fronted > 0 && (
+            <p className="mb-1.5 text-sm text-slate-600">{tdName} owes you <b className="text-slate-800">{money(owed)}</b>: your assigning fee {money(a.total)} plus <b className="text-slate-800">{money(fronted)}</b> of staff pay you paid for them.</p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${st.state === 'paid' ? 'bg-emerald-50 text-emerald-700' : st.state === 'part' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
-                {st.state === 'paid' ? 'Fee paid' : st.state === 'part' ? 'Part paid' : 'Fee not paid yet'}
+                {st.state === 'paid' ? 'Paid in full' : st.state === 'part' ? 'Part paid' : 'Not paid yet'}
               </span>
-              <span>Paid <b className="text-slate-800">{money(st.paid)}</b> of {money(a.total)}{st.due > 0 ? <> · <b className="text-amber-700">{money(st.due)}</b> due</> : null}</span>
-              <Link href="/dashboard/org/assigning-fees" className="text-xs font-semibold text-teal-700">Every event</Link>
+              <span>Paid <b className="text-slate-800">{money(st.paid)}</b> of {money(owed)}{st.due > 0 ? <> · <b className="text-amber-700">{money(st.due)}</b> due</> : null}</span>
+              <Link href="/dashboard/org/assigning-fees" className="text-xs font-semibold text-teal-700">Owed to you, every event</Link>
             </p>
             {!rec && (
               <button type="button" onClick={() => setRec({ amount: st.due > 0 ? String(st.due) : '', on: todayStr(), method: 'check', note: '' })}

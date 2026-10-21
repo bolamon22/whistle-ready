@@ -64,7 +64,7 @@ export const ORG_PAGES: { label: string; path: string }[] = [
   { label: 'Staff → Your team', path: '/dashboard/org' },
   { label: 'Staff → Training videos', path: '/dashboard/org/videos' },
   { label: 'Staff → 1099 export', path: '/dashboard/org/1099' },
-  { label: 'Assigning fees (Assigner plan; home → Assigning fees)', path: '/dashboard/org/assigning-fees' },
+  { label: 'Owed to you (Assigner plan; home → Owed to you)', path: '/dashboard/org/assigning-fees' },
 ]
 
 // Flattened text used as grounding context for the AI help assistant.

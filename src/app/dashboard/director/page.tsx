@@ -23,7 +23,8 @@ export default function DirectorDashboard() {
   const router = useRouter()
   const [tournaments, setTournaments] = useState<Tournament[]>([])
   const [loading, setLoading] = useState(true)
-  // Assigning fees still due across every event (Assigner plan, Oct 21 2026).
+  // Owed to you across every event: assigning fees plus staff pay he paid for tournament
+  // directors (Assigner plan, Oct 21 2026).
   const [fees, setFees] = useState<{ due: number; events: number } | null>(null)
   // Each event's buttons are the pages this role and the organization's plan can open.
   // On the Assigner plan Manage, Scores, Field Req and Broadcast all ended at "not
@@ -58,8 +59,8 @@ export default function DirectorDashboard() {
         <Link href="/dashboard/org/assigning-fees" className="mb-3 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm hover:border-teal-300">
           <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700"><Wallet size={16} aria-hidden /></span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-slate-800">Assigning fees</p>
-            <p className="text-xs text-slate-500">{fees.due > 0 ? `$${fees.due.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} still due from ${fees.events} event${fees.events === 1 ? '' : 's'}` : 'Every fee is paid'}</p>
+            <p className="text-sm font-semibold text-slate-800">Owed to you</p>
+            <p className="text-xs text-slate-500">{fees.due > 0 ? `$${fees.due.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} still due from ${fees.events} event${fees.events === 1 ? '' : 's'}` : 'Everything is paid'}</p>
           </div>
           <ArrowRight size={16} className="flex-shrink-0 text-slate-300" aria-hidden />
         </Link>

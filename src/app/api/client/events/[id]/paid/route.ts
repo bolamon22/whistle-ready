@@ -3,6 +3,7 @@ import prisma from '@/lib/db'
 import { requireClientEvent } from '@/lib/apiAuth'
 import { clientPay } from '@/lib/clientPay'
 import { PAY_METHODS } from '@/lib/utils'
+import { effectivePayers, setRecordPayer } from '@/lib/officialsPayer'
 
 // Mark paid and Unpay in the tournament director's area (lib/clientEvents). Bo, Oct 17
 // 2026: "The tournament directors actually are the one that pays the staff. Normally."
@@ -23,6 +24,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (person.isPaid) return NextResponse.json({ error: 'They are already marked paid.' }, { status: 409 })
   const by = String(gate.session?.user?.name || gate.session?.user?.email || '')
   const record = await prisma.paymentRecord.create({ data: { workerId, tournamentId: params.id, amount: person.total, method, notes, paidBy: by || null } })
+  // They paid it themselves (lib/officialsPayer), whatever the event's usual payer is.
+  await setRecordPayer(record.id, 'td')
   return NextResponse.json(record, { status: 201 })
 }
 
@@ -31,6 +34,10 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   const recordId = new URL(req.url).searchParams.get('recordId') || ''
   const rec = recordId ? await prisma.paymentRecord.findUnique({ where: { id: recordId }, select: { tournamentId: true } }) : null
   if (!rec || rec.tournamentId !== params.id) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // A payment the head assigner's organization made is theirs to undo (Oct 21 2026).
+  if ((await effectivePayers([{ id: recordId, tournamentId: params.id }])).get(recordId) === 'org' && gate.as === 'client') {
+    return NextResponse.json({ error: 'Your assigner paid this person, so they undo it.' }, { status: 403 })
+  }
   await prisma.paymentRecord.delete({ where: { id: recordId } })
   return NextResponse.json({ ok: true })
 }

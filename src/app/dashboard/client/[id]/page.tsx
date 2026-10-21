@@ -16,7 +16,7 @@ import { formatDate, formatTime, PAY_METHODS } from '@/lib/utils'
 
 type Official = { role: string; label: string; name: string; phone: string }
 type Game = { id: string; gameNumber: string; date: string; startTime: string; division: string; location: string; team1: string; team2: string; refCount: number; isChampionship: boolean; isCanceled: boolean; score1?: number | null; score2?: number | null; officials: Official[] }
-type PayRecord = { id: string; amount: number; method: string; paidAt: string; paidBy: string | null }
+type PayRecord = { id: string; amount: number; method: string; paidAt: string; paidBy: string | null; payer?: 'td' | 'org' }
 type Person = { workerId: string; name: string; phone: string; payMethod: string; payHandle: string; games: { gameNumber: string; date: string; startTime: string; division: string; location: string; role: string; pay: number }[]; hours: { date: string; clockIn: string | null; clockOut: string | null; hours: number; pay: number }[]; total: number; isPaid: boolean; records: PayRecord[] }
 type Data = {
   as: 'client' | 'director' | 'admin'
@@ -26,7 +26,7 @@ type Data = {
   sections: string[]
   schedule: Game[]
   pay: { people: Person[]; total: number; paid: number; owed: number }
-  fee: { amount: number; per: 'game' | 'event'; games: number; total: number; paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid'; payments: { amount: number; on: string; method: string }[] }
+  fee: { amount: number; per: 'game' | 'event'; games: number; total: number; fronted: number; owed: number; paid: number; due: number; state: 'none' | 'unpaid' | 'part' | 'paid'; payments: { amount: number; on: string; method: string }[] }
 }
 
 const money = (n: number) => `$${(Number(n) || 0).toFixed(2)}`
@@ -202,15 +202,20 @@ function PayTab({ d, id, reload }: { d: Data; id: string; reload: () => Promise<
         <Stat label="Staff pay" value={money(d.pay.total)} />
         <Stat label="Paid" value={money(d.pay.paid)} tone="green" />
         <Stat label="Still to pay" value={money(d.pay.owed)} tone={d.pay.owed > 0.004 ? 'amber' : undefined} />
-        <Stat label="Assigning fee" value={money(fee.total)} sub={!fee.amount ? 'none set' : fee.state === 'paid' ? 'paid' : fee.paid > 0 ? `${money(fee.due)} still due` : (fee.per === 'event' ? 'for the event' : `${money(fee.amount)} × ${fee.games} game${fee.games === 1 ? '' : 's'}`)} tone={fee.state === 'paid' ? 'green' : undefined} />
+        {fee.fronted > 0
+          ? <Stat label={`Owed to ${orgName}`} value={money(fee.owed)} sub={fee.state === 'paid' ? 'paid' : fee.paid > 0 ? `${money(fee.due)} still due` : 'fee + staff pay they paid'} tone={fee.state === 'paid' ? 'green' : undefined} />
+          : <Stat label="Assigning fee" value={money(fee.total)} sub={!fee.amount ? 'none set' : fee.state === 'paid' ? 'paid' : fee.paid > 0 ? `${money(fee.due)} still due` : (fee.per === 'event' ? 'for the event' : `${money(fee.amount)} × ${fee.games} game${fee.games === 1 ? '' : 's'}`)} tone={fee.state === 'paid' ? 'green' : undefined} />}
       </div>
-      {fee.total > 0 && (
+      {fee.owed > 0 && (
         <div className="mb-4 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-700">
-          <p>Staff pay plus the assigning fee: <b>{money(d.pay.total + fee.total)}</b>. The assigning fee goes to {orgName}{d.org?.zelleHandle ? <> (Zelle: <b>{d.org.zelleHandle}</b>)</> : null}.</p>
+          {fee.fronted > 0
+            // Staff pay the head assigner paid for them (lib/officialsPayer, Oct 21 2026).
+            ? <p>You owe {orgName} <b>{money(fee.owed)}</b>: the assigning fee {money(fee.total)} plus <b>{money(fee.fronted)}</b> of staff pay they paid for you{d.org?.zelleHandle ? <> (Zelle: <b>{d.org.zelleHandle}</b>)</> : null}.</p>
+            : <p>Staff pay plus the assigning fee: <b>{money(d.pay.total + fee.total)}</b>. The assigning fee goes to {orgName}{d.org?.zelleHandle ? <> (Zelle: <b>{d.org.zelleHandle}</b>)</> : null}.</p>}
           {/* What they've paid toward it, as the head assigner recorded it (Oct 21 2026). */}
           <p className="mt-1.5">
             {fee.state === 'paid'
-              ? <span className="font-semibold text-emerald-700">Assigning fee paid. Thank you!</span>
+              ? <span className="font-semibold text-emerald-700">{fee.fronted > 0 ? 'Paid in full' : 'Assigning fee paid'}. Thank you!</span>
               : fee.paid > 0
                 ? <>You've paid <b>{money(fee.paid)}</b> of it; <b className="text-amber-700">{money(fee.due)}</b> is still due.</>
                 : <><b className="text-amber-700">{money(fee.due)}</b> is still due.</>}
@@ -247,7 +252,7 @@ function PayTab({ d, id, reload }: { d: Data; id: string; reload: () => Promise<
                 <div className="flex-shrink-0 text-right">
                   <p className="text-lg font-bold text-slate-900">{money(p.total)}</p>
                   {p.isPaid
-                    ? <p className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 size={13} aria-hidden />Paid{rec ? ` · ${pmLabel(rec.method)}` : ''}</p>
+                    ? <p className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><CheckCircle2 size={13} aria-hidden />{rec?.payer === 'org' ? `Paid by ${orgName}` : 'Paid'}{rec ? ` · ${pmLabel(rec.method)}` : ''}</p>
                     : <p className="text-xs font-semibold text-amber-700">Not paid yet</p>}
                 </div>
               </div>
@@ -262,7 +267,7 @@ function PayTab({ d, id, reload }: { d: Data; id: string; reload: () => Promise<
                 {p.isPaid ? (
                   <p className="text-xs text-slate-500">
                     {rec ? `${money(rec.amount)} on ${new Date(rec.paidAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}${rec.paidBy ? ` by ${rec.paidBy}` : ''}` : ''}
-                    {rec && <button type="button" onClick={() => unpay(p, rec)} className="ml-2 font-semibold text-slate-500 underline hover:text-red-600">Unpay</button>}
+                    {rec && rec.payer !== 'org' && <button type="button" onClick={() => unpay(p, rec)} className="ml-2 font-semibold text-slate-500 underline hover:text-red-600">Unpay</button>}
                   </p>
                 ) : paying === p.workerId ? (
                   <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
