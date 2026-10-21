@@ -48,6 +48,8 @@ export const TOURNAMENT_PAGES: { label: string; path: string; public?: boolean }
   { label: 'Availability (Staff roster → Availability)', path: '/availability' },
   { label: 'Time entries', path: '/time-entries' },
   { label: 'People → Vendor requests', path: '/vendor-requests' },
+  { label: 'Assigner → ⋯ → Print schedule', path: '/print-schedule' },
+  { label: 'Assigner → ⋯ → Checkpoints', path: '/checkpoints' },
   { label: 'Live → Post scores', path: '/scores' },
   { label: 'Live → Assignments', path: '/assignments' },
   { label: 'Live → Communications', path: '/communications' },

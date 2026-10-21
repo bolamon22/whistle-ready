@@ -2,6 +2,7 @@ import { PrismaClient } from '@prisma/client'
 import { PrismaLibSQL } from '@prisma/adapter-libsql'
 import { createClient } from '@libsql/client'
 import { noteGameWrite } from '@/lib/divisionEdits'
+import { checkpointBeforeGameWrite } from '@/lib/assignCheckpoint'
 
 const g = globalThis as unknown as { prisma: PrismaClient | undefined }
 
@@ -23,7 +24,12 @@ function createPrisma() {
   // on the transaction's own lock.
   // $use is Prisma 5's middleware hook; guarded so a future Prisma without it can't
   // take every database call down with it.
+  //
+  // Before a Game write that changes the schedule, save a checkpoint of who was on each
+  // game (lib/assignCheckpoint), so assigners can see the officials games had before
+  // they moved. Also skipped inside a transaction, for the same reason.
   if (typeof (client as any).$use === 'function') client.$use(async (params, next) => {
+    if (params.model === 'Game' && !params.runInTransaction) await checkpointBeforeGameWrite(client as any, params.action, params.args)
     const result = await next(params)
     if (params.model === 'Game' && !params.runInTransaction) await noteGameWrite(client as any, params.action, params.args, result)
     return result

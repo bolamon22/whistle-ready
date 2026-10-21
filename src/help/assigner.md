@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: show scores no scores score boxes, card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green last name alphabetical sort a-z rename division divisions division names boys games girls games teams
+keywords: show scores no scores score boxes, card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green last name alphabetical sort a-z print schedule pdf checkpoints rename division divisions division names boys games girls games teams
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -53,6 +53,8 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 **To rename a division:** click the **⋯** button at the top right of the Assigner, then **Divisions** (the Head Assigner, directors and schedulers). Change the name and click **Rename**: every game in the division moves with it. The tag under each name shows whose game it is, **Boys**, **Girls** or **Boys & girls**, from the name, or from the event's **Teams** when the name says neither, so adding Boys or Girls to a name changes it. A name another division already has is refused.
 
 **Games are the scheduler's:** assigners can change **refs per game** but can't add, import, move, edit or delete games, rename divisions or enter scores. Ask the scheduler or director (the Head Assigner on the Assigner plan). To bring games in, see "Import, build or delete the games".
+
+**To print the schedule or see who had games before they moved:** click **⋯**, then **Print schedule** or **Checkpoints** (see "Print the schedule and see who had games before they moved"). A yellow note at the top of the board says when games with officials changed since the last checkpoint.
 
 **To prevent accidental changes:** click **⋯**, then **Lock editing**. A **Locked** tag shows at the top; click it to unlock. This applies on your own browser only.
 

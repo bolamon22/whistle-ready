@@ -4,7 +4,8 @@ import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid } from 'lucide-react'
+import CheckpointBanner from '@/components/CheckpointBanner'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid, Printer, History } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -1096,6 +1097,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
         logoUrl={tournament.logoUrl}
         stats={{ games: games.length, assigned: assignedCount, pct: Math.round(assignedCount / Math.max(games.length, 1) * 100) }}
       />
+      {/* The schedule changed since the newest checkpoint (Oct 21 2026): who had those games. */}
+      <CheckpointBanner tournamentId={params.id} />
 
       {/* Header (Oct 2026 redesign). Assigners said the page was too busy: seven bands sat above the
           first game. Now one action row, one view row and one filter row; the staff list, the
@@ -1136,6 +1139,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
           {moreOpen&&(<>
             <div className="fixed inset-0 z-40" onClick={()=>setMoreOpen(false)}/>
             <div className="absolute right-0 top-11 z-50 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+              {/* Bo, Oct 21 2026: a printable schedule (PDF) and checkpoints of who had each game. */}
+              {games.length>0&&<Link href={`/tournaments/${params.id}/print-schedule`} className={menuItem} onClick={()=>setMoreOpen(false)}><Printer size={15} className="text-slate-400"/> Print schedule</Link>}
+              <Link href={`/tournaments/${params.id}/checkpoints`} className={menuItem} onClick={()=>setMoreOpen(false)}><History size={15} className="text-slate-400"/> Checkpoints</Link>
+              <div className="my-1 border-t border-slate-100"/>
               {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);openAddGame()}}><Plus size={15} className="text-slate-400"/> Add a game</button>}
               {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);fileRef.current?.click()}}><Upload size={15} className="text-slate-400"/> Import schedule</button>}
               {!noSchedule&&<button type="button" className={menuItem} onClick={()=>{setMoreOpen(false);setShowBuilder(true)}}><LayoutGrid size={15} className="text-slate-400"/> Build a schedule</button>}
