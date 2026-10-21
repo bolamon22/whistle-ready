@@ -6,6 +6,7 @@ import { dropWaitlisted, involvesWaitlisted } from '@/lib/poolMembership'
 import { nameKey } from '@/lib/names'
 import { noBracketKeys, renameNoBracket, setNoBracket } from '@/lib/divisionPlan'
 import { dropDivisionNote, renameDivisionNote } from '@/lib/divisionNotes'
+import { isWithdrawnDivision } from '@/lib/withdrawn'
 
 // Every division with its team, waiting-list, pool and game counts.
 //
@@ -78,6 +79,8 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
     }
 
     for (const t of teams) {
+      // Withdrawn teams (lib/withdrawn) live on their registration, not in a division.
+      if (isWithdrawnDivision(t.division)) continue
       const cur = divMap.get(t.division) ?? { teams: 0, waitlisted: 0, pools: 0, assignedTeams: 0, gameCount: 0 }
       divMap.set(t.division, t.waitlisted ? { ...cur, waitlisted: cur.waitlisted + 1 } : { ...cur, teams: cur.teams + 1 })
     }

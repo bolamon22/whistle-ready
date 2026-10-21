@@ -6,6 +6,7 @@ import { cleanName, nameKey } from '@/lib/names'
 import { renameTeamRefs, removeTeamRefs, swapTeamDivisionRefs } from '@/lib/teamRename'
 import { findShortTeams, describeFinding } from '@/lib/gameBalance'
 import { parsePricing, calcFee } from '@/lib/regPricing'
+import { WITHDRAWN_DIVISION } from '@/lib/withdrawn'
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string; division: string } }) {
   // Staff only: this returns coach phone/email and what each club owes. It was open to
@@ -82,7 +83,28 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   // Auth (Jul 2026 sweep): staff only — was previously callable with no auth.
   const gate = await requireStaff(); if (!gate.ok) return gate.res
   try {
-    const { teamId, newDivision, swapWithTeamId } = await req.json()
+    const { teamId, newDivision, swapWithTeamId, withdraw } = await req.json()
+
+    // WITHDRAW (lib/withdrawn): off this division, its pools and its games, but kept
+    // on the club's registration with the invoice and payments untouched.
+    if (teamId && withdraw === true) {
+      const team = await prisma.registeredTeam.findFirst({
+        where: { id: teamId, registration: { tournamentId: params.id } },
+        select: { id: true, teamName: true, division: true },
+      })
+      if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+      await prisma.registeredTeam.update({ where: { id: team.id }, data: { division: WITHDRAWN_DIVISION, waitlisted: true } })
+      const removed = await removeTeamRefs(params.id, team.teamName, team.division)
+      let shortWarning: { message: string }[] = []
+      try {
+        const rest = await prisma.game.findMany({
+          where: { tournamentId: params.id, division: team.division },
+          select: { division: true, pool: true, team1: true, team2: true, isCanceled: true, isChampionship: true },
+        })
+        shortWarning = findShortTeams(rest as any).map(f => ({ message: describeFinding(f) }))
+      } catch { /* advisory only */ }
+      return NextResponse.json({ ok: true, withdrawn: true, removed, shortWarning })
+    }
 
     // Swap with another team: each takes the other's pool spot, games and bracket
     // seed (and, from another division, its division), so no schedule needs
@@ -305,6 +327,22 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
     const team = await prisma.registeredTeam.findUnique({ where: { id: teamId } })
     if (!team) return NextResponse.json({ ok: true })
+
+    // NEVER DELETE A REGISTRATION BY DELETING ITS LAST TEAM (Oct 21 2026). This used
+    // to delete the club's whole registration once its only team was gone, and its
+    // payments with it (they cascade), with no undo: Space Coast vanished from the
+    // registrations page that way. The last team can be withdrawn instead, and a
+    // whole registration is removed on the registrations page, where it can be
+    // restored.
+    if (team.registrationId) {
+      const siblings = await prisma.registeredTeam.count({ where: { registrationId: team.registrationId } })
+      if (siblings <= 1) {
+        return NextResponse.json({
+          error: `${team.teamName} is the only team on ${team.clubName || 'its club'}'s registration, so deleting it would delete the registration and its payments. Use Withdraw to take it out of the division and keep the registration, or remove the whole registration on the Registrations page.`,
+          lastTeam: true,
+        }, { status: 409 })
+      }
+    }
 
     await prisma.registeredTeam.delete({ where: { id: teamId } })
 

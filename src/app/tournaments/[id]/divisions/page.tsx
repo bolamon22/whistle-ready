@@ -539,6 +539,30 @@ export default function DivisionsPage() {
     toast.success(`${team.teamName} and ${other.teamName} swapped divisions, pool spots and games`)
   }
 
+  // Withdraw (lib/withdrawn, Bo Oct 21 2026): the team leaves this division, its
+  // pools and its games, but stays on the club's registration with its invoice and
+  // payments as they are, until the office decides on a refund or credit.
+  async function withdrawTeam(team: Team) {
+    if (!activeDiv) return
+    const theirs = [...poolGames, ...bracketGames].filter(g => g.team1 === team.teamName || g.team2 === team.teamName)
+    const gameLine = theirs.length ? ` Its ${theirs.length} game${theirs.length === 1 ? '' : 's'} come off the schedule, so each opponent loses that game.` : ''
+    if (!confirm(`Withdraw "${team.teamName}" from ${activeDiv}?\n\nIt leaves this division and its pools.${gameLine}\n\nIt stays on ${team.clubName || 'the club'}'s registration marked Withdrawn, with the invoice and payments unchanged, until you decide on a refund or credit.`)) return
+    const res = await fetch(`/api/tournaments/${id}/divisions/${encodeURIComponent(activeDiv)}/teams`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: team.id, withdraw: true }),
+    })
+    const data: any = await res.json().catch(() => ({}))
+    if (!res.ok) { toast.error(data.error ?? 'Failed to withdraw team'); return }
+    setTeams(t => t.filter(x => x.id !== team.id))
+    setPools(ps => ps.map(p => ({ ...p, teamNames: p.teamNames.filter(n => n !== team.teamName) })))
+    setDivisions(d => d.map(x => x.name === activeDiv ? { ...x, teamCount: Math.max(0, x.teamCount - 1) } : x))
+    setPoolGames(gs => gs.filter(g => g.team1 !== team.teamName && g.team2 !== team.teamName))
+    setBracketGames(gs => gs.map(g => ({ ...g, team1: g.team1 === team.teamName ? '' : g.team1, team2: g.team2 === team.teamName ? '' : g.team2 })))
+    const gone = Number(data?.removed?.games) || 0
+    toast.success(`${team.teamName} withdrawn${gone ? ` \u2014 ${gone} game${gone === 1 ? '' : 's'} removed` : ''}. It stays on the registrations page.`, { duration: 7000 })
+    for (const w of (data?.shortWarning || []) as { message: string }[]) toast(w.message, { duration: 10000, icon: '\u26A0\uFE0F' })
+  }
+
   async function deleteTeam(team: Team) {
     if (!activeDiv) return
     // Say what it costs BEFORE the click, not after. A pool game is a pairing,
@@ -1686,6 +1710,12 @@ if (loading) return (
                                       onClick={() => { setMovingTeam(team); setMoveTarget('') }}
                                       className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-teal-600 border border-slate-200 hover:border-teal-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
                                       Move <ArrowRight size={11} />
+                                    </button>
+                                    <button
+                                      onClick={() => withdrawTeam(team)}
+                                      title="Take it out of this division but keep it, paid or owing, on the club's registration"
+                                      className="inline-flex items-center gap-1 text-[11px] text-slate-400 hover:text-amber-700 border border-slate-200 hover:border-amber-300 rounded px-1.5 py-0.5 transition-colors whitespace-nowrap">
+                                      Withdraw
                                     </button>
                                     <button
                                       onClick={() => deleteTeam(team)}
