@@ -12,6 +12,7 @@ import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
 import { canSeeRefLevel } from '@/lib/roleScope'
 import { useRole } from '@/lib/role-context'
 import { importName } from '@/lib/importName'
+import { byLastName } from '@/lib/personName'
 
 interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
@@ -355,6 +356,8 @@ export default function StaffPage() {
     .filter(w=>appFilter==='all'||(w.appStatus??'none')===appFilter)
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
+      // Name sorts by last name (James Vacco, Oct 21 2026; lib/personName).
+      if(sortKey==='name'){const d=byLastName(a.name,b.name);return sortDir==='asc'?d:-d}
       const av=String(a[sortKey as keyof Worker]??''),bv=String(b[sortKey as keyof Worker]??'')
       return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av)
     })

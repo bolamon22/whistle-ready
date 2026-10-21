@@ -3,7 +3,7 @@ title: Add and edit people in the Staff Pool
 category: Staff
 order: 400
 routes: /staff
-keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv first name last name full name map columns delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos ref level ref levels rank ranking 1 2 3 level 1 level 2 level 3 red yellow green best refs top refs
+keywords: staff pool staff database add staff edit staff refs referees scorekeepers trainers field ops bulk import upload spreadsheet csv first name last name full name map columns delete remove unassign photo w-9 w9 tax form clean up cleanup old profiles no email start fresh which events add to event tournament roster training videos watched send videos ref level ref levels rank ranking 1 2 3 level 1 level 2 level 3 red yellow green best refs top refs sort by last name alphabetical
 ---
 The Staff Pool is your organization's master list of everyone who works your events: refs, scorekeepers, athletic trainers and field operations. Each tournament's roster is picked from this pool.
 
@@ -15,7 +15,7 @@ The Staff Pool is your organization's master list of everyone who works your eve
 3. Under **Roles (select all that apply)**, tick every job they do. For refs, set **Cert Level** and **Can Ref** (**Boys & Girls**, **Boys only** or **Girls only**).
 4. Tick **Also serves as Assigner** if they assign games, add **Notes**, then click **Add Staff**.
 
-**To edit someone:** find them with **Search by name…** or the **Role**, **Can Ref** and **App** filters, then click **Edit**. Click **Profile** to see their details without editing.
+**To edit someone:** find them with **Search by name…** or the **Role**, **Can Ref** and **App** filters, then click **Edit**. Click **Profile** to see their details without editing. The list is A–Z by last name; click **Name** to reverse it.
 
 **To see someone's events and add them to one:** click **Profile**. Under **Events** are the tournaments they're on, with how many games they have at each. Pick a tournament from **Add to an event…** to put them on its staff roster. Click the **×** on an event to take them off it. **Show past events** lists the ones that are over.
 

@@ -3,7 +3,7 @@ title: Assign refs and scorekeepers to games
 category: Staff
 order: 440
 routes: /tournaments/*
-keywords: show scores no scores score boxes, card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green rename division divisions division names boys games girls games teams
+keywords: show scores no scores score boxes, card size full compact mini density layout staffing panel needs crew conflicts filter, notify officials, send assignments, email refs, confirm games, officials confirm, confirmations, release schedule, can't work, assigner assign refs referees scorekeepers staffing slots drag drop crew double booked lock editing refs per game grid fill games ref level ranking L1 L2 L3 red yellow green last name alphabetical sort a-z rename division divisions division names boys games girls games teams
 ---
 The Assigner is where you put refs and scorekeepers on each game. Every game has ref slots (1 to 3) plus one scorekeeper slot.
 
@@ -11,8 +11,8 @@ The Assigner is where you put refs and scorekeepers on each game. Every game has
 
 **To assign staff on the grid:**
 1. Pick the day from the day buttons at the top left (the number is how many games it has).
-2. Click **Staffing** (at the right end of the second row) to open the staffing panel. Its **Staff** tab lists everyone on the tournament roster. Use **Find a name**, filter **All**, **Boys**, **Girls** or **SK**, and click **Fewest games first** to switch to **A–Z**. The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
-3. Drag a name onto a game's slot, or click the slot and pick a name.
+2. Click **Staffing** (at the right end of the second row) to open the staffing panel. Its **Staff** tab lists everyone on the tournament roster. Use **Find a name**, filter **All**, **Boys**, **Girls** or **SK**, and click **Fewest games first** to switch to **A–Z** (by last name). The number after a name is how many games they have that day. A red, yellow or green **L1**, **L2** or **L3** is the ref's level (3 is the highest), which you set on the Staff Pool; only directors, admins and assigners see it.
+3. Drag a name onto a game's slot, or click the slot and pick a name. The pick list runs A–Z by last name and shows it last name first ("Cox, Chris"); typing a first or last name finds them.
 4. To change how many refs a game needs, use the minus and plus buttons on the game. To set every game that day at once, open **Layout** (the sliders button next to **Card size**) and click **1 ref**, **2 refs** or **3 refs**.
 
 **The staffing panel:** it stays out of the way until you click **Staffing**. The panel then slides in over the board (the buttons at the top move over so they stay in reach) with three tabs: **Staff**, **Needs** and **Staff portal**. Click **Staffing** again, **»**, or the Esc key to close it. The pin button keeps it open beside the board instead (on a wide screen; remembered on this browser).

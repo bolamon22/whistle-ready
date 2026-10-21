@@ -14,6 +14,7 @@ import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 import RefLevelPill from '@/components/RefLevelPill'
 import { scoresShown } from '@/lib/eventScores'
+import { byLastName, lastFirst } from '@/lib/personName'
 import ScheduleBuilder from './ScheduleBuilder'
 
 // refLevel (lib/refLevel) comes back only for those who see this person's pay (api/workers).
@@ -55,7 +56,7 @@ function staffRank(w:Worker):number{
 // Searchable dropdown component
 function SearchSelect({ value, onChange, options, placeholder, assigned, disabled, chip, offList }: {
   value: string; onChange: (v:string)=>void
-  options: {id:string;label:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string;level?:number|null}[]
+  options: {id:string;label:string;listLabel?:string;sublabel?:string;warning?:boolean;dot?:string;busy?:string;level?:number|null}[]
   placeholder: string; assigned: boolean; disabled: boolean
   /** Name of whoever holds this slot when they aren't in the pick list (off this event's
    *  roster). Without it the box read "unassigned" while someone was on the game, and
@@ -82,7 +83,8 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
   // People already working another game at this time sink to the bottom, greyed
   // out and not pickable (the one already in this slot stays selectable).
   const isBusy=(o:{id:string;busy?:string})=>!!o.busy&&o.id!==value
-  const filtered=options.filter(o=>o.label.toLowerCase().includes(search.toLowerCase()))
+  // listLabel: how the pick list shows it ("Cox, Chris 4"); search finds either form.
+  const filtered=options.filter(o=>[o.label,o.listLabel||''].some(l=>l.toLowerCase().includes(search.toLowerCase())))
     .sort((a,b)=>Number(isBusy(a))-Number(isBusy(b)))
 
   const list=(
@@ -90,13 +92,13 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
       <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
       {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>isBusy(o)?(
         <div key={o.id} aria-disabled="true" title={`Already working ${o.busy} at this time`} className="px-2 py-1.5 cursor-not-allowed bg-slate-50 opacity-60">
-          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.label}</div>
+          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.listLabel||o.label}</div>
           <div className="text-[10px] text-slate-500">Busy · on {o.busy}</div>
         </div>
       ):(
         <div key={o.id} onClick={()=>{onChange(o.id);setOpen(false);setSearch('')}}
           className={`px-2 py-1.5 cursor-pointer hover:bg-sky-50 ${o.id===value?'bg-sky-100':''}`}>
-          <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.warning?'⚠ ':''}{o.label}</div>
+          <div className={`flex items-center gap-1 text-[11px] font-medium ${o.warning?'text-amber-600':'text-slate-800'}`}>{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.warning?'⚠ ':''}{o.listLabel||o.label}</div>
           {o.sublabel&&<div className="text-[10px] text-slate-400">{o.sublabel}</div>}
         </div>
       ))}
@@ -402,7 +404,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
       }
     }
     for(const p of Array.from(by.values()))p.slots.sort((x,y)=>(x.g.date+x.g.startTime).localeCompare(y.g.date+y.g.startTime))
-    return Array.from(by.values()).sort((x,y)=>x.name.localeCompare(y.name))
+    return Array.from(by.values()).sort((x,y)=>byLastName(x.name,y.name))
   }
   // Mirrors the clear-assignments route: same kinds, same field filter, same gender rule.
   function clearTargets(kinds:Set<string>,fields:Set<string>){
@@ -818,7 +820,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 </label>}
                 {aaFill.scorekeepers&&stickyScorekeeper&&(()=>{
                   const dayFields=[...new Set(dayGames.filter(g=>!g.isCanceled&&g.location).map(g=>g.location))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))
-                  const sks=rosterWorkers.filter(w=>canScorekeeper(w)).sort((a,b)=>(a.defaultRole==='scorekeeper'?0:1)-(b.defaultRole==='scorekeeper'?0:1)||a.name.localeCompare(b.name))
+                  const sks=rosterWorkers.filter(w=>canScorekeeper(w)).sort((a,b)=>(a.defaultRole==='scorekeeper'?0:1)-(b.defaultRole==='scorekeeper'?0:1)||byLastName(a.name,b.name))
                   const fieldOf=new Map(Object.entries(aaSkFields).map(([f,w])=>[w,f]))
                   const short=(f:string)=>f.split(' - ').pop()||f
                   const picked=dayFields.filter(f=>aaSkFields[f]).length
@@ -1239,7 +1241,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 if(staffFilter==='boys')return w.defaultRole==='ref'&&(w.gender==='boys'||w.gender==='both')
                 if(staffFilter==='girls')return w.defaultRole==='ref'&&(w.gender==='girls'||w.gender==='both')
                 return true
-              }).map(w=>({w,count:getGameCount(w.id)})).sort((a,b)=>staffSort==='load'?(a.count-b.count||a.w.name.localeCompare(b.w.name)):a.w.name.localeCompare(b.w.name))
+              }).map(w=>({w,count:getGameCount(w.id)})).sort((a,b)=>staffSort==='load'?(a.count-b.count||byLastName(a.w.name,b.w.name)):byLastName(a.w.name,b.w.name))
               const loadCls=(n:number)=>n>=8?'bg-red-50 text-red-700':n>=5?'bg-amber-50 text-amber-700':'bg-emerald-50 text-emerald-700'
               const canDrag=!locked&&viewMode==='grid'
               return(
@@ -1496,7 +1498,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
               <label className="text-sm font-medium text-slate-600">View schedule for:</label>
               <select className="select !w-64" value={staffViewId} onChange={e=>setStaffViewId(e.target.value)}>
                 <option value="">— pick a staff member —</option>
-                {workers.filter(w=>rosterIds.has(w.id)).sort((a,b)=>a.name.localeCompare(b.name)).map(w=><option key={w.id} value={w.id}>{w.name}</option>)}
+                {workers.filter(w=>rosterIds.has(w.id)).sort((a,b)=>byLastName(a.name,b.name)).map(w=><option key={w.id} value={w.id}>{lastFirst(w.name)}</option>)}
               </select>
               {staffViewId&&<span className="text-sm text-slate-500">{staffGame.length} games assigned</span>}
               {(()=>{const sw=staffViewId?workers.find(w=>w.id===staffViewId):undefined;if(!sw||!('lastSeenAt' in sw))return null;const on=isOnline(sw.lastSeenAt);return<span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full ${on?'bg-emerald-50 text-emerald-700':'bg-slate-100 text-slate-500'}`}>{on&&<span className="w-1.5 h-1.5 rounded-full bg-emerald-500"/>}{presenceLabel(sw)}</span>})()}
@@ -1919,15 +1921,15 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
   function hasSkRole(w:Worker){try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.includes('scorekeeper')}catch{return false}}
   const eligible=slotType==='scorekeeper'
     ?[
-        ...workers.filter(w=>w.defaultRole==='scorekeeper'),
-        ...workers.filter(w=>w.defaultRole!=='scorekeeper'&&hasSkRole(w)),
+        ...workers.filter(w=>w.defaultRole==='scorekeeper').sort((a,b)=>byLastName(a.name,b.name)),
+        ...workers.filter(w=>w.defaultRole!=='scorekeeper'&&hasSkRole(w)).sort((a,b)=>byLastName(a.name,b.name)),
       ]
     :workers.filter(w=>{
         if(w.defaultRole!=='ref')return false
         if(gg==='boys')return w.gender==='boys'||w.gender==='both'
         if(gg==='girls')return w.gender==='girls'||w.gender==='both'
         return true
-      })
+      }).sort((a,b)=>byLastName(a.name,b.name))
 
   const options=eligible.map(w=>{
     const count=getGameCount(w.id)
@@ -1937,6 +1939,8 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
     return{
       id:w.id,
       label:`${w.name}${crossSK?` (${mainJob(w.defaultRole)}→SK)`:''} ${count}`,
+      // The pick list is A–Z by last name, shown last name first (James Vacco, Oct 21 2026).
+      listLabel:`${lastFirst(w.name)}${crossSK?` (${mainJob(w.defaultRole)}→SK)`:''} ${count}`,
       dot:staffKind(w).dot,
       // Ref level (lib/refLevel): ref slots only; it's the assigners' rank of their refs.
       level:slotType==='ref'?w.refLevel:null,

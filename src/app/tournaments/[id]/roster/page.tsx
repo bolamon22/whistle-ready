@@ -13,6 +13,7 @@ import RefLevelPill from '@/components/RefLevelPill'
 import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
 import PersonEvents, { eventDates } from '@/components/staff/PersonEvents'
 import PersonTraining from '@/components/staff/PersonTraining'
+import { byLastName } from '@/lib/personName'
 
 interface Worker { id:string;name:string;certLevel:string;refLevel?:number|null;defaultRole:string;roles:string;gender:string;payMethod:string;payHandle:string|null;phone:string|null;email:string|null;isAssigner:boolean;payRateOverride:number|null;hourlyRate:number|null;notes:string|null;photoUrl:string|null }
 interface RosterEntry { id:string;workerId:string;gameTarget:number;notes:string|null }
@@ -280,7 +281,7 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     .filter(w=>addCert==='all'||w.certLevel===addCert)
     .filter(w=>matchesRefGender(w,gender))
     .filter(w=>!addSearch||[w.name,w.email??'',w.phone??''].some(v=>v.toLowerCase().includes(addSearch.toLowerCase())))
-    .sort((a,b)=>a.name.localeCompare(b.name))
+    .sort((a,b)=>byLastName(a.name,b.name))
 
   const needsHandleFor = (m:string) => m==='venmo'||m==='zelle'
   const filteredOnRoster = onRoster
@@ -293,7 +294,9 @@ export default function RosterPage({ params }: { params:{id:string} }) {
     .filter(w=>infoFilter==='all'||(infoFilter==='contact'?(!w.phone||!w.email):(w.payMethod!==null&&(!w.payMethod||(needsHandleFor(w.payMethod)&&!w.payHandle)))))
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
-      if(sortKey==='games'){const d=(gameCount[a.id]??0)-(gameCount[b.id]??0);return (sortDir==='asc'?d:-d)||a.name.localeCompare(b.name)}
+      if(sortKey==='games'){const d=(gameCount[a.id]??0)-(gameCount[b.id]??0);return (sortDir==='asc'?d:-d)||byLastName(a.name,b.name)}
+      // Name sorts by last name (James Vacco, Oct 21 2026; lib/personName).
+      if(sortKey==='name'){const d=byLastName(a.name,b.name);return sortDir==='asc'?d:-d}
       const av=String(a[sortKey as keyof Worker]??''), bv=String(b[sortKey as keyof Worker]??'')
       return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av)
     })
