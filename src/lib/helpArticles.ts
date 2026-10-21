@@ -44,6 +44,9 @@ export const TOURNAMENT_PAGES: { label: string; path: string; public?: boolean }
   { label: 'People → Tournament director (Assigner plan)', path: '/tournament-director' },
   { label: 'People → Staff roster', path: '/roster' },
   { label: 'People → Staff applications', path: '/staff-applications' },
+  { label: 'People → Staff pay', path: '/pay-summary' },
+  { label: 'Availability (Staff roster → Availability)', path: '/availability' },
+  { label: 'Time entries', path: '/time-entries' },
   { label: 'People → Vendor requests', path: '/vendor-requests' },
   { label: 'Live → Post scores', path: '/scores' },
   { label: 'Live → Assignments', path: '/assignments' },
@@ -57,6 +60,11 @@ export const TOURNAMENT_PAGES: { label: string; path: string; public?: boolean }
 /** Org-level pages (not inside one tournament). */
 export const ORG_PAGES: { label: string; path: string }[] = [
   { label: 'Forms (home dashboard → Forms)', path: '/dashboard/org/forms' },
+  { label: 'Staff → Staff Pool', path: '/staff' },
+  { label: 'Staff → Your team', path: '/dashboard/org' },
+  { label: 'Staff → Training videos', path: '/dashboard/org/videos' },
+  { label: 'Staff → 1099 export', path: '/dashboard/org/1099' },
+  { label: 'Assigning fees (Assigner plan; home → Assigning fees)', path: '/dashboard/org/assigning-fees' },
 ]
 
 // Flattened text used as grounding context for the AI help assistant.
