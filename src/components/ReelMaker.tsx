@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save, Music } from 'lucide-react'
+import { X, Download, Film, RotateCcw, Volume2, Check, ChevronUp, ChevronDown, Save, Music, Plus } from 'lucide-react'
 import { REEL_SONGS, songUrl as trackUrl } from '@/lib/reelSongs'
 import { allCategories, groupTracks, orgSongId, isOrgSong, titleFromFile } from '@/lib/reelMusic'
 import { useOrgMusic } from './useOrgMusic'
@@ -65,7 +65,10 @@ type Props = { src: string; style: string; label: string; event: string; sub: st
   postDay?: string }
 
 /** A Reel maker's settings, saved as a draft to pick up later. */
-export type ReelSetup = { picks: string[]; order: number[]; len: number; song: string; day: string; coverIdx: number }
+// seq: the squad's parts in play order, one or more per player (Bo: "I want it to have two
+// for each"). picks/order still describe the first look per player, for older drafts.
+export type ReelSetup = { picks: string[]; order: number[]; len: number; song: string; day: string; coverIdx: number; seq?: { i: number; style: string }[] }
+const MIN_PART = 3   // seconds a part needs to read; caps how many parts a Reel can hold
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 function daysBetween(from: string, to: string): number | null {
@@ -244,6 +247,17 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   // Look menus: favorites, then folders with this event's season first (lib/socialPosts).
   const menu = lookMenu(favorites, seasonOf(event, eventStart || ''), false)
   const isCustomLook = (s: string) => s in CUSTOM_REELS
+  // Another part for player i, right after their last one ("Two looks each": a second
+  // round, so players alternate), on a look they don't have yet
+  // (one nobody else in the Reel has, when possible; this event's season and favorites first).
+  const addPart = (o: { i: number; style: string }[], i: number, atEnd = false) => {
+    const have = o.filter(x => x.i === i).map(x => x.style)
+    const pool = [...(SEASON_LOOKS[seasonOf(event, eventStart || '')] || []), ...favorites, ...menu.flatMap(g => g.looks.map(l => l.id))]
+    const used = o.map(x => x.style), fresh = (s: string) => !have.includes(s) && !have.some(h => lookKind(h) === lookKind(s))
+    const style = pool.find(s => fresh(s) && !used.includes(s)) || pool.find(fresh) || pool.find(s => !have.includes(s)) || have[0]
+    const at = atEnd ? o.length : o.map(x => x.i).lastIndexOf(i) + 1
+    return [...o.slice(0, at), { i, style }, ...o.slice(at)]
+  }
   const [len, setLen] = useState<number>(initialSetup?.len && LENGTHS.some(l => l.sec === initialSetup.len) ? initialSetup.len : squadMode ? (squad!.length <= 2 ? 15 : 30) : 8)
   // The look for each part, picked by staff (Bo: "I'd like to be able to pick the looks").
   // One player: up to 4 parts, starting from the chosen look and Bo's favorites. Squad:
@@ -253,8 +267,19 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const lookCount = squadMode ? squad!.length : token ? (LENGTHS.find(l => l.sec === len)?.looks || 1) : 1
   // Squad order (Bo: "reorder them ... I might watch the video and say it should be
   // different"): indexes into `squad`; picks stay keyed by the player's original index.
-  const [order, setOrder] = useState<number[]>(() => initialSetup?.order?.length === (squad || []).length && (squad || []).length ? initialSetup.order : (squad || []).map((_, i) => i))
-  const slots = squadMode ? order.map(i => ({ token: squad![i].token, style: picks[i] || squad![i].style, who: squad![i].first }))
+  const [order] = useState<number[]>(() => initialSetup?.order?.length === (squad || []).length && (squad || []).length ? initialSetup.order : (squad || []).map((_, i) => i))
+  // Squad parts in play order. A player can have more than one part ("+ Look" on their row).
+  const [seq, setSeq] = useState<{ i: number; style: string }[]>(() => {
+    if (!squadMode) return []
+    const n = squad!.length, saved = initialSetup?.seq
+    if (saved?.length && saved.every(x => x.i >= 0 && x.i < n && x.style) && new Set(saved.map(x => x.i)).size === n) return saved
+    return order.map(i => ({ i, style: picks[i] || squad![i].style }))
+  })
+  const maxParts = Math.max(1, Math.floor((len - END) / MIN_PART))
+  // First look per player and first-appearance order, for drafts and the post's player order.
+  const seqOrder = squadMode ? seq.map(x => x.i).filter((v, k, a) => a.indexOf(v) === k) : order
+  const seqPicks = squadMode ? squad!.map((p, i) => seq.find(x => x.i === i)?.style || p.style) : picks
+  const slots = squadMode ? seq.map(x => ({ token: squad![x.i].token, style: x.style, who: squad![x.i].first }))
     : picks.slice(0, lookCount).map(s => ({ token: token || '', style: s, who: '' }))
   const endDur = squadMode ? END : 0
   const single = slots.length === 1 && !squadMode
@@ -268,7 +293,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
   const paint = (ctx: CanvasRenderingContext2D, img: HTMLImageElement, t: number) => {
     const imgs = imgsRef.current.length ? imgsRef.current : [img]
     const n = slots.length, body = n * segDur
-    if (endDur && t >= body) { drawEnd(ctx, t - body, endDur, imgs[n - 1] || img, event, sub, slots.map(x => x.who)); return }
+    if (endDur && t >= body) { drawEnd(ctx, t - body, endDur, imgs[n - 1] || img, event, sub, slots.map(x => x.who).filter((v, k, a) => a.indexOf(v) === k)); return }
     const i = Math.max(0, Math.min(n - 1, Math.floor(t / segDur)))
     const tl = t - i * segDur, slot = slots[i], im = imgs[i] || img
     const c = slot.token ? customs.current[slot.token + qDays] : undefined
@@ -480,7 +505,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
     if (!onSaveSetup || savingSetup) return
     setSavingSetup(true); setErr('')
     // A file picked from the computer can't be kept with the draft; it reopens on the default song.
-    try { await onSaveSetup({ picks, order, len, song: song === 'own' ? (initialSong || 'trap-hype') : song, day, coverIdx }) }
+    try { await onSaveSetup({ picks: seqPicks, order: seqOrder, ...(squadMode ? { seq } : {}), len, song: song === 'own' ? (initialSong || 'trap-hype') : song, day, coverIdx }) }
     catch (e: any) { setErr(String(e?.message || 'Could not save the draft')) }
     finally { setSavingSetup(false) }
   }
@@ -501,7 +526,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
         poster = await new Promise<Blob | null>(r => c.toBlob(r, 'image/jpeg', 0.86))
         loop()
       }
-      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}), ...(squadMode ? { order } : {}), ...(saveDraft ? { saveDraft: true } : {}) })
+      await onUse(blob, poster, dur, { igSong: song === 'ig', ...(eventStart ? { day } : {}), ...(squadMode ? { order: seqOrder } : {}), ...(saveDraft ? { saveDraft: true } : {}) })
     } catch (e: any) {
       setErr(String(e?.message || 'Upload failed'))
     } finally { setUsing(false) }
@@ -542,7 +567,7 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
             <div className="flex items-center gap-2 text-sm text-slate-700">
               <span className="font-semibold shrink-0">Length</span>
               <div className="flex-1 grid grid-cols-3 gap-1">
-                {LENGTHS.filter(l => !squadMode || l.sec >= (squad!.length <= 2 ? 15 : 30)).map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{squadMode ? `${squad!.length} players` : l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
+                {LENGTHS.filter(l => !squadMode || l.sec >= (squad!.length <= 2 ? 15 : 30)).map(l => <button key={l.sec} type="button" disabled={playing || using} onClick={() => setLen(l.sec)} className={`rounded-lg border px-2 py-1.5 text-xs font-bold ${len === l.sec ? 'border-teal-500 bg-teal-50 text-teal-800' : 'border-slate-300 text-slate-600 hover:border-teal-400'}`}>{l.sec} sec<span className="block font-normal text-[10px] text-slate-500">{squadMode ? `${squad!.length} players${seq.length > squad!.length ? ` · ${seq.length} looks` : ''}` : l.looks === 1 ? '1 look' : `${l.looks} looks`}</span></button>)}
               </div>
             </div>
           )}
@@ -550,26 +575,39 @@ export default function ReelMaker({ src, style, label, event, sub, days: daysPro
             <div className="flex flex-col gap-1.5">
               <span className="text-sm font-semibold text-slate-700">{squadMode ? 'Players & looks' : slots.length > 1 ? 'Looks, in order' : 'Look'}</span>
               {slots.map((x, i) => {
-                const pi = squadMode ? order[i] : i   // which pick this row edits
-                // Move a part up or down: squad → swap players; one player → swap looks.
+                const pi = i   // which pick this row edits (one player)
+                // Move a part up or down: squad → swap parts; one player → swap looks.
                 const move = (d: number) => {
                   const j = i + d; if (j < 0 || j >= slots.length) return
-                  if (squadMode) setOrder(o => { const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n })
+                  if (squadMode) setSeq(o => { const n = [...o]; [n[i], n[j]] = [n[j], n[i]]; return n })
                   else setPicks(ps => { const n = [...ps]; [n[i], n[j]] = [n[j], n[i]]; return n })
                 }
+                const who = squadMode ? seq[i].i : -1
+                const theirs = squadMode ? seq.filter(x => x.i === who).length : 0
+                const nth = squadMode ? seq.slice(0, i + 1).filter(x => x.i === who).length : 0
+                const setStyle = (v: string) => squadMode ? setSeq(o => o.map((x, k) => k === i ? { ...x, style: v } : x))
+                  : setPicks(ps => { const n = [...ps]; while (n.length <= pi) n.push(x.style); n[pi] = v; return n })
                 return (
                 <div key={`${x.token}-${i}`} className="flex items-center gap-2 text-xs text-slate-600">
                   {slots.length > 1 && <span className="flex flex-col shrink-0">
                     <button type="button" onClick={() => move(-1)} disabled={i === 0 || playing || using} aria-label="Move up" className="h-4 w-6 grid place-items-center text-slate-500 hover:text-slate-900 disabled:opacity-25"><ChevronUp size={14} /></button>
                     <button type="button" onClick={() => move(1)} disabled={i === slots.length - 1 || playing || using} aria-label="Move down" className="h-4 w-6 grid place-items-center text-slate-500 hover:text-slate-900 disabled:opacity-25"><ChevronDown size={14} /></button>
                   </span>}
-                  <span className="w-20 shrink-0 font-semibold truncate">{squadMode ? `${i + 1}. ${x.who}` : `${i + 1}.`}</span>
-                  <select value={x.style} disabled={playing || using} onChange={e => setPicks(ps => { const n = [...ps]; while (n.length <= pi) n.push(x.style); n[pi] = e.target.value; return n })} className="flex-1 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
+                  <span className="w-20 shrink-0 font-semibold truncate" title={x.who}>{squadMode ? `${i + 1}. ${x.who}${theirs > 1 ? ` · ${nth}` : ''}` : `${i + 1}.`}</span>
+                  <select value={x.style} disabled={playing || using} onChange={e => setStyle(e.target.value)} className="flex-1 min-w-0 rounded-lg border border-slate-300 px-2 py-1.5 text-xs bg-white">
                     {canSiblings && <><option value="siblings-poster">Siblings · Movie poster</option><option value="siblings">Siblings · Card set</option></>}
                     {menu.map(g => <optgroup key={g.label} label={g.label}>{g.looks.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}</optgroup>)}
                   </select>
+                  {squadMode && (theirs > 1
+                    ? <button type="button" onClick={() => setSeq(o => o.filter((_, k) => k !== i))} disabled={playing || using} aria-label={`Remove this look for ${x.who}`} title="Remove this look" className="h-7 w-7 shrink-0 rounded-lg border border-slate-300 grid place-items-center text-slate-500 hover:text-red-600 hover:border-red-300 disabled:opacity-40"><X size={13} /></button>
+                    : <span className="w-7 shrink-0" />)}
+                  {squadMode && <button type="button" onClick={() => setSeq(o => addPart(o, who))} disabled={playing || using || seq.length >= maxParts} aria-label={`Add another look for ${x.who}`} title={seq.length >= maxParts ? `${len} seconds holds ${maxParts} looks` : `Add another look for ${x.who}`} className="h-7 shrink-0 rounded-lg border border-teal-300 text-teal-700 hover:bg-teal-50 px-1.5 text-[11px] font-bold inline-flex items-center gap-0.5 disabled:opacity-40"><Plus size={12} />Look</button>}
                 </div>
               )})}
+              {squadMode && seq.length === squad!.length && squad!.length * 2 <= maxParts && (
+                <button type="button" onClick={() => setSeq(o => o.reduce((acc, x) => addPart(acc, x.i, true), o))} disabled={playing || using} className="self-start text-[11px] font-bold text-teal-700 hover:underline disabled:opacity-40">Two looks each</button>
+              )}
+              {squadMode && <span className="text-[11px] text-slate-500">{seq.length} looks · about {Math.round((len - END) / seq.length * 10) / 10} sec each{seq.length >= maxParts ? ` · ${len} sec holds ${maxParts}` : ''}</span>}
             </div>
           )}
           {state !== 'recording' && state !== 'loading' && state !== 'error' && (

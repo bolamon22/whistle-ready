@@ -44,7 +44,9 @@ export async function POST(req: Request) {
   const setup = {
     picks: (Array.isArray(s.picks) ? s.picks : []).map((x: unknown) => str(x, 40)).slice(0, 4),
     order: (Array.isArray(s.order) ? s.order : []).map(Number).filter((n: number) => Number.isInteger(n) && n >= 0 && n < 4).slice(0, 4),
-    len: Number(s.len) || 0, song: str(s.song, 60), day: /^\d{4}-\d{2}-\d{2}$/.test(String(s.day)) ? String(s.day) : '', coverIdx: Math.max(0, Math.min(8, Number(s.coverIdx) || 0)),
+    len: Number(s.len) || 0, song: str(s.song, 60), day: /^\d{4}-\d{2}-\d{2}$/.test(String(s.day)) ? String(s.day) : '', coverIdx: Math.max(0, Math.min(12, Number(s.coverIdx) || 0)),
+    // The squad's parts in play order, up to two or more per player (ReelMaker "+ Look").
+    seq: (Array.isArray(s.seq) ? s.seq : []).map((x: any) => ({ i: Number(x?.i), style: str(x?.style, 40) })).filter((x: { i: number; style: string }) => Number.isInteger(x.i) && x.i >= 0 && x.i < 4 && x.style).slice(0, 12),
   }
   const id = /^[\w-]{4,40}$/.test(String(b.id || '')) ? String(b.id) : Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4)
   const draft: ReelDraft = { id, label: str(b.label, 120) || 'Reel', savedAt: new Date().toISOString(), playerIds, look: str(b.look, 40), ...(Array.isArray(b.looks) ? { looks: b.looks.map((x: unknown) => str(x, 40)).slice(0, 4) } : {}), setup }
