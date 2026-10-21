@@ -5,6 +5,7 @@ import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
 import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
+import { keepScorekeeperOnField } from '@/lib/fieldScorekeeper'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -89,7 +90,12 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (before && b.provisional !== true) {
     await notifyFinal(before, { ...updated, url: `/tournaments/${updated.tournamentId}/public/games/${updated.id}` })
   }
-  if (was) await sendOfficialChanges(updated.tournamentId, gameMoveChanges(was, updated), actorOf(gate))
+  if (was) {
+    // The scorekeeper stays with the field, not the game (lib/fieldScorekeeper).
+    const sk = await keepScorekeeperOnField(was, updated)
+    const moved = gameMoveChanges(was, updated).filter(c => !(sk.handled && c.role === 'scorekeeper'))
+    await sendOfficialChanges(updated.tournamentId, [...moved, ...sk.changes], actorOf(gate))
+  }
   return NextResponse.json(updated)
 }
 

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
+import { keepScorekeeperOnField } from '@/lib/fieldScorekeeper'
 
 export async function PATCH(
   req: Request,
@@ -24,7 +25,12 @@ export async function PATCH(
         ...(gameNumber !== undefined && { gameNumber }),
       },
     })
-    if (before) await sendOfficialChanges(params.id, gameMoveChanges(before, updated), actorOf(gate))
+    if (before) {
+      // The scorekeeper stays with the field, not the game (lib/fieldScorekeeper).
+      const sk = await keepScorekeeperOnField(before, updated)
+      const moves = gameMoveChanges(before, updated).filter(c => !(sk.handled && c.role === 'scorekeeper'))
+      await sendOfficialChanges(params.id, [...moves, ...sk.changes], actorOf(gate))
+    }
 
     return NextResponse.json(updated)
   } catch (e: any) {
