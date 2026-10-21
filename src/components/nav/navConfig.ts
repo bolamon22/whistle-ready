@@ -13,7 +13,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
   Trophy, ListChecks, BookUser, Users, KeyRound, UserCog, GraduationCap, Globe, FileText, Megaphone,
-  Building2, Image, Scale, Camera, LayoutGrid, Building, Shield, Map, CreditCard,
+  Building2, Image, Scale, Camera, LayoutGrid, Building, Shield, Map, CreditCard, FileSpreadsheet,
 } from 'lucide-react'
 import { roleCanAccess } from '@/lib/routeAccess'
 import { ownerTitle } from '@/lib/orgPlans'
@@ -36,6 +36,7 @@ export const NAV_MENUS: NavMenu[] = [
     { href: '/staff', label: 'Staff Pool', desc: 'Refs, scorekeepers, trainers and field ops', icon: Users },
     { href: '/dashboard/org', label: 'Your team', desc: 'Add people to your organization and set roles', icon: UserCog, roles: ['director'] },
     { href: '/dashboard/org/videos', label: 'Training videos', desc: 'Send videos to staff and see who watched', icon: GraduationCap, roles: ['admin', 'director'] },
+    { href: '/dashboard/org/1099', label: '1099 export', desc: 'What each person was paid in a year', icon: FileSpreadsheet, roles: ['admin', 'director'] },
     { href: '/dashboard/assigner/videos', label: 'Training videos', desc: 'Send videos to the officials you run', icon: GraduationCap, roles: ['assigner'] },
     { href: '/dashboard/field-director/videos', label: 'Training videos', desc: 'Send videos to your scorekeepers, trainers and field ops', icon: GraduationCap, roles: ['field_director'] },
   ] },
