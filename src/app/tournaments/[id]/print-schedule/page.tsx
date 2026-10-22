@@ -9,6 +9,8 @@ import { eventDayList } from '@/lib/eventDays'
 import { gameGender } from '@/lib/gameGender'
 import { teamsSide } from '@/lib/eventTeams'
 import { cpGame, ROLE_SHORT, type CpGame } from '@/lib/checkpointDiff'
+import { useRole } from '@/lib/role-context'
+import { roleCanAccess } from '@/lib/routeAccess'
 
 // Print the schedule with its officials (Bo, Oct 21 2026: assigners want "a printable
 // version pdf of the schedule"). Every day or one, all games or one side's, sorted by
@@ -38,6 +40,13 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [games, setGames] = useState<CpGame[] | null>(null)
   const [cp, setCp] = useState<Cp | null>(null)
   const [err, setErr] = useState('')
+  // Field directors print it too (Bo, Oct 22 2026: "a printable version on the Scorer and
+  // refs. they would not be able to assign or edit that"). This page only shows; back goes
+  // to the Assigner for those who can open it, the Field board for everyone else.
+  const { effectiveRole, planOff } = useRole()
+  const back = roleCanAccess(effectiveRole, `/tournaments/${params.id}`, planOff)
+    ? { href: `/tournaments/${params.id}`, label: 'Assigner' }
+    : { href: `/tournaments/${params.id}/field-board`, label: 'Field board' }
   const [day, setDay] = useState('all')
   const [side, setSide] = useState<'all' | 'boys' | 'girls'>('all')
   const [layout, setLayout] = useState<'grid' | 'time' | 'field'>('grid')
@@ -127,7 +136,7 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact }
       }`}</style>
       <div className="pt-6 print:hidden">
-        <Link href={`/tournaments/${params.id}`} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft size={14} aria-hidden /> Assigner</Link>
+        <Link href={back.href} className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-700"><ChevronLeft size={14} aria-hidden /> {back.label}</Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">Print the schedule</h1>
         <p className="text-sm text-slate-500">Pick what to print, then click <b className="font-semibold">Print</b>. To get a PDF, choose <b className="font-semibold">Save as PDF</b> as the printer.</p>
         {cp && <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-sm text-amber-800"><History size={15} aria-hidden />Showing officials as of the checkpoint {when(cp.at)}, not now. <Link href={`/tournaments/${params.id}/print-schedule`} className="font-semibold underline">Print today&apos;s</Link></p>}

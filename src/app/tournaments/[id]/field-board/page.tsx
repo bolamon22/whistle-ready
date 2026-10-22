@@ -138,6 +138,8 @@ export default function FieldBoardPage() {
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><LayoutGrid size={22} className="text-teal-600" /> Field board</h1>
         <div className="flex items-center gap-1">
           <button type="button" onClick={() => window.print()} disabled={!shown.length} title="Print what's showing: the day, Refs or Scorekeepers, Boys or Girls" className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50 rounded-lg px-3 py-1.5 disabled:opacity-40"><Printer size={14} /> Print</button>
+          {/* Every day at once, as a list or grid (Print schedule; field directors too, Oct 22 2026). */}
+          <Link href={`/tournaments/${tid}/print-schedule`} title="Print every day, or one, by time or by field" className="hidden sm:inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 px-2 py-1">All days</Link>
           <button type="button" onClick={load} className="inline-flex items-center gap-1.5 text-sm text-slate-500 hover:text-slate-800 px-2 py-1"><RefreshCw size={14} /> Refresh</button>
         </div>
       </div>

@@ -238,6 +238,14 @@
       ]
     },
     {
+      "key": "schedule_print",
+      "label": "Print schedule (view-only refs and scorekeepers, every day)",
+      "group": "Tournaments",
+      "routes": [
+        "/tournaments/*/print-schedule"
+      ]
+    },
+    {
       "key": "tasks",
       "label": "Tasks, checklists & event contacts",
       "group": "Tournaments",
@@ -288,7 +296,8 @@
       "staff_applications": true,
       "org_admin": true,
       "tasks": true,
-      "tournament_client": true
+      "tournament_client": true,
+      "schedule_print": true
     },
     "assigner": {
       "tournaments_list": true,
@@ -320,7 +329,8 @@
       "staff_applications": true,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": true
     },
     "scheduler": {
       "field_board": true,
@@ -351,7 +361,8 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": true
     },
     "field_director": {
       "tournaments_list": true,
@@ -383,7 +394,8 @@
       "field_board": true,
       "tasks": false,
       "social_scheduler": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": true
     },
     "coach": {
       "tournaments_list": false,
@@ -413,7 +425,8 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": false
     },
     "parent": {
       "tournaments_list": false,
@@ -443,7 +456,8 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": false
     },
     "club_director": {
       "tournaments_list": false,
@@ -473,7 +487,8 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": false
     },
     "staff": {
       "tournaments_list": false,
@@ -505,7 +520,8 @@
       "staff_applications": false,
       "org_admin": false,
       "tasks": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": false
     },
     "client": {
       "tournaments_list": false,
@@ -537,7 +553,8 @@
       "field_board": false,
       "tasks": false,
       "social_scheduler": false,
-      "tournament_client": false
+      "tournament_client": false,
+      "schedule_print": false
     }
   }
 }

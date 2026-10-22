@@ -7,7 +7,7 @@ keywords: print schedule pdf save as pdf paper copy printable schedule with refs
 ---
 **Print the schedule** gives you the schedule with its officials on paper or as a PDF. **Checkpoints** keep who was on each game, so when the schedule changes you can see who had the games that moved.
 
-**Where:** on the Assigner, open **⋯** (top right), then **Print schedule** or **Checkpoints**.
+**Where:** on the Assigner, open **⋯** (top right), then **Print schedule** or **Checkpoints**. Field directors: **Print schedule** on your home page's event card, or **All days** on the **Field board**. Field directors can print the schedule with its refs and scorekeepers but not change anyone or open Checkpoints.
 
 **To print the schedule (or save a PDF):**
 1. Open **⋯ → Print schedule**.
