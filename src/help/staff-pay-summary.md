@@ -11,7 +11,7 @@ keywords: pay summary pay report staff pay payroll mark paid unpay csv export re
 
 **On the Whistle Ready Assigner plan:** above the list, **Tournament director** names the event's tournament director, with **Edit** (or **Add them**) to open their page and **See their view**, and **Assigning fee** sets what they pay you on top (see "Share an event with your tournament director"). **Officials are paid by** says who pays the officials at this event (the tournament director, or **You**), and **Mark Paid** has **Paid by** for one payment; each paid person shows who paid them. **Record payment** logs what the tournament director has paid you: your fee plus any staff pay you paid for them. People the tournament director marks paid show paid here too.
 
-**To change one game's pay:** open the person (the arrow on the right), click the game's amount, enter the pay for that game and, if you like, why (for example "covered two halves"), then **Save**. The game shows **edited**; hover over it to see who set it, the note and what it was. Pay you set by hand stays when rates or someone's override change. **Use the rate** puts it back to what the pay rates give. Someone already marked paid can't be changed here; click **Unpay** first. Assigners can change pay only for people whose pay is all in their groups.
+**To change one game's pay** (any event, any plan): open the person (the arrow on the right), click the game's amount, enter the pay for that game and, if you like, why (for example "covered two halves"), then **Save**. The game shows **edited**; hover over it to see who set it, the note and what it was. Pay you set by hand stays when rates or someone's override change. **Use the rate** puts it back to what the pay rates give. Someone already marked paid can't be changed here; click **Unpay** first. Assigners can change pay only for people whose pay is all in their groups.
 
 **To pay staff:**
 1. Open **Staff pay**. The header shows **Total**, **Paid** and **Outstanding**.
@@ -30,10 +30,12 @@ keywords: pay summary pay report staff pay payroll mark paid unpay csv export re
 - Admins pick the groups on **Logins**, directors on **Your team**. Until then an assigner sees boys and girls refs, not scorekeepers or hourly staff.
 
 **To track hourly time (Time entries):**
-1. Pick the day tab.
-2. Under **Quick Punch Clock**, click **Clock In** for a staff member and **Clock Out** when they finish.
-3. Forgot to clock? Click **+ Manual Entry**, choose the staff member, and enter **Clock In**, **Clock Out** or **Manual Hours**, plus **Notes**. Click **Save**.
-4. Fix a row with **Edit**, or remove it with **Del**.
+1. **All days** shows every entry, grouped by day with that day's hours and pay. A day before the event (a setup day) gets its own tab as soon as someone has hours on it, and today has one until the event is over. During the event the page opens on today.
+2. Under **Quick Punch Clock**, click **Clock In** for a staff member and **Clock Out** when they finish. Clock In always uses today's date, whichever day tab is showing.
+3. Forgot to clock? Click **+ Manual Entry**, choose the staff member, pick the **Date** (any day, including before the event), and enter **Clock In**, **Clock Out** or **Manual Hours**, plus **Notes**. Click **Save**.
+4. Fix a row with **Edit** (you can change its date there too), or remove it with **Del**.
+
+Every entry counts toward **Staff pay**, whatever day it's on.
 
 Running entries show **● LIVE**; hand-edited ones show **edited**.
 
