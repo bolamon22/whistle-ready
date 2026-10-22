@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, History, Printer } from 'lucide-react'
 import { formatDate, formatTime, getDivisionColor, resetDivisionColors } from '@/lib/utils'
@@ -42,6 +42,17 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [side, setSide] = useState<'all' | 'boys' | 'girls'>('all')
   const [layout, setLayout] = useState<'grid' | 'time' | 'field'>('grid')
   const [show, setShow] = useState<'both' | 'refs' | 'sk'>('both')
+  const [auto, setAuto] = useState(false)
+  // The Assigner's print drop-down opens this page with its picks (?day=&layout=&side=&show=)
+  // and auto=1, which brings up the browser's Print (Save as PDF) once the games are on the page.
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search)
+    const d = q.get('day'); if (d && (d === 'all' || /^\d{4}-\d{2}-\d{2}$/.test(d))) setDay(d)
+    const sd = q.get('side'); if (sd === 'boys' || sd === 'girls') setSide(sd)
+    const sh = q.get('show'); if (sh === 'refs' || sh === 'sk') setShow(sh)
+    const l = q.get('layout'); if (l === 'grid' || l === 'time' || l === 'field') setLayout(l)
+    if (q.get('auto') === '1') setAuto(true)
+  }, [])
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('checkpoint')
     Promise.all([
@@ -85,6 +96,14 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     if (layout === 'field') out.sort((a, b) => a.key.split('|')[0].localeCompare(b.key.split('|')[0]) || byField(a.key.split('|')[1], b.key.split('|')[1]))
     return out
   }, [shown, layout])
+
+  // Once per visit: a ref, not state, so turning it off can't cancel the timer it started.
+  const printed = useRef(false)
+  useEffect(() => {
+    if (!auto || printed.current || !games || !shown.length) return
+    printed.current = true
+    window.setTimeout(() => window.print(), 400)
+  }, [auto, games, shown.length])
 
   const sel = 'min-h-[44px] rounded-lg border border-slate-300 bg-white px-3 text-sm sm:min-h-0 sm:py-2'
   const note = [day === 'all' ? 'Every day' : formatDate(day), side !== 'all' ? `${side === 'boys' ? 'Boys' : 'Girls'} games` : '', show === 'refs' ? 'Refs only' : show === 'sk' ? 'Scorekeepers only' : '', cp ? `Officials as of the checkpoint ${when(cp.at)}` : ''].filter(Boolean).join(' · ')

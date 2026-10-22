@@ -275,6 +275,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   const [panelTab,setPanelTab]=useState<'staff'|'needs'|'portal'>('staff')
   const [statusFilter,setStatusFilter]=useState<'all'|'open'|'bad'>('all')
   const [moreOpen,setMoreOpen]=useState(false)
+  const [printOpen,setPrintOpen]=useState(false)
   const [layoutOpen,setLayoutOpen]=useState(false)
   const [staffSearch,setStaffSearch]=useState('')
   const [staffSort,setStaffSort]=useState<'load'|'name'>('load')
@@ -289,12 +290,12 @@ export default function GridPage({ params }: { params:{id:string} }) {
   useEffect(()=>{
     function onKey(e:KeyboardEvent){
       if(e.key!=='Escape')return
-      if(moreOpen||layoutOpen){setMoreOpen(false);setLayoutOpen(false);return}
+      if(moreOpen||layoutOpen||printOpen){setMoreOpen(false);setLayoutOpen(false);setPrintOpen(false);return}
       if(panelMode==='open')setPanelModeRaw('rail')
     }
     window.addEventListener('keydown',onKey)
     return()=>window.removeEventListener('keydown',onKey)
-  },[moreOpen,layoutOpen,panelMode])
+  },[moreOpen,layoutOpen,printOpen,panelMode])
   function setPanelMode(m:'rail'|'open'|'pinned'){setPanelModeRaw(m);try{localStorage.setItem('assignerPanel',m==='pinned'?'pinned':'rail')}catch{}}
   function setFitFields(v:boolean){setFitFieldsRaw(v);try{localStorage.setItem('assignerFit:'+params.id,v?'1':'0')}catch{}}
 
@@ -1134,8 +1135,32 @@ export default function GridPage({ params }: { params:{id:string} }) {
         {confirms?.ask && <Link href={`/tournaments/${params.id}/confirmations`} title="Who has confirmed their games" className={`${barBtn} text-teal-700`}><CheckCheck size={15}/> Confirmed {confirms.totals.confirmed}/{confirms.totals.officials}</Link>}
         {dayGames.length>0&&<button type="button" onClick={()=>{setAaFill(AA_NONE);setShowAutoAssign(true);setAutoResult(null)}} className={barBtn}><Zap size={15} className="text-purple-600"/> Auto-assign</button>}
         {games.length>0&&<button type="button" onClick={()=>setShowNotify(true)} className="h-9 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold inline-flex items-center gap-1.5 whitespace-nowrap transition-colors"><Send size={15}/> Notify officials</button>}
+        {/* Bo, Oct 21 2026: "a little icon on the main page just so we know to print", with a
+            drop-down that makes the PDF. Each pick opens the print page with the board's Boys /
+            Girls and Refs / Scorekeepers filters and brings up the browser's Print (Save as PDF). */}
+        {games.length>0&&(()=>{
+          const qs=(day:string,layout:string)=>{const q=new URLSearchParams({day,layout,auto:'1'});if(genderFilter!=='all')q.set('side',genderFilter);if(crewShow!=='all')q.set('show',crewShow);return q.toString()}
+          const href=(day:string,layout:string)=>`/tournaments/${params.id}/print-schedule?${qs(day,layout)}`
+          const note=[genderFilter!=='all'?(genderFilter==='boys'?'Boys games':'Girls games'):'',crewShow==='refs'?'refs only':crewShow==='sk'?'scorekeepers only':''].filter(Boolean).join(', ')
+          return(
+          <div className="relative">
+            <button type="button" aria-label="Print or save as PDF" title="Print or save as PDF" aria-expanded={printOpen} onClick={()=>{setPrintOpen(o=>!o);setMoreOpen(false);setLayoutOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><Printer size={16}/></button>
+            {printOpen&&(<>
+              <div className="fixed inset-0 z-40" onClick={()=>setPrintOpen(false)}/>
+              <div className="absolute right-0 top-11 z-50 w-64 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+                <p className="px-2.5 pt-1 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Save as PDF{note?` · ${note}`:''}</p>
+                {activeDay&&<Link href={href(activeDay,'grid')} className={menuItem} onClick={()=>setPrintOpen(false)}><LayoutGrid size={15} className="text-slate-400"/> {formatDate(activeDay)} · grid</Link>}
+                {dates.length>1&&<Link href={href('all','grid')} className={menuItem} onClick={()=>setPrintOpen(false)}><LayoutGrid size={15} className="text-slate-400"/> Every day · grid</Link>}
+                {activeDay&&<Link href={href(activeDay,'time')} className={menuItem} onClick={()=>setPrintOpen(false)}><ClipboardList size={15} className="text-slate-400"/> {formatDate(activeDay)} · list by time</Link>}
+                {activeDay&&<Link href={href(activeDay,'field')} className={menuItem} onClick={()=>setPrintOpen(false)}><ClipboardList size={15} className="text-slate-400"/> {formatDate(activeDay)} · list by field</Link>}
+                <div className="my-1 border-t border-slate-100"/>
+                <Link href={`/tournaments/${params.id}/print-schedule`} className={menuItem} onClick={()=>setPrintOpen(false)}><Printer size={15} className="text-slate-400"/> More print choices…</Link>
+              </div>
+            </>)}
+          </div>)
+        })()}
         <div className="relative">
-          <button type="button" aria-label="More actions" title="More actions" aria-expanded={moreOpen} onClick={()=>{setMoreOpen(o=>!o);setLayoutOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><MoreHorizontal size={16}/></button>
+          <button type="button" aria-label="More actions" title="More actions" aria-expanded={moreOpen} onClick={()=>{setMoreOpen(o=>!o);setLayoutOpen(false);setPrintOpen(false)}} className={`${barBtn} w-9 px-0 justify-center`}><MoreHorizontal size={16}/></button>
           {moreOpen&&(<>
             <div className="fixed inset-0 z-40" onClick={()=>setMoreOpen(false)}/>
             <div className="absolute right-0 top-11 z-50 w-60 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
