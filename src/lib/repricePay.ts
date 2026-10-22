@@ -8,10 +8,12 @@
 // Now, after such a change, every assigned game whose person isn't marked paid at that
 // event yet is priced again by the same rule as assigning (api/assignments). A person
 // marked paid keeps what they were paid. A person's change reaches only events that
-// haven't ended more than 60 days ago, so old history isn't rewritten. Server only.
+// haven't ended more than 60 days ago, so old history isn't rewritten. A game whose pay
+// was set by hand on Staff pay (lib/payEdit) keeps it. Server only.
 
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates } from '@/lib/utils'
+import { payEditsFor } from '@/lib/payEdit'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 const WINDOW_DAYS = 60
@@ -33,10 +35,11 @@ async function reprice(where: object): Promise<number> {
     prisma.paymentRecord.findMany({ where: { tournamentId: { in: tids }, workerId: { in: Array.from(new Set(rows.map(r => r.workerId))) } }, select: { workerId: true, tournamentId: true } }),
   ])
   const rates = new Map(events.map(e => [e.id, parsePayRates(e.payRates)]))
+  const edited = await payEditsFor(rows)
   const isPaid = new Set(paid.map(p => p.workerId + '|' + p.tournamentId))
   let changed = 0
   for (const r of rows) {
-    if (isPaid.has(r.workerId + '|' + r.game.tournamentId)) continue
+    if (isPaid.has(r.workerId + '|' + r.game.tournamentId) || edited.has(r.id)) continue
     const pr = rates.get(r.game.tournamentId)
     if (!pr) continue
     const want = payFor(r.worker, r.role, pr)

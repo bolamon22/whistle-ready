@@ -1,8 +1,8 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { certLabel, formatDate, formatTime, PAY_METHODS, WORKER_ROLES, ALL_ROLES } from '@/lib/utils'
-import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown, Banknote } from 'lucide-react'
+import { Users, Calendar, Clock, Wallet, Download, ChevronUp, ChevronDown, Banknote, Pencil } from 'lucide-react'
 import TournamentNav from '../TournamentNav'
 import IfCanOpen from '@/components/IfCanOpen'
 import PayRatesPanel from '@/components/PayRatesPanel'
@@ -12,7 +12,8 @@ import { useRefGender, RefGenderSelect, matchesRefGender } from '@/components/St
 import { useRole } from '@/lib/role-context'
 import { canSeeMoney } from '@/lib/roleScope'
 
-interface GameEntry{gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
+// id: the assignment; edited: its pay was set by hand (lib/payEdit), with the note.
+interface GameEntry{id:string;edited:{note:string;by:string;at:string;was:number}|null;gameNumber:string;date:string;startTime:string;division:string;location:string;role:string;pay:number}
 interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual:number|null;hours:number;pay:number}
 // partial: this person also has pay in a group the viewer doesn't run (an assigner
 // set to boys refs looking at a ref who also scorekept). Only the director marks
@@ -36,6 +37,9 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
   const [gender,setGender]=useRefGender(params.id)
   const [payNote,setPayNote]=useState('')
   const [err,setErr]=useState('')
+  // Change one game's pay by hand (Bo, Oct 22 2026): the game being edited, the amount and a note.
+  const [editPay,setEditPay]=useState<{id:string;value:string;note:string}|null>(null)
+  const [payBusy,setPayBusy]=useState(false)
   // Pay rates (components/PayRatesPanel): the director's, as in Tournament setup. On the
   // Assigner plan this is the only place to set them.
   const { effectiveRole }=useRole()
@@ -73,6 +77,37 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
     const res=await fetch('/api/payment-records',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({workerId:ws.worker.id,tournamentId:params.id,amount:ws.totalPay,method,notes:payNote||null,...(payInfo?{payer:payBy}:{})})})
     if(res.ok){setPayNote('');setErr('');await load();setFeeRefresh(n=>n+1)}
     else setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.')
+  }
+
+  async function savePay(id:string,pay:number|null,note=''){
+    setPayBusy(true)
+    try{
+      const res=await fetch(`/api/assignments/${id}/pay`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({pay,note})})
+      if(!res.ok){setErr((await res.json().catch(()=>({})))?.error||'That didn’t save. Please try again.');return}
+      setErr('');setEditPay(null);await load();setFeeRefresh(n=>n+1)
+    }finally{setPayBusy(false)}
+  }
+  // The amount, or a button that opens the editor when this person's pay can change here.
+  function payCell(g:GameEntry,canEdit:boolean){
+    const tag=g.edited?<span className="ml-1 rounded bg-amber-50 px-1 py-0.5 text-[10px] font-semibold text-amber-700" title={`Set by hand${g.edited.by?` by ${g.edited.by}`:''}${g.edited.note?`: ${g.edited.note}`:''} (was $${g.edited.was.toFixed(2)})`}>edited</span>:null
+    if(!canEdit)return <span className="font-semibold">${g.pay.toFixed(2)}{tag}</span>
+    return <button type="button" onClick={()=>setEditPay({id:g.id,value:g.pay.toFixed(2),note:g.edited?.note||''})} title="Change the pay for this game" className="inline-flex min-h-[40px] items-center gap-1 rounded-md px-1.5 font-semibold hover:bg-slate-100 sm:min-h-0 sm:py-0.5">${g.pay.toFixed(2)}{tag}<Pencil size={12} className="text-slate-400" aria-hidden/></button>
+  }
+  function payEditor(g:GameEntry){
+    if(!editPay||editPay.id!==g.id)return null
+    return(
+      <div className="flex flex-col gap-2 bg-amber-50/60 px-3 py-2.5 sm:flex-row sm:items-center sm:px-5">
+        <span className="text-xs font-semibold text-slate-700">Pay for #{g.gameNumber}</span>
+        <span className="relative"><span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-400">$</span>
+          <input autoFocus inputMode="decimal" aria-label="Pay for this game" value={editPay.value} onChange={e=>setEditPay({...editPay,value:e.target.value.replace(/[^\d.]/g,'')})} className="input w-28 py-1 pl-6 text-sm"/></span>
+        <input className="input flex-1 py-1 text-sm" placeholder="Why (optional), e.g. covered two halves" value={editPay.note} maxLength={200} onChange={e=>setEditPay({...editPay,note:e.target.value})}/>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" disabled={payBusy||editPay.value===''} onClick={()=>savePay(g.id,Number(editPay.value),editPay.note)} className="btn-primary btn-sm">{payBusy?'Saving…':'Save'}</button>
+          {g.edited&&<button type="button" disabled={payBusy} onClick={()=>savePay(g.id,null)} className="btn-secondary btn-sm" title="Go back to what the pay rates give">Use the rate</button>}
+          <button type="button" onClick={()=>setEditPay(null)} className="btn-secondary btn-sm">Cancel</button>
+        </div>
+      </div>
+    )
   }
 
   async function unmarkPaid(recordId:string){
@@ -247,13 +282,16 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                   <div className="border-t border-slate-100">
                     {ws.games.length>0&&<div className="sm:hidden divide-y divide-slate-50">
                       {ws.games.map((g,i)=>(
-                        <div key={i} className="px-3 py-2 flex items-center gap-3">
+                        <div key={i}>
+                        <div className="px-3 py-2 flex items-center gap-3">
                           <div className="min-w-0 flex-1">
                             <div className="text-xs text-slate-700"><span className="font-mono text-slate-500">#{g.gameNumber}</span> · {formatDate(g.date)} {formatTime(g.startTime)}</div>
                             <div className="text-xs text-slate-400 truncate">{g.division} · {g.location}</div>
                           </div>
                           <span className="badge bg-teal-100 text-teal-700 text-xs flex-shrink-0">{rLabel(g.role)}</span>
-                          <span className="text-sm font-semibold flex-shrink-0">${g.pay.toFixed(2)}</span>
+                          <span className="text-sm flex-shrink-0">{payCell(g,!pr&&!ws.partial)}</span>
+                        </div>
+                        {payEditor(g)}
                         </div>
                       ))}
                     </div>}
@@ -266,7 +304,7 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
                         <th className="text-left px-4 py-2 text-xs text-slate-500 font-semibold uppercase tracking-wide">Role</th>
                         <th className="text-right px-5 py-2 text-xs text-slate-500 font-semibold uppercase tracking-wide">Pay</th>
                       </tr></thead>
-                      <tbody className="divide-y divide-slate-50">{ws.games.map((g,i)=><tr key={i} className="hover:bg-slate-50"><td className="px-5 py-2 font-mono text-xs text-slate-600">#{g.gameNumber}</td><td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{formatDate(g.date)} {formatTime(g.startTime)}</td><td className="px-4 py-2 text-xs text-slate-600">{g.division}</td><td className="px-4 py-2 text-xs text-slate-600">{g.location}</td><td className="px-4 py-2"><span className="badge bg-teal-100 text-teal-700 text-xs">{rLabel(g.role)}</span></td><td className="px-5 py-2 text-right font-semibold">${g.pay.toFixed(2)}</td></tr>)}</tbody>
+                      <tbody className="divide-y divide-slate-50">{ws.games.map((g,i)=><Fragment key={i}><tr className="hover:bg-slate-50"><td className="px-5 py-2 font-mono text-xs text-slate-600">#{g.gameNumber}</td><td className="px-4 py-2 text-xs text-slate-600 whitespace-nowrap">{formatDate(g.date)} {formatTime(g.startTime)}</td><td className="px-4 py-2 text-xs text-slate-600">{g.division}</td><td className="px-4 py-2 text-xs text-slate-600">{g.location}</td><td className="px-4 py-2"><span className="badge bg-teal-100 text-teal-700 text-xs">{rLabel(g.role)}</span></td><td className="px-5 py-2 text-right">{payCell(g,!pr&&!ws.partial)}</td></tr>{editPay?.id===g.id&&<tr><td colSpan={6} className="p-0">{payEditor(g)}</td></tr>}</Fragment>)}</tbody>
                     </table>}
                     {ws.timeEntries.length>0&&<div className="sm:hidden divide-y divide-slate-50 border-t border-amber-100">
                       {ws.timeEntries.map((t,i)=>(
