@@ -13,7 +13,7 @@ Before you build the schedule, you can ask each club to check its team list and 
 1. Click **Email clubs** and pick **Confirm your teams**.
 2. Tick the clubs, check the letter and click **Send to N clubs**. Each club gets a **Review + confirm your teams** button with its own private link.
 
-**Clubs can also confirm from their club portal:** they tick **Confirm your team list** under What's left, check their teams and tap **Everything's right — confirm**. The column shows the check mark and date, and a "[Club portal …] Confirmed the team list: …" line goes into the registration's notes with who confirmed and the teams and divisions they saw. If their teams change while they have the list open, they're asked to look again before it saves.
+**Clubs can also confirm from their club portal:** they tap **Club business**, tick **Confirm your team list** under What's left, check their teams and tap **Everything's right — confirm**. The column shows the check mark and date, and a "[Club portal …] Confirmed the team list: …" line goes into the registration's notes with who confirmed and the teams and divisions they saw. If their teams change while they have the list open, they're asked to look again before it saves.
 
 **What the Teams confirmed column means:**
 - A check mark and date: the club confirmed.
