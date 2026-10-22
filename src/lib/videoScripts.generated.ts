@@ -324,11 +324,14 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "intro": "Whistle Ready assigner training. A tour of the Assigner board.",
     "lines": [
       "The Assigner board is where you staff every game. Each column is a field, and each row is a start time.",
-      "Switch days with the tabs, and narrow the board by division, or boys and girls games.",
-      "Min staff tells you how many boys referees, girls referees, and scorekeepers you need on your busiest day.",
-      "Density changes the size of the cards. Compact fits a whole day on one screen.",
-      "Fold staffed hides the time rows that are already done, so you only see what is left.",
-      "This counter shows how many slots are filled, how many are open, and anyone double-booked.",
+      "Pick a day with the day buttons. Each one shows how many games it has.",
+      "Narrow the board by division, or to just the boys or girls games.",
+      "Needs crew shows only the games still missing someone. Conflicts shows anyone booked on two games at once.",
+      "The counter shows how many slots are filled, and the red tag flags anyone double-booked.",
+      "Card size makes the cards bigger or smaller. Compact fits a whole day on one screen.",
+      "Refs, or Scorekeepers, shows just those slots, so each assigner sees their own crew, and what is still missing.",
+      "Layout folds the time rows that are already staffed, and sets how many refs every game needs that day.",
+      "Staffing opens your people. Its Needs tab shows how many boys refs, girls refs, and scorekeepers your busiest day takes.",
       "Other views: List shows one game per row. Division groups games by division. And Staff shows one person’s whole day.",
       "Games are the scheduler’s job, so the board doesn’t let you move or edit them. If a game needs to change, ask the scheduler."
     ],
@@ -339,7 +342,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "intro": "Whistle Ready assigner training. Assign officials manually.",
     "lines": [
       "Every game card has a slot for each referee, plus one for the scorekeeper. Dashed slots are still open.",
-      "The staff bar lists everyone on your roster. The number after a name is how many games they have that day, so you can spread games evenly.",
+      "Click Staffing to open your people. The number after a name is how many games they have that day, so you can spread games evenly.",
       "Drag a name onto an open slot to assign them.",
       "Or click an open slot, type a name, and pick it.",
       "Referee slots only list referees who work that kind of game: boys referees on boys games, girls referees on girls games.",
@@ -355,12 +358,12 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "intro": "Whistle Ready assigner training. Auto-assign, and clearing a day.",
     "lines": [
       "Auto-assign fills every open slot for the day you are on in seconds. It never touches assignments you already made.",
-      "Choose what to fill: scorekeepers, boys referees, girls referees. The open count is next to each.",
+      "Tick what to fill. Nothing is ticked at first, so you only fill your own crew: scorekeepers, boys refs, or girls refs. The open count is under each.",
       "Keep scorekeepers on one field all day is on by default, so each scorekeeper stays put.",
       "Click Preview to see every pick before anything is saved. It gives each game to whoever has the fewest so far, and skips anyone who is out.",
       "Untick any pick you don’t want, then click Save.",
       "If games are still short, it tells you which ones, and how many more officials you need. Then close it and check the board.",
-      "To start a day over, click Clear. Pick boys referees, girls referees, or scorekeepers, and optionally which fields.",
+      "To start a day over, open the more menu, and click Clear assignments. Pick boys referees, girls referees, or scorekeepers, and optionally which fields.",
       "Type your name for the record, and confirm. Clearing can’t be undone, so use it carefully."
     ],
     "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
@@ -372,6 +375,7 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "Assigning a game doesn’t tell anyone by itself. When your schedule is ready, click Notify officials.",
       "Send every day of the event, or just the day you are on.",
       "Add a note if you like, such as where to check in.",
+      "Ask them to confirm their games is on, with a date to confirm by. Officials tap Confirm in the email, and a check shows next to their name on the board.",
       "The box shows how many officials will get it, and anyone missing an email, so you can fix their roster entry first.",
       "Click Send. Each official gets an email with only their games: the day, time, field, teams, and whether they referee or keep score. Anyone with Whistle Ready alerts on gets a phone alert too.",
       "Made changes since? Open it again. Only officials whose games changed is ticked for you, so everyone else isn’t emailed twice.",
@@ -397,9 +401,9 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
     "lines": [
       "Someone can’t make it? Click their slot and pick the replacement. The new person shows right away.",
       "To empty a slot, click it and choose unassigned.",
-      "A red warning means someone is on two games at the same time. Hover the warning to see where.",
+      "A red warning means someone is on two games at the same time. Click Conflicts to see just those games.",
       "Fix it by giving one of those games to someone else.",
-      "When the board is the way you want it, tick Lock editing. That stops accidental drags on your computer until you untick it.",
+      "When the board is the way you want it, open the more menu, and click Lock editing. That stops accidental drags until you unlock it.",
       "Then use Notify officials, with only changed officials ticked, so just the people you moved hear about it."
     ],
     "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
@@ -441,6 +445,34 @@ export const VIDEO_SCRIPTS: Record<string, VideoScript> = {
       "On the right is the exact email they will get.",
       "Check who it is going to, then click Send. You will see every name once more before it goes.",
       "Afterward, open Who’s watched. You can see who finished, who is in progress, and remind anyone who has not started."
+    ],
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
+  },
+  "asg-print": {
+    "title": "Print the schedule",
+    "intro": "Whistle Ready assigner training. Print the schedule.",
+    "lines": [
+      "To print the schedule, or save it as a PDF, click the printer at the top of the Assigner board.",
+      "A day as a grid looks like the board: times down, fields across, and every game with its officials.",
+      "Every day puts each day on its own page. You can also print a day as a list, sorted by time, or grouped by field.",
+      "It prints what the board is showing. Pick Girls, or Refs, first, and only those print.",
+      "Click the day. Your browser’s Print opens. Choose Save as PDF, and click Save.",
+      "Each game shows its number, division, teams, and officials. Short field names and division codes keep it easy to read.",
+      "For more choices, open More print choices. Pick the day, the games, refs or scorekeepers, and the layout. Then click Print.",
+      "Bring the printout to the fields, so everyone knows who is working each game."
+    ],
+    "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
+  },
+  "asg-checkpoints": {
+    "title": "Checkpoints: who had each game",
+    "intro": "Whistle Ready assigner training. Checkpoints: who had each game.",
+    "lines": [
+      "If the schedule changes after your officials are on games, Whistle Ready saves a checkpoint first, with who had each game.",
+      "The note on the board tells you how many games moved. Click See who had them.",
+      "Each changed game shows where it was then, and where it is now, with its officials. So you know who to move, and who to tell.",
+      "Pick an older checkpoint from the list. Or click Save a checkpoint now, before you make big changes yourself.",
+      "Print it opens the schedule exactly as it was, with the officials it had. Click Print to save it as a PDF.",
+      "You can also open Checkpoints any time from the more menu on the Assigner board."
     ],
     "outro": "Get Whistle Ready! Game day, run from the palm of your hand."
   },

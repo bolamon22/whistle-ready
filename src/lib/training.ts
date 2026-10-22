@@ -33,14 +33,16 @@ export const TRAINING_VIDEOS: TrainingVideo[] = [
   { id: 'asg-crew', num: 'A02', series: 'assigner', title: 'Build your crew', blurb: 'The Staff Pool, invites, the recruiting link and the letter to forward.', secs: 61 },
   { id: 'asg-roster', num: 'A03', series: 'assigner', title: 'Your tournament roster', blurb: 'Who is working the event, editing someone, filters and Exhibit A.', secs: 62 },
   { id: 'asg-out', num: 'A04', series: 'assigner', title: 'Who can work, and who hasn’t answered', blurb: 'The Availability page: who answered, ref coverage, setting an answer for someone, and emailing who hasn’t answered.', secs: 65 },
-  { id: 'asg-board', num: 'A05', series: 'assigner', title: 'Tour the Assigner board', blurb: 'Days, filters, min staff, density, folding and the other views.', secs: 65 },
-  { id: 'asg-manual', num: 'A06', series: 'assigner', title: 'Assign officials manually', blurb: 'Drag a name or click a slot, busy and double-booked, refs per game.', secs: 67 },
-  { id: 'asg-auto', num: 'A07', series: 'assigner', title: 'Auto-assign and Clear', blurb: 'Fill a day in seconds, preview the picks, and clearing a day.', secs: 65 },
-  { id: 'asg-notify', num: 'A08', series: 'assigner', title: 'Notify your officials', blurb: 'Email each official their own games when the schedule is ready.', secs: 57 },
+  { id: 'asg-board', num: 'A05', series: 'assigner', title: 'Tour the Assigner board', blurb: 'Days, Needs crew and Conflicts, card size, the Layout menu, the Staffing panel and the other views.', secs: 83 },
+  { id: 'asg-manual', num: 'A06', series: 'assigner', title: 'Assign officials manually', blurb: 'Open Staffing, drag a name or click a slot, busy and double-booked, refs per game.', secs: 68 },
+  { id: 'asg-auto', num: 'A07', series: 'assigner', title: 'Auto-assign and Clear', blurb: 'Tick what to fill, preview the picks, and Clear assignments from the more menu.', secs: 70 },
+  { id: 'asg-notify', num: 'A08', series: 'assigner', title: 'Notify your officials', blurb: 'Email each official their own games, and ask them to confirm by a date.', secs: 67 },
   { id: 'asg-check', num: 'A09', series: 'assigner', title: 'Check your work', blurb: 'By official: every crew, every person, and their pay.', secs: 39 },
-  { id: 'asg-swaps', num: 'A10', series: 'assigner', title: 'Game-day swaps', blurb: 'Replace someone, fix a double-booking, lock the board.', secs: 45 },
+  { id: 'asg-swaps', num: 'A10', series: 'assigner', title: 'Game-day swaps', blurb: 'Replace someone, fix a conflict, and Lock editing from the more menu.', secs: 46 },
   { id: 'asg-refneeded', num: 'A11', series: 'assigner', title: 'Ref needed alerts', blurb: 'Answer a Ref needed request on game day.', secs: 36 },
   { id: 'asg-pay', num: 'A12', series: 'assigner', title: 'Paying your officials', blurb: 'Totals, each official’s games, Mark Paid and CSV.', secs: 44 },
+  { id: 'asg-print', num: 'A14', series: 'assigner', title: 'Print the schedule', blurb: 'The printer button: one day or every day as a grid, lists by time or field, filters, Save as PDF and More print choices.', secs: 70 },
+  { id: 'asg-checkpoints', num: 'A15', series: 'assigner', title: 'Checkpoints: who had each game', blurb: 'See who was on a game before it moved, compare then and now, save a checkpoint and print it.', secs: 51 },
   // Tournament director training (Oct 13 2026: "how to set up a tournament, for future
   // tournament directors"). Computer videos; in the Video library, not in a staff group.
   { id: 'dir-create', num: 'D01', series: 'director', title: 'Create a tournament', blurb: 'Name, dates, park and fields, game slots, team fee, logo, divisions, and copying last year’s event.', secs: 88 },
@@ -68,7 +70,7 @@ export const TRAINING_GROUPS: TrainingGroup[] = [
   { key: 'fieldops', label: 'Field ops', roles: ['field_ops'], ids: ['checklist', 'incidents'] },
   { key: 'trainers', label: 'Athletic trainers', roles: ['athletic_trainer'], ids: ['trainer-call', 'injury-report', 'incidents', 'field-request', 'directory'] },
   { key: 'schedulers', label: 'Schedulers', roles: ['scheduler'], ids: ['sch-home', 'dir-setup', 'sch-timing', 'dir-divisions', 'sch-brackets', 'dir-schedule', 'sch-fixes', 'sch-weather'] },
-  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-pay', 'asg-send'] },
+  { key: 'assigners', label: 'Assigners', roles: ['assigner'], ids: ['ref-games', 'ref-find', 'ref-gameday', 'asg-home', 'asg-crew', 'asg-roster', 'asg-out', 'asg-board', 'asg-manual', 'asg-auto', 'asg-notify', 'asg-check', 'asg-swaps', 'asg-refneeded', 'asg-print', 'asg-checkpoints', 'asg-pay', 'asg-send'] },
 ]
 
 export const trainingVideo = (id: string) => TRAINING_VIDEOS.find(v => v.id === id) || null
