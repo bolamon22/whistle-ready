@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { ChevronLeft, History, Printer } from 'lucide-react'
-import { formatDate, formatTime } from '@/lib/utils'
+import { formatDate, formatTime, getDivisionColor, resetDivisionColors } from '@/lib/utils'
+import { divisionAbbr } from '@/lib/names'
 import { eventDayList } from '@/lib/eventDays'
 import { gameGender } from '@/lib/gameGender'
 import { teamsSide } from '@/lib/eventTeams'
@@ -14,6 +15,10 @@ import { cpGame, ROLE_SHORT, type CpGame } from '@/lib/checkpointDiff'
 // time or grouped by field, refs and scorekeepers. The browser's Print saves it as a PDF.
 // ?checkpoint=<id> prints the officials as a checkpoint had them (lib/assignCheckpoint).
 // Opened from the Assigner's ⋯ menu and from Checkpoints.
+// Bo, Oct 21 2026: the first table ran the long field and division names into each other, and
+// he wants "the grid format. That's more valuable when looking at it." So fields print as
+// their short name ("Field 1", not the complex), divisions as their abbreviation (BHSB), and
+// Grid lays each day out like the Assigner: times down, fields across, a game per cell.
 
 type T = { name: string; logoUrl?: string; startDate?: string; endDate?: string; dates?: string; teams?: unknown }
 type Cp = { id: string; at: string; reason: string; data: CpGame[] }
@@ -21,6 +26,12 @@ const mins = (t: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); retu
 const time = (t: string) => (/^\d{1,2}:\d{2}/.test(t || '') ? formatTime(t) : 'TBD')
 const when = (iso: string) => new Date(iso).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
 const byField = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true })
+// "Village Park Athletics Complex - Field 1" -> "Field 1", the way the Assigner labels fields.
+const fieldShort = (f: string) => (f.includes(' - ') ? f.split(' - ').slice(1).join(' - ').trim() : f) || 'No field'
+// Up to this many fields side by side on one landscape page; more go to a second grid.
+const GRID_FIELDS = 9
+type DivColor = { bg: string; border: string; text: string }
+const NO_COLOR: DivColor = { bg: '#f8fafc', border: '#cbd5e1', text: '#475569' }
 
 export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [t, setT] = useState<T | null>(null)
@@ -29,7 +40,7 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [err, setErr] = useState('')
   const [day, setDay] = useState('all')
   const [side, setSide] = useState<'all' | 'boys' | 'girls'>('all')
-  const [layout, setLayout] = useState<'time' | 'field'>('time')
+  const [layout, setLayout] = useState<'grid' | 'time' | 'field'>('grid')
   const [show, setShow] = useState<'both' | 'refs' | 'sk'>('both')
   useEffect(() => {
     const cid = new URLSearchParams(window.location.search).get('checkpoint')
@@ -56,12 +67,19 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
   }, [shown])
   const cols = [...(show !== 'sk' ? refCols : []), ...(show !== 'refs' ? ['scorekeeper'] : [])]
   const name = (g: CpGame, role: string) => g.officials.filter(o => o.role === role).map(o => o.name).join(', ')
+  // The Assigner's division colors, in a fixed order so a division keeps its color on every page.
+  const colors = useMemo(() => {
+    resetDivisionColors()
+    const m = new Map<string, DivColor>()
+    for (const d of [...new Set((games || []).map(g => g.division))].sort()) m.set(d, getDivisionColor(d))
+    return m
+  }, [games])
   const groups = useMemo(() => {
     const out: { key: string; title: string; games: CpGame[] }[] = []
     for (const g of shown) {
       const k = layout === 'field' ? `${g.date}|${g.location}` : g.date
       let grp = out.find(x => x.key === k)
-      if (!grp) { grp = { key: k, title: layout === 'field' ? `${formatDate(g.date)} · ${g.location || 'No field'}` : formatDate(g.date), games: [] }; out.push(grp) }
+      if (!grp) { grp = { key: k, title: layout === 'field' ? `${formatDate(g.date)} · ${fieldShort(g.location)}` : formatDate(g.date), games: [] }; out.push(grp) }
       grp.games.push(g)
     }
     if (layout === 'field') out.sort((a, b) => a.key.split('|')[0].localeCompare(b.key.split('|')[0]) || byField(a.key.split('|')[1], b.key.split('|')[1]))
@@ -82,6 +100,10 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
         #ps-print tr { break-inside: avoid }
         #ps-print .ps-group { break-inside: auto }
         #ps-print h2 { break-after: avoid }
+        #ps-print .ps-day + .ps-day { break-before: page }
+        #ps-print .ps-grid-wrap { overflow: visible !important }
+        #ps-print .ps-grid { min-width: 0 !important; font-size: 8px }
+        #ps-print .ps-grid thead { display: table-header-group }
         html, body, #ps-print { background: #fff !important }
         * { -webkit-print-color-adjust: exact; print-color-adjust: exact }
       }`}</style>
@@ -101,8 +123,8 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
           <select value={show} onChange={e => setShow(e.target.value as 'both' | 'refs' | 'sk')} aria-label="Officials" className={sel}>
             <option value="both">Refs and scorekeepers</option><option value="refs">Refs only</option><option value="sk">Scorekeepers only</option>
           </select>
-          <select value={layout} onChange={e => setLayout(e.target.value as 'time' | 'field')} aria-label="Layout" className={sel}>
-            <option value="time">By time</option><option value="field">By field</option>
+          <select value={layout} onChange={e => setLayout(e.target.value as 'grid' | 'time' | 'field')} aria-label="Layout" className={sel}>
+            <option value="grid">Grid (fields across)</option><option value="time">List by time</option><option value="field">List by field</option>
           </select>
           <button type="button" onClick={() => window.print()} disabled={!shown.length} className="btn-primary inline-flex min-h-[44px] items-center gap-1.5 sm:ml-auto sm:min-h-0"><Printer size={15} aria-hidden />Print</button>
         </div>
@@ -118,14 +140,15 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
             <p className="text-lg font-bold text-slate-900">{t?.name}</p>
             <p className="text-xs text-slate-600">{note} · {shown.length} game{shown.length === 1 ? '' : 's'} · printed {when(new Date().toISOString())}</p>
           </div>
-          {groups.map(grp => (
+          {layout === 'grid' && groups.map(grp => <GridDay key={grp.key} title={grp.title} games={grp.games} cols={cols} colors={colors} />)}
+          {layout !== 'grid' && groups.map(grp => (
             <section key={grp.key} className="ps-group mb-4">
               <h2 className="mb-1 text-sm font-bold text-slate-800">{grp.title}</h2>
               {/* Phones: a card per game. Wider screens and paper: the table. */}
               <div className="space-y-1.5 sm:hidden print:hidden">
                 {grp.games.map(g => (
                   <div key={g.id} className="rounded-lg border border-slate-200 bg-white p-2.5 text-sm">
-                    <p className="font-semibold text-slate-900">{time(g.startTime)}{layout === 'time' && g.location ? ` · ${g.location}` : ''} <span className="font-normal text-slate-500">#{g.gameNumber} · {g.division}</span></p>
+                    <p className="font-semibold text-slate-900">{time(g.startTime)}{layout === 'time' && g.location ? ` · ${fieldShort(g.location)}` : ''} <span className="font-normal text-slate-500">#{g.gameNumber} · {divisionAbbr(g.division)}</span></p>
                     <p className="text-slate-600">{g.team1} vs {g.team2}</p>
                     <p className="mt-1 text-xs text-slate-700">{cols.map(c => `${ROLE_SHORT[c] || c}: ${name(g, c) || 'open'}`).join(' · ')}</p>
                   </div>
@@ -135,12 +158,12 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
                 <table className="w-full table-fixed text-left text-xs">
                   {/* The same widths for every day and field, so the columns line up down the page. */}
                   <colgroup>
-                    <col style={{ width: '9%' }} />
-                    {layout === 'time' && <col style={{ width: '9%' }} />}
-                    <col style={{ width: '5%' }} />
-                    <col style={{ width: '11%' }} />
+                    <col style={{ width: '7%' }} />
+                    {layout === 'time' && <col style={{ width: '7%' }} />}
+                    <col style={{ width: '4%' }} />
+                    <col style={{ width: '7%' }} />
                     <col />
-                    {cols.map(c => <col key={c} style={{ width: '12%' }} />)}
+                    {cols.map(c => <col key={c} style={{ width: '13%' }} />)}
                   </colgroup>
                   <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600">
                     <tr>
@@ -152,14 +175,14 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
                       {cols.map(c => <th key={c} className="px-2 py-1.5">{ROLE_SHORT[c] || c}</th>)}
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 align-top [&_td]:break-words">
                     {grp.games.map(g => (
                       <tr key={g.id}>
                         <td className="whitespace-nowrap px-2 py-1">{time(g.startTime)}</td>
-                        {layout === 'time' && <td className="whitespace-nowrap px-2 py-1">{g.location}</td>}
+                        {layout === 'time' && <td className="px-2 py-1">{fieldShort(g.location)}</td>}
                         <td className="px-2 py-1">{g.gameNumber}</td>
-                        <td className="px-2 py-1">{g.division}</td>
-                        <td className="px-2 py-1">{g.team1} vs {g.team2}</td>
+                        <td className="px-2 py-1 font-semibold" style={{ color: (colors.get(g.division) || NO_COLOR).text }} title={g.division}>{divisionAbbr(g.division)}</td>
+                        <td className="px-2 py-1">{g.team1} <span className="text-slate-400">v</span> {g.team2}</td>
                         {cols.map(c => <td key={c} className="px-2 py-1">{name(g, c) || <span className="text-slate-400">open</span>}</td>)}
                       </tr>
                     ))}
@@ -171,5 +194,83 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
         </div>
       )}
     </div>
+  )
+}
+
+// One day as a grid: times down the side, fields across the top, a game in each cell with
+// its number, division and teams, then its refs. A field's scorekeeper usually keeps score
+// on that field all day, so when every game there has the same one it prints once, under
+// the field's name, and a cell lists a scorekeeper only when its field has no single one.
+function GridDay({ title, games, cols, colors }: { title: string; games: CpGame[]; cols: string[]; colors: Map<string, DivColor> }) {
+  const loc = (g: CpGame) => g.location || ''
+  const fields = [...new Set(games.map(loc))].sort(byField)
+  const times = [...new Set(games.map(g => g.startTime))].sort((a, b) => mins(a) - mins(b))
+  const who = (g: CpGame, role: string) => g.officials.filter(o => o.role === role).map(o => o.name).filter(Boolean).join(', ')
+  const showSk = cols.includes('scorekeeper')
+  const refCols = cols.filter(c => c !== 'scorekeeper')
+  const fieldSk = new Map<string, string>()
+  for (const f of fields) {
+    const sks = games.filter(g => loc(g) === f).map(g => who(g, 'scorekeeper'))
+    if (sks[0] && sks.every(x => x === sks[0])) fieldSk.set(f, sks[0])
+  }
+  const chunks: string[][] = []
+  for (let i = 0; i < fields.length; i += GRID_FIELDS) chunks.push(fields.slice(i, i + GRID_FIELDS))
+  return (
+    <section className="ps-day mb-6">
+      {chunks.map((fs, ci) => (
+        <div key={ci} className={ci ? 'mt-3' : ''}>
+          <h2 className="mb-1 text-sm font-bold text-slate-800">{title}{chunks.length > 1 ? ` (fields ${ci * GRID_FIELDS + 1}–${ci * GRID_FIELDS + fs.length} of ${fields.length})` : ''}</h2>
+          <div className="ps-grid-wrap overflow-x-auto rounded-lg border border-slate-300 bg-white print:rounded-none">
+            <table className="ps-grid w-full min-w-[900px] table-fixed border-collapse text-[10px] leading-tight">
+              <colgroup>
+                <col style={{ width: 52 }} />
+                {fs.map(f => <col key={f} />)}
+              </colgroup>
+              <thead>
+                <tr className="bg-slate-700 text-white">
+                  <th className="border-r border-slate-500 px-1 py-1 text-left font-semibold">Time</th>
+                  {fs.map(f => (
+                    <th key={f} className="border-r border-slate-500 px-1 py-1 text-center font-semibold last:border-r-0">
+                      <span className="block">{fieldShort(f)}</span>
+                      {showSk && fieldSk.get(f) && <span className="block font-normal text-slate-200">SK {fieldSk.get(f)}</span>}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {times.map(tm => (
+                  <tr key={tm} className="break-inside-avoid border-t border-slate-300">
+                    <td className="whitespace-nowrap border-r border-slate-300 bg-slate-50 px-1 py-1 align-top font-bold text-slate-800">{time(tm)}</td>
+                    {fs.map(f => {
+                      const here = games.filter(g => loc(g) === f && g.startTime === tm)
+                      return (
+                        <td key={f} className="border-r border-slate-200 p-0.5 align-top last:border-r-0">
+                          {here.map(g => {
+                            const dc = colors.get(g.division) || NO_COLOR
+                            const sk = showSk && !fieldSk.has(f) ? who(g, 'scorekeeper') : ''
+                            return (
+                              <div key={g.id} className="mb-0.5 break-words rounded-sm px-1 py-0.5 last:mb-0" style={{ background: dc.bg, borderLeft: `3px solid ${dc.border}` }}>
+                                <p><b className="text-slate-900">#{g.gameNumber}</b> <b style={{ color: dc.text }} title={g.division}>{divisionAbbr(g.division)}</b></p>
+                                <p className="font-semibold text-slate-900">{g.team1} <span className="font-normal text-slate-500">v</span> {g.team2}</p>
+                                {refCols.map(c => {
+                                  const n = who(g, c)
+                                  if (!n && c === 'ref3') return null
+                                  return <p key={c} className="text-slate-700"><span className="text-slate-400">{ROLE_SHORT[c] || c}</span> {n || <span className="font-semibold text-amber-700">open</span>}</p>
+                                })}
+                                {showSk && !fieldSk.has(f) && <p className="text-slate-700"><span className="text-slate-400">SK</span> {sk || <span className="font-semibold text-amber-700">open</span>}</p>}
+                              </div>
+                            )
+                          })}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </section>
   )
 }
