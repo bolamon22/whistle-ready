@@ -23,6 +23,16 @@ const DEFAULT_FROM_NAME = process.env.EMAIL_FROM_NAME || 'Whistle Ready'
 // per-org settings next to the sender identity.
 export const OFFICE_CC = 'info@sunshinelax.com'
 
+/** The office copy for one org's staff mail: that org's own contact address. Another
+ *  org's staff invites carry a personal claim link that sets the person's password,
+ *  so they never go to the Sunshine inbox (Bo, Oct 22 2026: James Vacco's refs).
+ *  No org (platform mail) keeps the Sunshine office. */
+export function officeCcFor(org?: { contactEmail?: string | null } | null): string | undefined {
+  if (!org) return OFFICE_CC
+  const c = String(org.contactEmail || '').trim()
+  return c.includes('@') ? c : undefined
+}
+
 export type SendEmailArgs = {
   to: string | string[]
   subject: string

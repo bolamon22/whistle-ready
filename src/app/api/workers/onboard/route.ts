@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import crypto from 'crypto'
 import { requireStaff } from '@/lib/apiAuth'
-import { sendEmail, orgSender, OFFICE_CC } from '@/lib/email'
+import { sendEmail, orgSender, officeCcFor } from '@/lib/email'
 import { inviteLetterFor, mergeLetter, letterBodyHtml, escapeHtml } from '@/lib/inviteLetter'
 import { orgById } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     await sendEmail({
       ...orgSender(org),
       to: email,
-      cc: OFFICE_CC, // office copy of every staff invite (Bo)
+      cc: officeCcFor(org), // the org's own office copy (lib/email officeCcFor)
       subject,
       html: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px;">
