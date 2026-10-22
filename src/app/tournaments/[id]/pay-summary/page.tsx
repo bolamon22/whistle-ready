@@ -209,6 +209,8 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400">
               <span>{filtered.length} shown</span>
+              {/* Where hand-set pay lives (Bo, Oct 22 2026: he looked for it and didn't see it). */}
+              <span className="hidden sm:inline">· To change a game's pay, open a person and click the amount.</span>
               {(search||roleFilter!=='all'||gender!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600 underline" onClick={()=>{setSearch('');setRoleFilter('all');setGender('all')}}>Clear filters</button>}
             </div>
           </div>
