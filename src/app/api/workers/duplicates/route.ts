@@ -2,6 +2,11 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@libsql/client'
 import { prisma } from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
+import { canSeeContacts } from '@/lib/roleScope'
+
+// Every staff record's email, phone and payout handle: the people who see staff
+// contacts only. A ref or scorekeeper who claimed an invite is signed-in staff too.
+const denied = () => NextResponse.json({ error: 'Not allowed' }, { status: 403 })
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -105,6 +110,7 @@ async function resolveOrgId(req: Request, gate: { role: string; orgId: string | 
 export async function GET(req: Request) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
+  if (gate.role !== 'admin' && !canSeeContacts(gate.role)) return denied()
   const orgId = await resolveOrgId(req, gate)
 
   const client = db()
@@ -170,6 +176,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
+  if (gate.role !== 'admin' && !canSeeContacts(gate.role)) return denied()
   let body: { action?: unknown; key?: unknown; viewOrgId?: unknown } = {}
   try { body = await req.json() } catch { /* validated below */ }
   const key = String(body.key ?? '')
