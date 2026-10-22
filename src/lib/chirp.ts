@@ -122,20 +122,38 @@ export function pickArticles(list: HelpArticle[], question: string, page: string
   return out
 }
 
-/** Training videos this login role is shown: the assigner series only to
- *  assigners, directors and admins; everything else to all staff; and only the
- *  ones the organization's plan has the pages for (lib/training VIDEO_NEEDS). */
+/** Training videos this login role is shown, by series: everyone gets the
+ *  general staff videos (no series) and the ref videos; assigners add the
+ *  assigner series; schedulers the scheduler series; directors and admins get
+ *  all of them. A ref asking about his games shouldn't be handed "Build and
+ *  publish the schedule". Only the ones the organization's plan has the pages
+ *  for (lib/training VIDEO_NEEDS). */
+const SERIES_FOR: Record<string, string[] | 'all'> = {
+  admin: 'all', director: 'all',
+  assigner: ['ref', 'assigner'],
+  scheduler: ['ref', 'scheduler'],
+  field_director: ['ref'],
+  staff: ['ref'],
+}
 export function videosForRole(role: string, planOff: readonly string[] = []) {
-  const assigns = ['admin', 'director', 'assigner'].includes(role)
-  return TRAINING_VIDEOS.filter(v => (assigns || v.series !== 'assigner') && videoOnPlan(v.id, planOff))
+  const allow = SERIES_FOR[role] ?? ['ref']
+  return TRAINING_VIDEOS.filter(v => (allow === 'all' || !v.series || allow.includes(v.series)) && videoOnPlan(v.id, planOff))
 }
 const videoLink = (v: { id: string; title: string; secs: number }) => `[Watch: ${v.title} (${minutesLabel(v.secs)})](/dashboard/staff/training?v=${encodeURIComponent(v.id)})`
 
 /** The videos whose title, blurb or narration best match the question, with
  *  their narration: they were filmed on the real screens, so they double as
  *  step-by-step knowledge. */
+// Words people say vs. the words the videos use.
+const VIDEO_SYNONYMS: Record<string, string[]> = {
+  ref: ['official'], refs: ['official'], referee: ['official'], referees: ['official'],
+  tell: ['notify', 'email'], let: ['notify'], know: ['notify'], text: ['notify'],
+  sick: ['replace', 'swap'], cancel: ['replace', 'swap'], show: ['replace'], cover: ['replace', 'swap'],
+  wrong: ['fix'], broken: ['fix'], mistake: ['fix'],
+}
 export function pickVideos(role: string, question: string, max = 2, planOff: readonly string[] = []) {
-  const q = Array.from(new Set(words(question).map(stem)))
+  const raw = words(question)
+  const q = Array.from(new Set([...raw, ...raw.flatMap(w => VIDEO_SYNONYMS[w] || [])].map(stem)))
   if (!q.length) return []
   return videosForRole(role, planOff).map(v => {
     const sc = VIDEO_SCRIPTS[v.id]
@@ -143,6 +161,8 @@ export function pickVideos(role: string, question: string, max = 2, planOff: rea
     const body = new Set(words(sc ? [sc.intro, ...sc.lines, sc.outro].join(' ') : '').map(stem))
     let score = 0
     for (const w of q) score += (title.has(w) ? 3 : 0) + (blurb.has(w) ? 2 : 0) + (body.has(w) ? 1 : 0)
+    // An assigner asking about refs means the assigner videos, not the ref ones.
+    if (score && v.series && v.series === role) score += 3
     return { v, sc, score }
   }).filter(x => x.score >= 3).sort((a, b) => b.score - a.score).slice(0, max)
 }
