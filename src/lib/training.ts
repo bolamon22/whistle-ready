@@ -178,3 +178,70 @@ export function trainingLetter(o: { eventName?: string; dates?: string; roles: s
   const subject = o.eventName ? `${o.eventName}: your training videos` : 'Your Whistle Ready training videos'
   return { subject, body }
 }
+
+// When each video file was last re-recorded (the date of the commit that last
+// changed videos/training/<id>.mp4). Update the date when you ship a new take, so
+// the library and the staff Training page can show "Updated <date>".
+export const VIDEO_UPDATED: Record<string, string> = {
+  'asg-auto': '2026-10-22',
+  'asg-board': '2026-10-22',
+  'asg-check': '2026-10-18',
+  'asg-checkpoints': '2026-10-22',
+  'asg-crew': '2026-10-18',
+  'asg-home': '2026-10-18',
+  'asg-manual': '2026-10-22',
+  'asg-notify': '2026-10-22',
+  'asg-out': '2026-10-18',
+  'asg-pay': '2026-10-18',
+  'asg-print': '2026-10-22',
+  'asg-refneeded': '2026-10-18',
+  'asg-roster': '2026-10-18',
+  'asg-send': '2026-10-18',
+  'asg-swaps': '2026-10-22',
+  'availability': '2026-10-18',
+  'checklist': '2026-10-18',
+  'dir-create': '2026-10-18',
+  'dir-divisions': '2026-10-18',
+  'dir-money': '2026-10-18',
+  'dir-registrations': '2026-10-18',
+  'dir-schedule': '2026-10-18',
+  'dir-setup': '2026-10-18',
+  'directory': '2026-10-18',
+  'field-request': '2026-10-18',
+  'game-day-prep': '2026-10-18',
+  'home': '2026-10-18',
+  'incidents': '2026-10-18',
+  'injury-report': '2026-10-18',
+  'keep-score': '2026-10-18',
+  'penalties': '2026-10-18',
+  'post-final': '2026-10-18',
+  'ref-find': '2026-10-18',
+  'ref-gameday': '2026-10-18',
+  'ref-games': '2026-10-18',
+  'sch-brackets': '2026-10-18',
+  'sch-fixes': '2026-10-18',
+  'sch-home': '2026-10-18',
+  'sch-timing': '2026-10-18',
+  'sch-weather': '2026-10-18',
+  'scorer-settings': '2026-10-18',
+  'sign-up': '2026-10-18',
+  'staff-id': '2026-10-18',
+  'trainer-call': '2026-10-18',
+}
+
+/** "Oct 22, 2026" for a video's last update, or '' if we have no date. */
+export function videoUpdatedLabel(id: string): string {
+  const iso = VIDEO_UPDATED[id]
+  if (!iso) return ''
+  const [y, m, day] = iso.split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
+
+/** The newest update across a set of videos (all of them by default), as "Oct 22, 2026". */
+export function lastVideoUpdate(ids?: string[]): string {
+  const dates = (ids || Object.keys(VIDEO_UPDATED)).map(i => VIDEO_UPDATED[i]).filter(Boolean).sort()
+  const last = dates[dates.length - 1]
+  if (!last) return ''
+  const [y, m, day] = last.split('-').map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}

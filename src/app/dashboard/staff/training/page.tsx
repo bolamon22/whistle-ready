@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { ArrowLeft, CheckCircle2, ChevronRight, Play, X, GraduationCap } from 'lucide-react'
-import { trainingGroups, groupsFor, videosFor, trainingVideo, videoSrc, posterSrc, minutesLabel, type TrainingVideo } from '@/lib/training'
+import { trainingGroups, groupsFor, videosFor, trainingVideo, videoSrc, posterSrc, minutesLabel, videoUpdatedLabel, lastVideoUpdate, type TrainingVideo } from '@/lib/training'
 
 // Training videos for staff (Oct 2026). Each person sees the groups for their roles
 // first ("Start here" for everyone), the rest folded under "More videos". A video
@@ -45,7 +45,7 @@ export default function TrainingPage() {
     <div className="max-w-2xl mx-auto px-4 py-6">
       <Link href="/dashboard/staff" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-teal-700 mb-3"><ArrowLeft size={15} /> My portal</Link>
       <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><GraduationCap size={24} className="text-teal-600" /> Training videos</h1>
-      <p className="text-sm text-slate-500 mt-1">Short videos of the real screens, about a minute each. Watch the ones for your job before your first game day.</p>
+      <p className="text-sm text-slate-500 mt-1">Short videos of the real screens, about a minute each. Watch the ones for your job before your first game day.{lastVideoUpdate(want) && <span className="block text-xs text-slate-400 mt-0.5">Last video update: {lastVideoUpdate(want)}</span>}</p>
 
       {loaded && (
         <div className="mt-4 bg-white border border-slate-200 rounded-xl p-4">
@@ -92,7 +92,7 @@ function Group({ label, ids, watched, onPlay }: { label: string; ids: string[]; 
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-slate-800 leading-snug">{v.title}</p>
                 <p className="text-xs text-slate-500 mt-0.5 leading-snug">{v.blurb}</p>
-                <p className="text-[11px] text-slate-400 mt-1">{minutesLabel(v.secs)}</p>
+                <p className="text-[11px] text-slate-400 mt-1">{minutesLabel(v.secs)}{videoUpdatedLabel(v.id) && ` · Updated ${videoUpdatedLabel(v.id)}`}</p>
               </div>
               {watched.has(v.id)
                 ? <CheckCircle2 size={20} className="text-emerald-600 flex-shrink-0" aria-label="Watched" />
