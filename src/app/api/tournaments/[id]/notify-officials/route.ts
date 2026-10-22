@@ -11,6 +11,7 @@ import { CREWS, crewsOf, isCrew, type Crew } from '@/lib/staffRelease'
 import { getRelease, setRelease } from '@/lib/staffReleaseStore'
 import { rememberCrewAssigner } from '@/lib/officialChangeAlerts'
 import { eventSideOf } from '@/lib/eventTeamsStore'
+import { officialLinks, officialLinksHtml, officialLinksText } from '@/lib/officialLinks'
 
 // "Notify officials" on the Assigner board (Bo, Oct 13 2026: "we should have a way
 // for them to notify the refs when the schedule is ready"). Assigning never told
@@ -132,8 +133,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const noEmail = targets.filter(p => !p.email).map(p => p.name)
   const lastSentAt = Object.values(sent).map(v => v.sentAt).sort().pop() || ''
 
+  // The event's rules, field maps and directions, from its public event page (lib/officialLinks;
+  // Bo, Oct 22 2026), at the bottom of every email. The preview names them in the dialog.
+  const infoLinks = await officialLinks(params.id)
   if (b.preview) {
     return NextResponse.json({
+      infoLinks: infoLinks.map(l => ({ label: l.label, url: l.url })),
       officials: all.length, targets: targets.length, games: targets.reduce((n, p) => n + p.rows.length, 0),
       unchanged: all.length - targets.length, noEmail, lastSentAt,
       emailOn: emailEnabled(),
@@ -199,6 +204,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             : confirm ? ' You’ve confirmed all of them. Thank you!' : ''}</p>
           ${note ? `<p style="margin:12px 0;padding:12px 14px;background:#f0fdfa;border:1px solid #99f6e4;border-radius:8px;color:#0f172a">${esc(note).replace(/\n/g, '<br>')}</p>` : ''}
           ${tables}
+          ${officialLinksHtml(infoLinks, esc)}
           ${asking ? `<div style="margin-top:22px">${button(confirmUrl, pending === nUp ? `Confirm my ${gamesWord(nUp)}` : `Confirm ${gamesWord(pending)}`)}</div>
           <p style="margin:6px 0 0;font-size:13px"><a href="${confirmUrl}" style="color:#0f766e">Can't work one of them? Tell the assigner</a></p>
           <p style="margin:14px 0 0;font-size:12px;color:#64748b">No login needed. If your games change, we'll ask you to confirm the new ones. <a href="${myGames}" style="color:#64748b">My games</a> always shows the latest.</p>`
@@ -207,6 +213,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         footerNote: 'Questions about your games? Reply to this email.',
       })
       const text = `${first}, here are your games at ${t.name}:\n\n` + p.rows.map(r => `${dayName(r.date)} ${time12(r.time)} · ${r.field} · #${r.num} ${r.division} · ${r.teams} · ${r.role}${asking && isYes(r) ? ' (confirmed)' : ''}`).join('\n') + (note ? `\n\n${note}` : '')
+        + officialLinksText(infoLinks)
         + (asking ? `\n\nPlease confirm${confirmBy ? ` by ${dayTitle(confirmBy)}` : ''}, or tell the assigner which ones you can't work: ${confirmUrl}` : '') + `\n\nMy games: ${myGames}`
       const subject = asking
         ? `${reminder ? 'Reminder: please' : 'Please'} confirm ${pending === nUp ? `your ${gamesWord(nUp)}` : `${gamesWord(pending)}`} · ${t.name}${date ? ` · ${dayName(date)}` : ''}`

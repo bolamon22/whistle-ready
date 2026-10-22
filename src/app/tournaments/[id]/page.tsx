@@ -2074,7 +2074,7 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
   // Who (Bo, Oct 15 2026): boys officials, girls officials and scorekeepers have
   // their own assigners, so nobody is picked until the sender picks their crew.
   const [crews,setCrews]=useState<Crew[]>([])
-  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string;crews?:{crew:Crew;officials:number;games:number;shown:boolean}[];people?:{id:string;name:string;games:number;email:boolean;changed:boolean}[]}|null>(null)
+  const [preview,setPreview]=useState<{officials:number;targets:number;games:number;unchanged:number;noEmail:string[];lastSentAt:string;emailOn:boolean;ask:{confirmBy:string;at:string}|null;suggestBy:string;crews?:{crew:Crew;officials:number;games:number;shown:boolean}[];people?:{id:string;name:string;games:number;email:boolean;changed:boolean}[];infoLinks?:{label:string;url:string}[]}|null>(null)
   const [sending,setSending]=useState(false)
   const [testing,setTesting]=useState(false)
   const [primed,setPrimed]=useState(false)
@@ -2195,6 +2195,10 @@ function NotifyOfficials({ tournamentId, day, dayLabel, onClose, onSent }: { tou
           {!preview?<p className="text-slate-400">Counting…</p>:!crews.length?<p className="text-slate-500">Pick who to notify.</p>:<>
             <p><span className="font-bold">{preview.targets}</span> official{preview.targets===1?'':'s'} · {preview.games} game{preview.games===1?'':'s'}{preview.unchanged>0&&onlyChanged?<span className="text-slate-500"> · {preview.unchanged} unchanged, skipped</span>:''}</p>
             {last&&<p className="text-xs text-slate-500">Last sent {last}</p>}
+            {/* Rules, field maps and directions from the event page go at the bottom of each email (Oct 22 2026). */}
+            {(preview.infoLinks??[]).length>0
+              ?<p className="text-xs text-slate-500">Includes {(preview.infoLinks??[]).map((l,i)=><span key={l.url}>{i>0?', ':''}<a href={l.url} target="_blank" rel="noreferrer" className="text-teal-700 underline">{l.label}</a></span>)}.</p>
+              :<p className="text-xs text-slate-400">No rules or field maps on this event&apos;s page, so the email has none.</p>}
             {preview.noEmail.length>0&&<p className="text-xs text-amber-700">No email on file: {preview.noEmail.join(', ')}. Add one on the Roster.</p>}
             {!preview.emailOn&&<p className="text-xs text-red-600">Email isn’t set up on this server, so only phone alerts will go out.</p>}
           </>}
