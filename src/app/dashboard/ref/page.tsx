@@ -25,15 +25,18 @@ interface Portal { worker: { id: string; name: string; defaultRole: string; role
 // setup checklist (Bo, Sep 4). Multi-role workers see the union; no linked worker
 // record falls back to showing everything.
 const TOOLS: { href: string; label: string; icon: React.ComponentType<{ size?: number; className?: string }>; roles: string[] | null }[] = [
+  // Everyone can score (Bo, Oct 22 2026): refs and field ops cover a field when a
+  // scorekeeper is short, so scoring sits first for every job. Scorekeepers hand out
+  // awards too.
+  { href: 'scoring',        label: 'Live scoring',    icon: Timer,          roles: null },
+  { href: 'scores',         label: 'Post scores',     icon: Target,         roles: null },
   { href: 'communications', label: 'Field Request',   icon: Radio,          roles: null },
-  { href: 'scoring',        label: 'Live scoring',    icon: Timer,          roles: ['ref', 'scorekeeper', 'field_ops'] },
-  { href: 'scores',         label: 'Post scores',     icon: Target,         roles: ['ref', 'scorekeeper', 'field_ops'] },
-  { href: 'directory',      label: 'Staff contacts',  icon: Users,          roles: null },
+  { href: 'awards',         label: 'Awards & photos', icon: Trophy,         roles: ['field_ops', 'scorekeeper'] },
   { href: 'checklist',      label: 'Setup checklist', icon: ClipboardCheck, roles: ['field_ops'] },
+  { href: 'directory',      label: 'Staff contacts',  icon: Users,          roles: null },
+  { href: 'rules',          label: 'Rules',           icon: BookOpen,       roles: ['ref', 'scorekeeper'] },
   { href: 'incidents',      label: 'Incidents',       icon: TriangleAlert,  roles: null },
   { href: 'emergency',      label: 'Emergency plan',  icon: Siren,          roles: null },
-  { href: 'awards',         label: 'Awards & photos', icon: Trophy,         roles: ['field_ops'] },
-  { href: 'rules',          label: 'Rules',           icon: BookOpen,       roles: ['ref', 'scorekeeper'] },
 ]
 interface Crew { role: string; name: string; phone: string }
 interface Assignment { id: string; role: string; payRate: number; game: Game; crew?: Crew[] }
@@ -333,15 +336,21 @@ export default function RefDashboard() {
   // The availability to-do: events they work with a day still unanswered.
   const todoEvents = (portal?.events || []).filter(e => e.working && e.avail && e.avail.days.some(d => !d.state && !availLocked(d.date)))
   const todoLeft = openDays(portal)
+  // Event days (Bo, Oct 22 2026): during an event they work, the home page leads with
+  // their next game and the game-day buttons, and the before-the-event to-dos
+  // (confirming games, availability) move down under More instead of sitting on top.
+  const eventLive = (portal?.events || []).some(e => e.working && String(e.startDate || '').slice(0, 10) <= today && today <= String(e.endDate || e.startDate || '').slice(0, 10))
+    || (!!upNext && upNext.date === today)
 
   return (
     <div className="max-w-md mx-auto">
       {/* Greeting */}
       <div className="mb-4">
         <p className="text-sm text-gray-400">{roleLabel}</p>
-        <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'} 👋</h1>
+        <h1 className="text-2xl font-bold text-gray-800">Hi, {session?.user?.name?.split(' ')[0] || 'there'}</h1>
       </div>
 
+      {!eventLive && (<>
       {/* Games to confirm: their assigner asked, and some games still need an answer */}
       {(portal?.events || []).filter(e => e.confirm && e.confirm.pending > 0).map(e => (
         <div key={'confirm' + e.id} className="mb-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br from-[#0B1F3A] to-[#0E7490]">
@@ -371,6 +380,154 @@ export default function RefDashboard() {
         </div>
       )}
 
+      </>)}
+      {/* Up next */}
+      {upNext ? (
+        <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">● Up next</span>
+            <span className="text-xs font-semibold text-emerald-700">{startsIn(upNext) || dayLabel(upNext.date)}</span>
+          </div>
+          <p className="text-base font-bold text-gray-800">{upNext.team1} vs {upNext.team2}</p>
+          <p className="text-xs text-gray-500">{time12(upNext.startTime)} · {upNext.location || 'Field TBD'} · {slotLabel(upNext.role)}</p>
+          <Coaches g={upNext} />
+          <p className="text-xs text-gray-400 mb-3">{upNext.division}{upNext.crew?.length ? ` · with ${upNext.crew.map((c: Crew) => c.name.split(' ')[0]).join(', ')}` : ''}</p>
+          <div className="flex gap-2">
+            <button onClick={() => checkIn(upNext.id)} aria-pressed={checkedIn.has(upNext.id)}
+              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${checkedIn.has(upNext.id) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
+              {checkedIn.has(upNext.id) ? <><CheckCircle2 size={15} /> Checked in</> : <><MapPin size={15} /> Check in</>}
+            </button>
+            {upNext.role === 'scorekeeper' && (
+              <a href={`/tournaments/${upNext.tournamentId}/games/${upNext.id}/scorekeeper`}
+                className="flex-1 text-center py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white">Open scorer →</a>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-2xl border border-gray-200 bg-white card p-5 mb-5 text-center text-sm text-gray-400">No upcoming games yet. Your assigner puts you on games; you'll see them here.</div>
+      )}
+
+      {/* Game day tools */}
+      {selTournament && (
+        <div className="mb-5">
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Game day</p>
+          <div className="grid grid-cols-2 gap-2.5">
+            {visibleTools.map(tool => {
+              const Icon = tool.icon
+              return (
+                <Link key={tool.href} href={`/tournaments/${selTournament}/${tool.href}`} className="flex items-center gap-2.5 bg-white border border-gray-200 card rounded-2xl px-3 h-16 text-[15px] font-bold text-gray-800 leading-tight hover:border-teal-300"><span className="w-10 h-10 rounded-xl bg-teal-50 text-teal-700 flex items-center justify-center shrink-0"><Icon size={20} /></span>{tool.label}</Link>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Time clock — hourly staff (field ops & athletic trainers) */}
+      {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {
+        const open = punch.open
+        const todayHrs = (punch.entries || []).filter((e: any) => e.date === todayYMD()).reduce((s: number, e: any) => s + teHours(e), 0)
+        return (
+          <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5"><Clock size={14} className="text-teal-600" /> Time clock</span>
+              {todayHrs > 0 && <span className="text-xs text-gray-500">{todayHrs.toFixed(2)}h today</span>}
+            </div>
+            {open ? (
+              <>
+                <p className="text-sm text-gray-600 mb-2">Clocked in at <span className="font-semibold text-gray-800">{open.clockIn}</span> · <span className="text-emerald-600 font-semibold">{elapsedLabel(open.clockIn)}</span></p>
+                <button onClick={() => punchAction('out')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-red-600 hover:bg-red-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Square size={16} /> Clock Out</button>
+              </>
+            ) : (
+              <button onClick={() => punchAction('in')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Play size={16} /> Clock In</button>
+            )}
+          </div>
+        )
+      })()}
+
+      {/* View toggle */}
+      <div className="flex items-center gap-2 mb-3">
+        <button onClick={() => setView('mine')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'mine' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
+          My games ({upcoming.length})
+        </button>
+        <button onClick={() => setView('all')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'all' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
+          All games
+        </button>
+        {view === 'all' && tournaments.length > 1 && (
+          <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadAllGames(e.target.value) }}
+            className="ml-auto select border border-gray-300 rounded-lg px-2 py-1.5 text-xs max-w-[45%]">
+            {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        )}
+      </div>
+
+      {view === 'all' && (
+        <div className="relative mb-3">
+          <Search size={15} className="absolute left-3 top-3 text-gray-400" />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name, team or field" aria-label="Find a name, team or field"
+            className="w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 py-2.5 text-sm" />
+          {myName && !q && <button type="button" onClick={() => setQ(portal?.worker?.name || session?.user?.name || '')} className="mt-1.5 text-xs font-semibold text-teal-700">Find my name</button>}
+        </div>
+      )}
+
+      <div className="pb-8">
+        {view === 'mine' ? (
+          mine.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">No games yet.</div> :
+          byDay(mine).map(([d, list]) => (
+            <div key={d} className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
+              <div className="space-y-2">{list.map((g: any) => <MyGame key={g.id} g={g} />)}</div>
+            </div>
+          ))
+        ) : (
+          allShown.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">{q ? 'No games match.' : 'No games posted yet.'}</div> :
+          byDay(allShown).map(([d, list]) => (
+            <div key={d} className="mb-4">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
+              <div className="space-y-2">{list.map(g => <AnyGame key={g.id} g={g} />)}</div>
+            </div>
+          ))
+        )}
+        {view === 'mine' && past.length > 0 && (
+          <button type="button" onClick={() => setShowPast(v => !v)} className="w-full text-center text-xs font-semibold text-gray-500 hover:text-gray-800 py-2">
+            {showPast ? 'Hide past games' : `Show past games (${past.length})`}
+          </button>
+        )}
+      </div>
+      {/* Everything that isn't game day: sign-ups, availability, training, paperwork */}
+      <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 mt-1">More</p>
+      {eventLive && (<>
+      {/* Games to confirm: their assigner asked, and some games still need an answer */}
+      {(portal?.events || []).filter(e => e.confirm && e.confirm.pending > 0).map(e => (
+        <div key={'confirm' + e.id} className="mb-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br from-[#0B1F3A] to-[#0E7490]">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-teal-200"><Bell size={14} />TO DO</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-snug">Confirm your games</p>
+          <p className="mt-1 text-[13px] leading-snug text-slate-300">{e.name} · {e.confirm!.pending === e.confirm!.total ? `${e.confirm!.total} game${e.confirm!.total === 1 ? '' : 's'}` : `${e.confirm!.pending} of your ${e.confirm!.total} games`} to confirm{e.confirm!.confirmBy ? ` by ${dayTitle(e.confirm!.confirmBy, true)}` : ''}</p>
+          <a href={e.confirm!.href} className="mt-3 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#ffffff] text-[#0B1F3A] text-sm font-extrabold hover:bg-[#f1f5f9]">Confirm now<ArrowRight size={16} /></a>
+        </div>
+      ))}
+
+      {/* Availability to-do: until every day of every event they work has an answer */}
+      {todoLeft > 0 && (
+        <div data-avail className="mb-5 rounded-2xl p-4 text-white shadow-lg bg-gradient-to-br from-[#0B1F3A] to-[#0E7490]">
+          <p className="flex items-center gap-1.5 text-[11px] font-extrabold tracking-wider text-teal-200"><Bell size={14} />TO DO</p>
+          <p className="mt-1.5 text-lg font-extrabold leading-snug">Tell us which days you can work</p>
+          <p className="mt-1 text-[13px] leading-snug text-slate-300">{todoEvents.map(e => e.name).join(' and ')} · {todoLeft} {todoLeft === 1 ? 'day still needs' : 'days still need'} an answer</p>
+          <button type="button" onClick={() => jumpTo(todoEvents[0]?.id)} className="mt-3 inline-flex items-center gap-1.5 h-10 px-4 rounded-full bg-[#ffffff] text-[#0B1F3A] text-sm font-extrabold hover:bg-[#f1f5f9]">Answer now<ArrowRight size={16} /></button>
+        </div>
+      )}
+      {todoLeft === 0 && allSet && (
+        <div data-avail className="mb-5 rounded-2xl p-3.5 bg-teal-50 border border-teal-200 flex items-start gap-3">
+          <CheckCircle2 size={24} className="text-teal-700 shrink-0" />
+          <div>
+            <p className="text-[15px] font-extrabold text-slate-900">You're all set</p>
+            <p className="text-[13px] text-slate-600 leading-snug">The assigner can see your answers. You can change a day until 48 hours before it starts.</p>
+          </div>
+        </div>
+      )}
+
+      </>)}
       {/* Game-day alerts for this phone (field requests) */}
       <div className="mb-5"><StaffAlerts compact /></div>
 
@@ -445,69 +602,6 @@ export default function RefDashboard() {
       {/* Receipts: turn in what you bought for an event, see when it's paid back (components/expenses) */}
       <StaffReceipts />
 
-      {/* Time clock — hourly staff (field ops & athletic trainers) */}
-      {punch?.worker && (punch.worker.defaultRole === 'field_ops' || punch.worker.defaultRole === 'athletic_trainer') && (() => {
-        const open = punch.open
-        const todayHrs = (punch.entries || []).filter((e: any) => e.date === todayYMD()).reduce((s: number, e: any) => s + teHours(e), 0)
-        return (
-          <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wide flex items-center gap-1.5"><Clock size={14} className="text-teal-600" /> Time clock</span>
-              {todayHrs > 0 && <span className="text-xs text-gray-500">{todayHrs.toFixed(2)}h today</span>}
-            </div>
-            {open ? (
-              <>
-                <p className="text-sm text-gray-600 mb-2">Clocked in at <span className="font-semibold text-gray-800">{open.clockIn}</span> · <span className="text-emerald-600 font-semibold">{elapsedLabel(open.clockIn)}</span></p>
-                <button onClick={() => punchAction('out')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-red-600 hover:bg-red-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Square size={16} /> Clock Out</button>
-              </>
-            ) : (
-              <button onClick={() => punchAction('in')} disabled={punchBusy} className="w-full py-3 rounded-xl text-base font-bold bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-60 inline-flex items-center justify-center gap-2"><Play size={16} /> Clock In</button>
-            )}
-          </div>
-        )
-      })()}
-
-      {/* Game day tools */}
-      {selTournament && (
-        <div className="mb-5">
-          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2">Game day</p>
-          <div className="grid grid-cols-2 gap-2">
-            {visibleTools.map(tool => {
-              const Icon = tool.icon
-              return (
-                <Link key={tool.href} href={`/tournaments/${selTournament}/${tool.href}`} className="flex items-center gap-2 bg-white border border-gray-200 card rounded-2xl p-3 text-sm font-semibold text-gray-700 hover:border-teal-300"><Icon size={18} className="text-teal-600" /> {tool.label}</Link>
-              )
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Up next */}
-      {upNext ? (
-        <div className="rounded-2xl border border-gray-200 bg-white card p-4 mb-5">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wide bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">● Up next</span>
-            <span className="text-xs font-semibold text-emerald-700">{startsIn(upNext) || dayLabel(upNext.date)}</span>
-          </div>
-          <p className="text-base font-bold text-gray-800">{upNext.team1} vs {upNext.team2}</p>
-          <p className="text-xs text-gray-500">{time12(upNext.startTime)} · {upNext.location || 'Field TBD'} · {slotLabel(upNext.role)}</p>
-          <Coaches g={upNext} />
-          <p className="text-xs text-gray-400 mb-3">{upNext.division}{upNext.crew?.length ? ` · with ${upNext.crew.map((c: Crew) => c.name.split(' ')[0]).join(', ')}` : ''}</p>
-          <div className="flex gap-2">
-            <button onClick={() => checkIn(upNext.id)} aria-pressed={checkedIn.has(upNext.id)}
-              className={`flex-1 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center justify-center gap-1.5 ${checkedIn.has(upNext.id) ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-              {checkedIn.has(upNext.id) ? <><CheckCircle2 size={15} /> Checked in</> : <><MapPin size={15} /> Check in</>}
-            </button>
-            {upNext.role === 'scorekeeper' && (
-              <a href={`/tournaments/${upNext.tournamentId}/games/${upNext.id}/scorekeeper`}
-                className="flex-1 text-center py-2.5 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white">Open scorer →</a>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-gray-200 bg-white card p-5 mb-5 text-center text-sm text-gray-400">No upcoming games yet. Your assigner puts you on games; you'll see them here.</div>
-      )}
-
       {/* Stats */}
       <div className="grid grid-cols-3 gap-2 mb-5">
         <div className="bg-white border border-gray-200 card rounded-2xl p-3 text-center">
@@ -524,57 +618,6 @@ export default function RefDashboard() {
         </div>
       </div>
 
-      {/* View toggle */}
-      <div className="flex items-center gap-2 mb-3">
-        <button onClick={() => setView('mine')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'mine' ? 'bg-emerald-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
-          My games ({upcoming.length})
-        </button>
-        <button onClick={() => setView('all')}
-          className={`px-3 py-1.5 rounded-lg text-xs font-bold ${view === 'all' ? 'bg-blue-600 text-white' : 'bg-white border border-gray-300 text-gray-600'}`}>
-          All games
-        </button>
-        {view === 'all' && tournaments.length > 1 && (
-          <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadAllGames(e.target.value) }}
-            className="ml-auto select border border-gray-300 rounded-lg px-2 py-1.5 text-xs max-w-[45%]">
-            {tournaments.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
-        )}
-      </div>
-
-      {view === 'all' && (
-        <div className="relative mb-3">
-          <Search size={15} className="absolute left-3 top-3 text-gray-400" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Find a name, team or field" aria-label="Find a name, team or field"
-            className="w-full rounded-xl border border-gray-300 bg-white pl-9 pr-3 py-2.5 text-sm" />
-          {myName && !q && <button type="button" onClick={() => setQ(portal?.worker?.name || session?.user?.name || '')} className="mt-1.5 text-xs font-semibold text-teal-700">Find my name</button>}
-        </div>
-      )}
-
-      <div className="pb-8">
-        {view === 'mine' ? (
-          mine.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">No games yet.</div> :
-          byDay(mine).map(([d, list]) => (
-            <div key={d} className="mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
-              <div className="space-y-2">{list.map((g: any) => <MyGame key={g.id} g={g} />)}</div>
-            </div>
-          ))
-        ) : (
-          allShown.length === 0 ? <div className="text-center py-10 text-gray-400 text-sm">{q ? 'No games match.' : 'No games posted yet.'}</div> :
-          byDay(allShown).map(([d, list]) => (
-            <div key={d} className="mb-4">
-              <p className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">{dayLabel(d)} · {list.length} game{list.length === 1 ? '' : 's'}</p>
-              <div className="space-y-2">{list.map(g => <AnyGame key={g.id} g={g} />)}</div>
-            </div>
-          ))
-        )}
-        {view === 'mine' && past.length > 0 && (
-          <button type="button" onClick={() => setShowPast(v => !v)} className="w-full text-center text-xs font-semibold text-gray-500 hover:text-gray-800 py-2">
-            {showPast ? 'Hide past games' : `Show past games (${past.length})`}
-          </button>
-        )}
-      </div>
     </div>
   )
 }
