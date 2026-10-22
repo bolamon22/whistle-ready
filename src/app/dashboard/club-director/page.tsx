@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { AlertTriangle, BedDouble, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Clock, Copy, CreditCard, Download, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
+import { AlertTriangle, BedDouble, Briefcase, CalendarDays, Check, ChevronDown, ChevronUp, ClipboardList, Clock, Copy, CreditCard, Download, ExternalLink, Eye, Globe, ImagePlus, LayoutGrid, List, Mail, Phone, Plus, RefreshCw, ShieldCheck, Trophy, Users, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { compressImageFile } from '@/lib/imageCompress'
 import {
@@ -187,6 +187,9 @@ export default function ClubDirectorDashboard() {
   const [loading, setLoading] = useState(true)
   const [dataLoading, setDataLoading] = useState(false)
   const [tab, setTab] = useState<'overview' | 'players' | 'coaches' | 'schedule' | 'history'>('overview')
+  const tabPicked = useRef(false)
+  // What's left (payments, team list, waivers) folds behind one Club business button.
+  const [bizOpen, setBizOpen] = useState(false)
   // The same ready-written messages the checklist email links to, so a director
   // already in the portal doesn't have to go back to an email to find them
   // (Bo, Oct 4 2026). One source: /api/registrations/[id]/share.
@@ -302,9 +305,18 @@ export default function ClubDirectorDashboard() {
   }
 
   const switchTab = (key: typeof tab) => {
+    tabPicked.current = true
     setTab(key)
     if (key === 'history') loadHistory()
   }
+
+  // Schedule first (Bo, Oct 22 2026): on their phone a club director wants their
+  // teams' games, not waivers and billing. Once an event has pools or a schedule
+  // the portal opens on it, unless they already picked a tab.
+  useEffect(() => {
+    if (tabPicked.current || tab !== 'overview') return
+    if ((data?.games?.length ?? 0) > 0 || (data?.pools?.length ?? 0) > 0) setTab('schedule')
+  }, [data])
 
   if (status === 'loading' || loading) return <div className="p-10 text-center text-gray-400">Loading…</div>
 
@@ -540,10 +552,10 @@ export default function ClubDirectorDashboard() {
   // would quietly grant billing visibility to clubs that had it switched off.
   const showMoney = perms.cd_billing !== false
   const TABS: { key: typeof tab; label: string; Icon: typeof Users; perm?: string; when?: boolean }[] = [
+    { key: 'schedule',  label: hasSchedule ? 'Schedule' : 'Pools', Icon: hasSchedule ? CalendarDays : LayoutGrid, perm: 'cd_schedule', when: hasSchedule || hasPools },
     { key: 'overview',  label: 'Overview',           Icon: ClipboardList, perm: 'cd_overview' },
     { key: 'players',   label: 'Player waivers',     Icon: Users,         perm: 'cd_players'  },
     { key: 'coaches',   label: 'Coach waivers',      Icon: ShieldCheck,   perm: 'cd_players'  },
-    { key: 'schedule',  label: hasSchedule ? 'Schedule' : 'Pools', Icon: hasSchedule ? CalendarDays : LayoutGrid, perm: 'cd_schedule', when: hasSchedule || hasPools },
     { key: 'history',   label: 'History',            Icon: Trophy                             },
   ]
 
@@ -731,7 +743,7 @@ export default function ClubDirectorDashboard() {
           </div>
           {/* Only when there is a choice: one event in a dropdown is just a box. */}
           {tab !== 'history' && tournaments.length > 1 && (
-            <select value={selTournament} onChange={e => { setSelTournament(e.target.value); loadData(e.target.value) }}
+            <select value={selTournament} onChange={e => { tabPicked.current = false; setTab('overview'); setSelTournament(e.target.value); loadData(e.target.value) }}
               aria-label="Event"
               className="w-full sm:w-auto border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-500">
               {tournaments.map(t => (
@@ -740,11 +752,24 @@ export default function ClubDirectorDashboard() {
             </select>
           )}
         </div>
-        {showStatus && (
-          <div className="border-t border-gray-100 bg-gray-50/70">
-            <StatusBar title={leftTitle} readyTitle={readyTitle} items={leftItems} />
-          </div>
-        )}
+        {showStatus && (() => {
+          const open = leftItems.filter(i => !i.done && !i.optional).length
+          return (
+            <div className="border-t border-gray-100 bg-gray-50/70">
+              <button type="button" onClick={() => setBizOpen(o => !o)} aria-expanded={bizOpen}
+                className="w-full flex items-center gap-3 px-5 sm:px-6 py-3.5 text-left hover:bg-gray-100/70">
+                <Briefcase size={18} className="shrink-0 text-violet-600" />
+                <span className="flex-1 min-w-0">
+                  <span className="block text-sm font-bold text-gray-800">Club business</span>
+                  <span className="block text-xs text-gray-500 truncate">Payments, team list and waivers</span>
+                </span>
+                <span className={`text-xs font-bold rounded-full px-2.5 py-1 whitespace-nowrap ${open ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>{open ? `${open} to do` : 'All set'}</span>
+                {bizOpen ? <ChevronUp size={18} className="shrink-0 text-gray-400" /> : <ChevronDown size={18} className="shrink-0 text-gray-400" />}
+              </button>
+              {bizOpen && <StatusBar title={leftTitle} readyTitle={readyTitle} items={leftItems} />}
+            </div>
+          )
+        })()}
       </section>
 
       {/* Tabs */}
@@ -1601,14 +1626,16 @@ export default function ClubDirectorDashboard() {
                   // Find team logos
                   const myTeamData = data.registrations.flatMap(r => r.teams).find(t => t.teamName === myTeam)
                   return (
-                    <div key={g.id} className={`bg-white border rounded-xl px-5 py-3 flex items-center gap-4 ${g.isChampionship ? 'border-amber-300 bg-amber-50' : won ? 'border-green-200' : lost ? 'border-red-200' : 'border-gray-200'}`}>
-                      <div className="w-[72px] text-center flex-shrink-0">
+                    <div key={g.id} className={`bg-white border rounded-xl px-4 sm:px-5 py-3 flex flex-wrap sm:flex-nowrap items-center gap-x-4 gap-y-1 ${g.isChampionship ? 'border-amber-300 bg-amber-50' : won ? 'border-green-200' : lost ? 'border-red-200' : 'border-gray-200'}`}>
+                      {/* Phones: time and score on one line, the matchup full width under it.
+                          Three columns squeezed team names to one word per line. */}
+                      <div className="sm:w-[72px] sm:text-center flex-shrink-0 flex sm:block items-baseline gap-2">
                         <div className="text-xs text-gray-400 whitespace-nowrap">{dayDate(g.date)}</div>
                         <div className="text-sm font-semibold text-gray-700 whitespace-nowrap">{time12(g.startTime)}</div>
                         {g.isChampionship && <div className="text-xs text-amber-600 font-bold flex items-center justify-center gap-1"><Trophy size={11} className="shrink-0" /> Final</div>}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-gray-800 flex items-center gap-1.5">
+                      <div className="order-last sm:order-none basis-full sm:basis-auto flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 flex items-center gap-1.5 flex-wrap">
                           {myTeamData?.logoUrl && <img src={myTeamData.logoUrl} alt="" className="h-5 w-5 object-contain rounded" />}
                           <span className="text-violet-700 font-semibold">{myTeam}</span>
                           <span className="text-gray-400 mx-1">vs</span>
@@ -1617,11 +1644,11 @@ export default function ClubDirectorDashboard() {
                         <div className="text-xs text-gray-400">{g.division} · {g.location} · Game #{g.gameNumber}</div>
                       </div>
                       {hasScore ? (
-                        <div className={`text-lg font-bold ${won ? 'text-green-600' : lost ? 'text-red-600' : 'text-gray-600'}`}>
+                        <div className={`ml-auto sm:ml-0 text-lg font-bold ${won ? 'text-green-600' : lost ? 'text-red-600' : 'text-gray-600'}`}>
                           {myScore} – {oppScore}
                         </div>
                       ) : (
-                        <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-lg">Upcoming</span>
+                        <span className="ml-auto sm:ml-0 text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded-lg">Upcoming</span>
                       )}
                     </div>
                   )
