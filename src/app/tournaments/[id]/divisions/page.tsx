@@ -784,7 +784,14 @@ export default function DivisionsPage() {
     if (div === activeDiv) await loadPoolGames(div)
     setGenerating(false)
     const gpt = divGamesPerTeam[div] ?? '2'
-    toast.success(`${data.generated} games created for ${div} → ${gpt} games/team · now in parking lot`)
+    // Regenerate keeps each game's time, field and officials (pool-games route).
+    const kept = Number(data.kept) || 0, added = Number(data.added ?? data.generated) || 0, gone = Number(data.removed) || 0
+    toast.success([
+      `${data.generated} games for ${div} (${gpt} games/team)`,
+      kept ? `${kept} kept their time, field and officials, new matchups` : '',
+      added ? `${added} new in the parking lot` : '',
+      gone ? `${gone} no longer needed, removed${data.removedWithOfficials ? ` (${data.removedWithOfficials} had officials)` : ''}` : '',
+    ].filter(Boolean).join(' · '), { duration: 8000 })
   }
 
   async function generateGames() {
@@ -1863,14 +1870,14 @@ if (loading) return (
                     <div className="bg-white rounded-xl shadow-xl p-6 w-96" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-2 mb-3">
                         <AlertTriangle size={22} className="text-amber-500" />
-                        <h3 className="font-bold text-slate-800">Scheduled Games Will Be Replaced</h3>
+                        <h3 className="font-bold text-slate-800">New matchups, same game slots</h3>
                       </div>
                       <p className="text-sm text-slate-600 mb-2">
                         <strong>{generateConfirm.scheduledCount} game{generateConfirm.scheduledCount !== 1 ? 's' : ''}</strong> {generateConfirm.scheduledCount !== 1 ? 'are' : 'is'} currently scheduled
                         {generateConfirm.div === 'ALL' ? ' across divisions' : ` in ${generateConfirm.div}`}.
                       </p>
                       <p className="text-sm text-slate-500 mb-5">
-                        Regenerating will remove them from the scheduler grid. New games will appear in the parking lot.
+                        Regenerating keeps every game&apos;s time, field, refs and scorekeeper and changes only the teams: the new P1 plays where P1 is now. Nobody is notified. Extra games go to the parking lot; games no longer needed are removed.
                       </p>
                       <div className="flex justify-end gap-2">
                         <button onClick={() => setGenerateConfirm(null)}

@@ -289,8 +289,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       }
     } catch { /* no club data: rule 1 simply finds nothing to avoid */ }
 
+    // Regenerating REUSES the division's pool games instead of deleting them (Bo, Oct 22
+    // 2026: "I had to redo the lower school girls division again ... and it unassigned the
+    // refs again ... we're going to keep the same refs. It's just changing the team
+    // matchups. ... And also it's notifying people"). Deleting took every game's officials
+    // with it (Assignment cascades), and putting the new games back where the old ones
+    // were left the assigners to staff them all over again. Now the new P1 takes over the
+    // old P1's row: same time, field, officials and scorekeeper, new teams, scores cleared.
+    // Only the teams change, so nobody is told anything. Games beyond the old count are new
+    // and go to the parking lot; old games no longer needed are deleted, scheduled ones last.
+    const numOf = (n: string) => { const m = /(\d+)/.exec(n || ''); return m ? Number(m[1]) : 1e9 }
+    const reuse: { id: string; assigned: number }[] = []
     if (clearExisting) {
-      // Clear the division's pool games (and legacy un-pooled ones) so stale games
+      const old = await prisma.game.findMany({
+        where: { tournamentId: params.id, division, pool: { not: null }, NOT: { gameNumber: { startsWith: 'B' } } },
+        select: { id: true, gameNumber: true, startTime: true, location: true, _count: { select: { assignments: true } } },
+      })
+      const placed = (g: { startTime: string; location: string }) => (g.startTime && g.location ? 0 : 1)
+      old.sort((a, b) => placed(a) - placed(b) || numOf(a.gameNumber) - numOf(b.gameNumber))
+      for (const g of old) reuse.push({ id: g.id, assigned: g._count.assignments })
+    }
+
+    if (clearExisting) {
+      // Clear the division's legacy un-pooled games so stale games
       // don't persist -- but NOT the bracket's B-games.
       //
       // This used to delete every game in the division. Bulk Generate calls this for
@@ -300,13 +321,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       // disappeared from the Scheduler's parking lot with nothing said. Then bracket
       // generation saw the surviving Bracket row, called it "already exists", and
       // never rebuilt the games it had just destroyed.
+      // (Pool games are reused above, not deleted here.)
       await prisma.game.deleteMany({
-        where: { tournamentId: params.id, division, NOT: { gameNumber: { startsWith: 'B' } } },
+        where: { tournamentId: params.id, division, pool: null, NOT: { gameNumber: { startsWith: 'B' } } },
       })
     }
 
     // Count existing pool games for this division to continue numbering from there
-    const existingCount = await prisma.game.count({
+    // (a regenerate renumbers from P1: the reused games take the new numbers).
+    const existingCount = clearExisting ? 0 : await prisma.game.count({
       where: { tournamentId: params.id, division, pool: { not: null } },
     })
     let poolGameNum = existingCount + 1
@@ -362,6 +385,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       for (const ps of poolSchedules) {
         if (roundIdx >= ps.rounds.length) continue
         for (const [team1, team2] of ps.rounds[roundIdx]) {
+          const again = reuse.shift()
+          if (again) {
+            const game = await prisma.game.update({
+              where: { id: again.id },
+              data: { pool: ps.poolName, gameNumber: `P${poolGameNum++}`, team1, team2, score1: null, score2: null },
+            })
+            created.push({ id: game.id, gameNumber: game.gameNumber, pool: game.pool, team1: game.team1, team2: game.team2, kept: true })
+            continue
+          }
           const game = await prisma.game.create({
             data: {
               tournamentId: params.id,
@@ -381,11 +413,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string;
       }
     }
 
+    // Old games the new round robin doesn't need. The unscheduled ones went to the back
+    // of the queue above, so they are the ones that go.
+    const leftover = reuse.splice(0)
+    if (leftover.length) await prisma.game.deleteMany({ where: { id: { in: leftover.map(g => g.id) } } })
+    const kept = created.filter(g => g.kept).length
+    const removedWithOfficials = leftover.filter(g => g.assigned > 0).length
+
     // Said out loud rather than buried: a pool whose teams mostly share a club
     // cannot avoid a club meeting, and the organizer should hear that from the
     // generator instead of spotting it on the schedule later.
     const sameClubGames = created.filter(g => sameClub(clubOf, String(g.team1).trim(), String(g.team2).trim())).length
-    return NextResponse.json({ generated: created.length, games: created, sameClubGames })
+    return NextResponse.json({ generated: created.length, games: created, sameClubGames, kept, added: created.length - kept, removed: leftover.length, removedWithOfficials })
   }
 
   // Renumber pool games for this division with P prefix.
