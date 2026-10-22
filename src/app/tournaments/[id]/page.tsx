@@ -1,5 +1,6 @@
 'use client'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
@@ -73,13 +74,39 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
   const [open,setOpen]=useState(false)
   const [search,setSearch]=useState('')
   const ref=useRef<HTMLDivElement>(null)
+  const popRef=useRef<HTMLDivElement>(null)
   const inputRef=useRef<HTMLInputElement>(null)
+  // The pick list is drawn on document.body at a fixed spot under (or over) the slot.
+  // Drawn inside the card it slid under the game card below it on the board, whose
+  // own layer painted on top (Bo, Oct 22 2026), whatever its z-index said.
+  const popW=chip?224:208
+  const [pos,setPos]=useState<{left:number;top?:number;bottom?:number}|null>(null)
 
   useEffect(()=>{
-    function handle(e:MouseEvent){if(ref.current&&!ref.current.contains(e.target as Node))setOpen(false)}
+    function handle(e:MouseEvent){
+      const t=e.target as Node
+      if(ref.current?.contains(t)||popRef.current?.contains(t))return
+      setOpen(false)
+    }
+    function key(e:KeyboardEvent){if(e.key==='Escape')setOpen(false)}
     document.addEventListener('mousedown',handle)
-    return()=>document.removeEventListener('mousedown',handle)
+    document.addEventListener('keydown',key)
+    return()=>{document.removeEventListener('mousedown',handle);document.removeEventListener('keydown',key)}
   },[])
+  useLayoutEffect(()=>{
+    if(!open){setPos(null);return}
+    const place=()=>{
+      const r=ref.current?.getBoundingClientRect(); if(!r)return
+      const vw=window.innerWidth, vh=window.innerHeight, need=chip?250:220
+      const left=Math.max(8,Math.min(r.left,vw-popW-8))
+      // Below when it fits (or fits better than above), else open upward.
+      if(vh-r.bottom>=need||vh-r.bottom>=r.top)setPos({left,top:r.bottom+2})
+      else setPos({left,bottom:vh-r.top+2})
+    }
+    place()
+    window.addEventListener('scroll',place,true); window.addEventListener('resize',place)
+    return()=>{window.removeEventListener('scroll',place,true);window.removeEventListener('resize',place)}
+  },[open,chip,popW])
 
   const selected=options.find(o=>o.id===value)
   // People already working another game at this time sink to the bottom, greyed
@@ -91,7 +118,11 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
 
   const list=(
     <div className="max-h-48 overflow-y-auto">
-      <div className="px-2 py-1.5 text-[10px] text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>— unassigned —</div>
+      {/* Taking someone off a game, first and plain to see (Bo, Oct 22 2026: moving a
+          person from one field to another meant hunting for a faint "unassigned" row). */}
+      {assigned&&<button type="button" className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold text-red-600 hover:bg-red-50 border-b border-slate-100 text-left" onClick={()=>{onChange('');setOpen(false);setSearch('')}}>
+        <X size={12} className="shrink-0"/>Remove {selected?(selected.listLabel||selected.label):offList||'from this game'}
+      </button>}
       {filtered.length===0?<div className="px-3 py-2 text-[10px] text-slate-400">No matches</div>:filtered.map(o=>isBusy(o)?(
         <div key={o.id} aria-disabled="true" title={`Already working ${o.busy} at this time`} className="px-2 py-1.5 cursor-not-allowed bg-slate-50 opacity-60">
           <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500 line-through decoration-slate-300">{o.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${o.dot}`}/>}<RefLevelPill level={o.level}/>{o.listLabel||o.label}</div>
@@ -116,18 +147,23 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
       <div ref={ref} className="relative w-full min-w-0">
         <button type="button" disabled={disabled} title={chip.title}
           onClick={()=>{if(!disabled){setOpen(o=>!o);setTimeout(()=>inputRef.current?.focus(),50)}}}
-          className={`flex items-center gap-1 h-5 w-full px-1 rounded-md border text-[10px] min-w-0 text-left transition-colors ${look} ${disabled?'opacity-50 cursor-not-allowed':''}`}>
+          className={`group/chip flex items-center gap-1 h-5 w-full px-1 rounded-md border text-[10px] min-w-0 text-left transition-colors ${look} ${disabled?'opacity-50 cursor-not-allowed':''}`}>
           <span className="text-[8px] font-extrabold shrink-0" style={{color:chip.danger?'#b91c1c':chip.color}}>{chip.short}</span>
           {assigned&&<RefLevelPill level={selected?.level} small/>}
           <span className={`truncate ${assigned?'font-semibold':'font-medium'}`}>{assigned?chip.display:chip.declined?`open · ${chip.declined}`:'open'}</span>
           {assigned&&chip.confirmed&&<span className="text-emerald-600 text-[9px] font-black shrink-0" aria-label="Confirmed">✓</span>}
-          {assigned&&chip.count!==undefined&&<span className={`ml-auto text-[9px] shrink-0 ${chip.danger?'text-red-600':'text-slate-500'}`}>{chip.count}</span>}
+          {assigned&&chip.count!==undefined&&<span className={`ml-auto text-[9px] shrink-0 ${chip.danger?'text-red-600':'text-slate-500'} ${disabled?'':'group-hover/chip:hidden'}`}>{chip.count}</span>}
+          {/* One click off the game, on hover; the pick list's Remove row does the same on a touch screen. */}
+          {assigned&&!disabled&&<span role="button" tabIndex={-1} aria-label={`Remove ${chip.display}`} title="Remove from this game"
+            onClick={e=>{e.stopPropagation();setOpen(false);onChange('')}}
+            className={`hidden group-hover/chip:inline-flex items-center justify-center shrink-0 w-3.5 h-3.5 rounded text-slate-400 hover:text-red-600 hover:bg-red-100 ${chip.count===undefined?'ml-auto':''}`}><X size={10}/></span>}
         </button>
-        {open&&(
-          <div className="absolute z-50 left-0 top-full mt-0.5 w-56 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+        {open&&pos&&createPortal(
+          <div ref={popRef} style={{position:'fixed',left:pos.left,top:pos.top,bottom:pos.bottom,width:popW,zIndex:1000}} className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
             <input ref={inputRef} className="w-full px-2 py-1.5 text-[11px] border-b border-slate-100 outline-none" value={search} onChange={e=>setSearch(e.target.value)} placeholder="Type a name…"/>
             {list}
-          </div>
+          </div>,
+          document.body
         )}
       </div>
     )
@@ -146,10 +182,11 @@ function SearchSelect({ value, onChange, options, placeholder, assigned, disable
           <span className={`flex items-center gap-1 truncate ${assigned?'text-sky-800':'text-slate-400'}`}>{selected?.dot&&<span className={`w-1.5 h-1.5 rounded-full shrink-0 ${selected.dot}`}/>}<RefLevelPill level={selected?.level} small/>{selected?.label||(assigned?<span className="text-amber-700" title="On this game but not on the event's staff roster. Take them off or add them to the roster.">⚠ {offList||'Not on the roster'}</span>:placeholder)}</span>
         )}
       </div>
-      {open&&(
-        <div className="absolute z-50 left-0 top-6 w-52 bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
+      {open&&pos&&createPortal(
+        <div ref={popRef} style={{position:'fixed',left:pos.left,top:pos.top,bottom:pos.bottom,width:popW,zIndex:1000}} className="bg-white border border-slate-200 rounded-lg shadow-xl overflow-hidden">
           {list}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )
