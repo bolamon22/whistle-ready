@@ -9,6 +9,7 @@ import ShortTeamsBanner from '@/components/ShortTeamsBanner'
 import { findShortTeams, describeFinding, isPlaceholder, type BalanceGame } from '@/lib/gameBalance'
 import { poolKey } from '@/lib/poolNames'
 import { nameKey } from '@/lib/names'
+import { formatDate, formatTime } from '@/lib/utils'
 import { divisionColorMap } from '@/lib/divisionColors'
 import BracketBuilder from './BracketBuilder'
 import DivisionNotes from './DivisionNotes'
@@ -2124,9 +2125,9 @@ if (loading) return (
                                         </td>
                                       </>
                                     )}
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '--'}</td>
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '--'}</td>
-                                    <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '--'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{g.date ? formatDate(g.date) : '--'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{/^\d{1,2}:\d{2}/.test(g.startTime || '') ? formatTime(g.startTime) : '--'}</td>
+                                    <td className="px-3 py-2.5 text-xs text-slate-400" title={g.location || undefined}>{g.location ? g.location.split(' - ').pop() : '--'}</td>
                                     {/* Always visible rather than revealed on hover: this
                                         runs on an iPad, where there is no hover to reveal
                                         anything. Low contrast until you reach for them. */}
@@ -2230,9 +2231,9 @@ if (loading) return (
                                   <td className="px-5 py-2.5 font-mono text-xs text-teal-600">{g.gameNumber}</td>
                                   <td className="px-3 py-2.5 font-medium text-slate-800">{g.team1}</td>
                                   <td className="px-3 py-2.5 text-slate-600">{g.team2}</td>
-                                  <td className="px-3 py-2.5 text-xs text-slate-400">{g.date || '--'}</td>
-                                  <td className="px-3 py-2.5 text-xs text-slate-400">{g.startTime || '--'}</td>
-                                  <td className="px-3 py-2.5 text-xs text-slate-400">{g.location || '--'}</td>
+                                  <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{g.date ? formatDate(g.date) : '--'}</td>
+                                  <td className="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap">{/^\d{1,2}:\d{2}/.test(g.startTime || '') ? formatTime(g.startTime) : '--'}</td>
+                                  <td className="px-3 py-2.5 text-xs text-slate-400" title={g.location || undefined}>{g.location ? g.location.split(' - ').pop() : '--'}</td>
                                 </tr>
                               ))}
                             </tbody>
