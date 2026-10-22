@@ -17,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const away = await otherOrg(gate, params.id); if (away) return away
   const b=await req.json()
   const scope=await payScopeFor(gate.role,gate.userId)
-  return NextResponse.json(rate(await prisma.timeEntry.update({where:{id:params.id},data:{...(b.clockIn!==undefined&&{clockIn:b.clockIn}),...(b.clockOut!==undefined&&{clockOut:b.clockOut}),...(b.hoursManual!==undefined&&{hoursManual:b.hoursManual}),...(b.notes!==undefined&&{notes:b.notes}),...(b.isManualEdit!==undefined&&{isManualEdit:b.isManualEdit})},include:{worker:{select:{id:true,name:true,hourlyRate:true,defaultRole:true,gender:true}}}}), gate.role, scope))
+  return NextResponse.json(rate(await prisma.timeEntry.update({where:{id:params.id},data:{...(typeof b.date==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(b.date)&&{date:b.date}),...(b.clockIn!==undefined&&{clockIn:b.clockIn}),...(b.clockOut!==undefined&&{clockOut:b.clockOut}),...(b.hoursManual!==undefined&&{hoursManual:b.hoursManual}),...(b.notes!==undefined&&{notes:b.notes}),...(b.isManualEdit!==undefined&&{isManualEdit:b.isManualEdit})},include:{worker:{select:{id:true,name:true,hourlyRate:true,defaultRole:true,gender:true}}}}), gate.role, scope))
 }
 export async function DELETE(_: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
