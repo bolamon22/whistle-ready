@@ -5,6 +5,7 @@ import toast from 'react-hot-toast'
 import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetDivisionColors } from '@/lib/utils'
 import TournamentNav from './TournamentNav'
 import CheckpointBanner from '@/components/CheckpointBanner'
+import { askSideSwitch } from '@/components/askSideSwitch'
 import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid, Printer, History } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
@@ -464,7 +465,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
   async function saveGameEdit(e:React.FormEvent){
     e.preventDefault();if(!editGame)return;setGameSaving(true)
     const res=await fetch(`/api/games/${editGame.id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(gameForm)})
-    if(res.ok){toast.success('Game updated');setEditGame(null);await load()}else toast.error('Failed')
+    if(res.ok){const d=await res.json().catch(()=>({}));toast.success('Game updated');setEditGame(null);await load();askSideSwitch(d.sideSwitch,load)}else toast.error('Failed')
     setGameSaving(false)
   }
 

@@ -4,7 +4,7 @@ import { requireStaff, eventGate, orgGate, viewer } from '@/lib/apiAuth'
 import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
-import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
+import { actorOf, gameMoveChanges, genderOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -57,8 +57,8 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   }
   // A move, cancel, renumber or new teams is told to the officials on it once their
   // crew is published (lib/officialChangeAlerts). Score saves skip the extra read.
-  const moves = ['date', 'startTime', 'location', 'isCanceled', 'gameNumber', 'team1', 'team2'].some(k => b[k] !== undefined)
-  const was = moves ? await prisma.game.findUnique({ where: { id: params.id }, include: { assignments: { select: { workerId: true, role: true } } } }) : null
+  const moves = ['date', 'startTime', 'location', 'isCanceled', 'gameNumber', 'team1', 'team2', 'division'].some(k => b[k] !== undefined)
+  const was = moves ? await prisma.game.findUnique({ where: { id: params.id }, include: { assignments: { select: { id: true, workerId: true, role: true } } } }) : null
   const updated = await prisma.game.update({ where:{id:params.id}, data:{
     // null and '' both mean "no score". Number(null) is 0, so the old ''-only check
     // turned the Scores page's empty box (it sends null) into a 0 -- filling in the
@@ -95,6 +95,20 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     // handing a moved game to the new field's scorekeeper.
     const moved = gameMoveChanges(was, updated).filter(c => c.role !== 'scorekeeper')
     await sendOfficialChanges(updated.tournamentId, moved, actorOf(gate))
+    // Girls game became a boys game (or back): refs stay on it, and the caller asks whether
+    // to take off the ones who work the other side (components/askSideSwitch). Refs set to
+    // Both, and scorekeepers, are never asked.
+    const from = genderOf(was.division), to = genderOf(updated.division)
+    const refs = was.assignments.filter(a => a.role !== 'scorekeeper')
+    if (from && to && from !== to && refs.length) {
+      const ws = await prisma.worker.findMany({ where: { id: { in: refs.map(a => a.workerId) } }, select: { id: true, name: true, gender: true } })
+      const sideSwitch = refs.flatMap(a => {
+        const w = ws.find(x => x.id === a.workerId)
+        if (!w || w.gender === 'both' || w.gender === to) return []
+        return [{ assignmentId: a.id, name: w.name, role: a.role, num: updated.gameNumber, from, to }]
+      })
+      if (sideSwitch.length) return NextResponse.json({ ...updated, sideSwitch })
+    }
   }
   return NextResponse.json(updated)
 }

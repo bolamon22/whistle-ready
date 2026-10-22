@@ -45,7 +45,8 @@ type GameLike = { id: string; date: string; startTime: string; location: string;
 export function spotOf(g: GameLike): Spot {
   return { gameId: g.id, date: g.date || '', time: g.startTime || '', field: g.location || '', num: g.gameNumber || '', division: g.division || '', teams: `${g.team1} vs ${g.team2}`, canceled: !!g.isCanceled }
 }
-const sameSpot = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field && a.num === b.num && a.canceled === b.canceled && a.teams === b.teams
+// Division counts: a game edited from a girls division to a boys one is news to its refs.
+const sameSpot = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field && a.num === b.num && a.canceled === b.canceled && a.teams === b.teams && a.division === b.division
 const samePlace = (a: Spot, b: Spot) => a.date === b.date && a.time === b.time && a.field === b.field
 
 // Girls or boys, from the division name. Bo (Oct 20 2026): for officials, a game
@@ -83,6 +84,7 @@ function line(c: OfficialChange): string {
   if (c.after.canceled && !c.before.canceled) return `#${c.after.num} (${c.after.division}, ${c.after.teams}) is canceled. It was ${when(c.before)}.`
   if (!c.after.canceled && c.before.canceled) return `#${c.after.num} (${c.after.division}, ${c.after.teams}) is back on: ${when(c.after)}.`
   const renum = c.before.num !== c.after.num ? ` (was #${c.before.num})` : ''
+  if (samePlace(c.before, c.after) && c.before.teams === c.after.teams && c.before.division !== c.after.division) return `#${c.after.num}${renum}, ${when(c.after)}, ${c.after.teams}, is now ${c.after.division}. It was ${c.before.division}.`
   if (samePlace(c.before, c.after)) return `#${c.after.num}${renum}, ${when(c.after)}, is now ${c.after.teams} (${c.after.division}). It was ${c.before.teams}.`
   return `#${c.after.num}${renum} (${c.after.division}, ${c.after.teams}) moved from ${when(c.before)} to ${when(c.after)}.`
 }
