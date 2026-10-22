@@ -17,7 +17,7 @@ Moving games on the Scheduler is private. The public page shows times and fields
 **To publish:**
 1. Click **Publish**.
 2. If phones are following affected teams, a window lists games **Newly scheduled**, **Moved** and **Unscheduled**.
-3. Leave **Tell followers their schedule changed** (or **Tell followers the schedule is out**) ticked to alert them, or untick it to publish quietly.
+3. **Tell followers their schedule changed** (or **Tell followers the schedule is out**) starts unticked, so a publish is quiet. Tick it to alert followers' phones, for example the day before the event.
 4. Click **Publish schedule**.
 
 Followers get one message per team with its current schedule, never one per game. If nobody is following, it publishes right away.

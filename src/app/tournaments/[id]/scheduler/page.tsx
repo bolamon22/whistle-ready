@@ -268,10 +268,11 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
   const [publishing,     setPublishing]     = useState(false)
   const [showDiff,       setShowDiff]       = useState(false)
   // Who a Publish reaches, per team, from GET /publish: follows and phones with
-  // alerts on. And Bo's toggle -- on by default, off for a quiet publish.
+  // alerts on. And Bo's toggle -- off by default (Bo, Oct 22 2026: "I really only like to
+  // check that box like 24 hours before the event"), ticked when he wants phones alerted.
   // Keyed by teamRefKey(division, team): the same club name plays in several divisions.
   const [followers,      setFollowers]      = useState<Record<string, { follows: number; phones: number }>>({})
-  const [notifyFollowers, setNotifyFollowers] = useState(true)
+  const [notifyFollowers, setNotifyFollowers] = useState(false)
   const [visKey,         setVisKey]         = useState(0)
   // The header's "Tools" menu: the seldom-used actions, so the bar fits on one line.
   const [toolsOpen,      setToolsOpen]      = useState(false)
@@ -943,7 +944,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
             : notify && nt.teams > 0
               ? 'Schedule published — no followers have alerts on yet'
               : 'Schedule published — the public page now shows it')
-        setNotifyFollowers(true)
+        setNotifyFollowers(false)
       }
     } finally { setPublishing(false) }
   }
