@@ -4,6 +4,7 @@ import { orgGateFor, requireStaff } from '@/lib/apiAuth'
 import { redactWorker, stripWorkerUpdate, fieldDirectorSees } from '@/lib/roleScope'
 import { payScopeFor } from '@/lib/payScope'
 import { setRefLevel, refLevelsFor } from '@/lib/refLevelDb'
+import { repriceWorker } from '@/lib/repricePay'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers). An assigner reads and edits pay only for staff in
 // their pay groups (lib/payGroups, Oct 13 2026). A director, scheduler, assigner or
@@ -79,7 +80,7 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   // the "Failed" on every Staff roster and Staff Pool save that didn't touch the box.
   const toBool = (v: unknown) => v === true || v === 1 || v === '1' || v === 'true'
   try {
-  return NextResponse.json(redactWorker(await prisma.worker.update({where:{id:params.id},data:{
+  const updated = await prisma.worker.update({where:{id:params.id},data:{
     ...(b.name!==undefined&&{name:b.name}),
     ...(b.email!==undefined&&{email:b.email||null}),
     ...(b.phone!==undefined&&{phone:b.phone||null}),
@@ -94,7 +95,11 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     ...(b.notes!==undefined&&{notes:b.notes||null}),
     ...(b.photoUrl!==undefined&&{photoUrl:b.photoUrl||null}),
     ...(b.roles!==undefined&&{roles:JSON.stringify(b.roles)}),
-  }}), gate.role, scope))
+  }})
+  // A new Pay Rate Override or certification reaches games already assigned and not yet
+  // paid (lib/repricePay; James Vacco, Oct 22 2026). Never blocks the save.
+  if (b.payRateOverride!==undefined||b.certLevel!==undefined) await repriceWorker(params.id).catch(e=>console.error('reprice worker',e))
+  return NextResponse.json(redactWorker(updated, gate.role, scope))
   } catch (e) {
     console.error('worker update', e)
     return NextResponse.json({ error: 'That didn’t save. Please try again.' }, { status: 500 })

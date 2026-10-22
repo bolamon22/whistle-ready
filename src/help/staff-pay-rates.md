@@ -25,6 +25,6 @@ keywords: staff pay rates referee pay official pay per game hourly roles officia
 
 **Common problems:**
 - With no exceptions, every game uses the standard count.
-- A new rate applies to games assigned after you save. Games already assigned keep the pay they were given.
+- Saving new rates updates the pay on games already assigned, except for anyone already marked paid at this event (they keep what they were paid).
 - A **Pay Rate Override** on someone's Staff Pool card comes first, and time entries are paid at the **Hourly Rate** on each person's card.
 - A role you add is saved, but pay comes from the roles every event starts with.

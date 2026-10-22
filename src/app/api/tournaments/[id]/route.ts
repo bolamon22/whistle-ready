@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { repriceEvent } from '@/lib/repricePay'
 import prisma from '@/lib/db'
 import { requireStaff, requireDirector, viewerRole } from '@/lib/apiAuth'
 import { canSeeMoney, canSeeStaffPay } from '@/lib/roleScope'
@@ -152,6 +153,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
       }
     } catch (e) { console.error('[tournament PATCH] ref rule backfill failed (non-blocking):', e) }
   }
+  // New Pay rates reach games already assigned to people not yet marked paid here
+  // (lib/repricePay; James Vacco, Oct 22 2026). Setup sends them on every save; only
+  // games whose pay differs are touched. Never blocks the save.
+  if (b.payRates !== undefined && out) await repriceEvent(params.id).catch(e => console.error('[tournament PATCH] reprice failed (non-blocking):', e))
 
   // The URL slug. Only the BASE is ever settable -- the year is always computed
   // from the event's own start date, so it cannot drift out of step with it and

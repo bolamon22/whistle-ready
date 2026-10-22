@@ -47,7 +47,7 @@ export default function PayRatesPanel({ id, onClose }: { id: string; onClose: ()
         <div className="min-w-0">
           <h2 id="pay-rates-title" className="text-base font-bold text-slate-900">Pay rates</h2>
           <p className="mt-0.5 text-sm text-slate-500">
-            What each role earns at this event, and how many officials a game gets. A <strong className="font-semibold text-slate-700">Pay Rate Override</strong> on someone’s Staff Pool card comes first. A new rate applies to games assigned after you save.
+            What each role earns at this event, and how many officials a game gets. A <strong className="font-semibold text-slate-700">Pay Rate Override</strong> on someone’s Staff Pool card comes first. Saving updates the pay on games already assigned, except for people already marked paid.
           </p>
         </div>
         <button type="button" onClick={onClose} aria-label="Close pay rates"
