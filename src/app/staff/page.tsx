@@ -119,6 +119,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
   const [sendTo,setSendTo]=useState('')
   const [sending,setSending]=useState(false)
   const [sendMsg,setSendMsg]=useState('')
+  const [testing,setTesting]=useState(false)
   const viewOrg=()=>{const m=document.cookie.match(/(?:^|; )preview-org=([^;]*)/);return m?decodeURIComponent(m[1]):null}
   useEffect(()=>{
     const v=viewOrg()
@@ -175,6 +176,17 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
         else{toast.error('Failed to send');setSendMsg('')}
       }
     }finally{setSending(false)}
+  }
+  // Email the on-screen letter to yourself only (api/workers/invite-letter/send test).
+  async function sendTest(){
+    setTesting(true);setSendMsg('')
+    try{
+      await save(false,true) // what's on screen is what the test shows
+      const res=await fetch('/api/workers/invite-letter/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({test:true,subject:cur.subject,body:cur.body,audience:aud,viewOrgId:viewOrg()})})
+      const d=await res.json().catch(()=>null)
+      if(res.ok&&d?.ok){toast.success(`Test sent to ${d.to}`);setSendMsg(`Test sent to ${d.to} — only you got it`)}
+      else toast.error(d?.error||'Test failed')
+    }finally{setTesting(false)}
   }
   // Copies the BODY, as rich text and plain text together.
   //
@@ -249,6 +261,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
           <div className="flex flex-col sm:flex-row gap-2">
             <input className="input flex-1" value={sendTo} onChange={e=>setSendTo(e.target.value)} placeholder="email@example.com, another@example.com" />
             <button className="btn-primary btn-sm shrink-0" onClick={sendLetter} disabled={sending||!sendTo.trim()}>{sending?'Sending…':'Save + send'}</button>
+            <button className="btn-secondary btn-sm shrink-0" onClick={sendTest} disabled={testing||sending}>{testing?'Sending…':'Send me a test'}</button>
           </div>
           {sendMsg&&<p className="text-xs text-slate-500 mt-1.5">{sendMsg}</p>}
         </div>
