@@ -35,6 +35,7 @@ interface Game {
   bracketLabel?: string
   bracketSection?: string
   bracketFlight?: string   // 'A' / 'B' in a division split into flights
+  assignments?: { role: string; workerId: string; worker?: { name?: string } | null }[]
 }
 
 interface Field {
@@ -596,12 +597,82 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     return `on ${field} at ${fmtTime(sp.startTime)}${sp.date !== activeDate ? `, ${fmtDate(sp.date)}` : ''}`
   }
 
+  // ── Scorekeepers stay on their field (Bo, Oct 21 2026) ──────────────────────
+  // A scorekeeper works one field all day. Moving a game never changes who keeps
+  // score on it (the server leaves it alone and messages nobody). When a game lands
+  // on another field or day, this ASKS whether to hand it to that field's
+  // scorekeeper, the one on most of its other games that day: "you gotta ask me if
+  // I want to move the scorekeeper." Nothing changes unless he clicks Switch.
+  type SkOffer = { gameId: string; num: string; fieldName: string; fromName: string; toId: string; toName: string }
+  function skOffersFor(moves: { id: string; to: Spot }[]): SkOffer[] {
+    const next = new Map(moves.map(m => [m.id, m.to]))
+    const spotNow = (g: Game) => next.get(g.id) || spotOf(g)
+    const out: SkOffer[] = []
+    for (const m of moves) {
+      const g = games.find(x => x.id === m.id)
+      if (!g || !m.to.location || !m.to.date) continue
+      if (g.location === m.to.location && g.date === m.to.date) continue
+      const sk = g.assignments?.find(a => a.role === 'scorekeeper')
+      if (!sk) continue
+      const n = new Map<string, { c: number; name: string }>()
+      for (const o of games) {
+        if (o.id === g.id) continue
+        const sp = spotNow(o)
+        if (sp.location !== m.to.location || sp.date !== m.to.date) continue
+        const a = o.assignments?.find(x => x.role === 'scorekeeper')
+        if (!a) continue
+        const e = n.get(a.workerId) || { c: 0, name: a.worker?.name || 'their scorekeeper' }
+        e.c++; n.set(a.workerId, e)
+      }
+      let best: string | null = null, most = 0, tie = false
+      n.forEach((e, w) => { if (e.c > most) { most = e.c; best = w; tie = false } else if (e.c === most) tie = true })
+      if (!best || tie || best === sk.workerId) continue
+      out.push({ gameId: g.id, num: g.gameNumber, fieldName: fields.find(f => f.fullName === m.to.location)?.fieldName || m.to.location, fromName: sk.worker?.name || 'its scorekeeper', toId: best, toName: n.get(best)!.name })
+    }
+    return out
+  }
+  async function switchScorekeepers(offers: SkOffer[]) {
+    const ok = await Promise.all(offers.map(o => fetch('/api/assignments', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ gameId: o.gameId, workerId: o.toId, role: 'scorekeeper', quiet: true }),
+    }).then(r => r.ok).catch(() => false)))
+    setGames(prev => prev.map(g => {
+      const i = offers.findIndex(o => o.gameId === g.id)
+      if (i < 0 || !ok[i]) return g
+      const o = offers[i]
+      return { ...g, assignments: [...(g.assignments || []).filter(a => a.role !== 'scorekeeper'), { role: 'scorekeeper', workerId: o.toId, worker: { name: o.toName } }] }
+    }))
+    if (ok.every(Boolean)) toast.success(offers.length === 1 ? `${offers[0].toName} now keeps score on ${offers[0].num}` : 'Scorekeepers switched to their fields')
+    else toast.error('A scorekeeper switch did not save. Check the Assigner.')
+  }
+  function askScorekeepers(offers: SkOffer[]) {
+    if (!offers.length) return
+    toast(t => (
+      <span className="text-sm text-slate-700">
+        <span className="block font-semibold text-slate-900">Scorekeeper{offers.length === 1 ? '' : 's'}?</span>
+        {offers.map(o => (
+          <span key={o.gameId} className="block mt-0.5">{o.num} is now on {o.fieldName}, which {o.toName} keeps score on. {o.fromName} is still on it.</span>
+        ))}
+        <span className="flex gap-2 mt-2">
+          <button type="button" onClick={() => { toast.dismiss(t.id); switchScorekeepers(offers) }} className="text-xs font-semibold px-2.5 py-1 rounded-lg bg-teal-600 text-white hover:bg-teal-700">
+            Switch to {Array.from(new Set(offers.map(o => o.toName.split(' ')[0]))).join(' & ')}
+          </button>
+          <button type="button" onClick={() => toast.dismiss(t.id)} className="text-xs font-semibold px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">
+            Keep {offers.length === 1 ? offers[0].fromName.split(' ')[0] : 'as is'}
+          </button>
+        </span>
+      </span>
+    ), { duration: 20000, id: `sk-${offers.map(o => o.gameId).join('-')}` })
+  }
+
   /** A move made by hand: saves it and remembers where the game was, for Undo. */
   async function moveGame(gameId: string, to: Spot): Promise<boolean> {
     const g = games.find(x => x.id === gameId)
+    const offers = skOffersFor([{ id: gameId, to }])
     const saved = await patchGame(gameId, to)
     if (g && saved && !sameSpot(spotOf(g), spotOf(saved)))
       pushUndo({ label: `move ${gameName(g)}`, moves: [{ id: g.id, from: spotOf(g), to: spotOf(saved) }] })
+    if (saved) askScorekeepers(offers)
     return !!saved
   }
 
@@ -822,6 +893,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
     if (!a || !b || a.id === b.id) return
     if (!okForField(a, b.location) || !okForField(b, a.location)) return
     setSaving(true)
+    const offers = skOffersFor([{ id: a.id, to: spotOf(b) }, { id: b.id, to: spotOf(a) }])
     const send = (id: string, to: Game) => fetch(`/api/tournaments/${params.id}/games/${id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ date: to.date, startTime: to.startTime, location: to.location }),
@@ -835,6 +907,7 @@ export default function SchedulerPage({ params }: { params: { id: string } }) {
       }))
       pushUndo({ label: `swap ${a.gameNumber} and ${b.gameNumber}`, moves: [{ id: a.id, from: spotOf(a), to: spotOf(b) }, { id: b.id, from: spotOf(b), to: spotOf(a) }] })
       toast.success(`Swapped ${a.gameNumber} and ${b.gameNumber}`)
+      askScorekeepers(offers)
     } else {
       toast.error('Swap did not save. Reloading the board.')
       fetch(`/api/tournaments/${params.id}/games`).then(r => r.ok ? r.json() : null).then(d => { if (d) setGames(Array.isArray(d) ? d : (d.games ?? [])) }).catch(() => {})

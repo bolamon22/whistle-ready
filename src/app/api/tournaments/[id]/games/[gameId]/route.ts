@@ -2,7 +2,6 @@ import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff } from '@/lib/apiAuth'
 import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
-import { keepScorekeeperOnField } from '@/lib/fieldScorekeeper'
 
 export async function PATCH(
   req: Request,
@@ -26,10 +25,12 @@ export async function PATCH(
       },
     })
     if (before) {
-      // The scorekeeper stays with the field, not the game (lib/fieldScorekeeper).
-      const sk = await keepScorekeeperOnField(before, updated)
-      const moves = gameMoveChanges(before, updated).filter(c => !(sk.handled && c.role === 'scorekeeper'))
-      await sendOfficialChanges(params.id, [...moves, ...sk.changes], actorOf(gate))
+      // A move never changes who keeps score (Bo, Oct 21 2026: scorekeepers are on a
+      // field all day; "you gotta ask me if I want to move the scorekeeper"). The
+      // Scheduler offers to hand the game to the new field's scorekeeper, and only
+      // does it when he says so. Scorekeepers aren't messaged about moves either.
+      const moves = gameMoveChanges(before, updated).filter(c => c.role !== 'scorekeeper')
+      await sendOfficialChanges(params.id, moves, actorOf(gate))
     }
 
     return NextResponse.json(updated)

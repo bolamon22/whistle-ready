@@ -5,7 +5,6 @@ import { getPublicVisibility, applyPublicView } from '@/lib/publicView'
 import { notifyFinal } from '@/lib/finalAlerts'
 import { ownClubTeams, isOwnClubGame, ownClubRefusal } from '@/lib/ownClub'
 import { actorOf, gameMoveChanges, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
-import { keepScorekeeperOnField } from '@/lib/fieldScorekeeper'
 
 // Middleware lets every /api/* request through, so the gate has to live here.
 // Without it this route rewrote or deleted any game by id with no login at all —
@@ -91,10 +90,11 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     await notifyFinal(before, { ...updated, url: `/tournaments/${updated.tournamentId}/public/games/${updated.id}` })
   }
   if (was) {
-    // The scorekeeper stays with the field, not the game (lib/fieldScorekeeper).
-    const sk = await keepScorekeeperOnField(was, updated)
-    const moved = gameMoveChanges(was, updated).filter(c => !(sk.handled && c.role === 'scorekeeper'))
-    await sendOfficialChanges(updated.tournamentId, [...moved, ...sk.changes], actorOf(gate))
+    // A move never changes who keeps score, and scorekeepers aren't messaged about
+    // moves: they work a field all day (Bo, Oct 21 2026). The Scheduler asks before
+    // handing a moved game to the new field's scorekeeper.
+    const moved = gameMoveChanges(was, updated).filter(c => c.role !== 'scorekeeper')
+    await sendOfficialChanges(updated.tournamentId, moved, actorOf(gate))
   }
   return NextResponse.json(updated)
 }

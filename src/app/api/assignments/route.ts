@@ -23,7 +23,9 @@ const shape = (a: any, role: string, scope: PayScope, division: string, side: Ga
 })
 export async function POST(req: Request) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
-  const{gameId,workerId,role}=await req.json()
+  // quiet: the Scheduler handing a moved game to its new field's scorekeeper, which
+  // Bo okays on screen. Nobody is messaged about that (scorekeepers work a field).
+  const{gameId,workerId,role,quiet}=await req.json()
   const game=await prisma.game.findUnique({where:{id:gameId},include:{tournament:true}})
   if(!game)return NextResponse.json({error:'Game not found'},{status:404})
   // Only games of the organization this login works in, and only its own Staff Pool (lib/orgScope).
@@ -36,7 +38,7 @@ export async function POST(req: Request) {
   // Who held the slot before, so a published official taken off it is told too (lib/officialChangeAlerts).
   const prev=await prisma.assignment.findUnique({where:{gameId_role:{gameId,role}},select:{workerId:true}})
   const saved=await prisma.assignment.upsert({where:{gameId_role:{gameId,role}},create:{gameId,workerId,role,payRate},update:{workerId,payRate},include:{worker:true}})
-  if(prev?.workerId!==workerId){
+  if(prev?.workerId!==workerId&&quiet!==true){
     const spot=spotOf(game)
     const changes:OfficialChange[]=[{kind:'added',workerId,role,spot}]
     if(prev?.workerId)changes.push({kind:'removed',workerId:prev.workerId,role,spot})
