@@ -148,7 +148,8 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
             <Progress t={t} progress={progress} />
           </div>
         </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Phones: the row opens the event; ten icon buttons here pushed the page sideways. */}
+        <div className="hidden sm:flex items-center gap-1 flex-shrink-0">
           {actionsFor(t.id).map(a => (
             <Link key={a.label} href={a.href} title={a.label}
               className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-[11px] font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900">
@@ -183,21 +184,6 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
         </div>
       </div>
 
-      {clubs.length > 0 && (
-        <Link href="/dashboard/club-director"
-          className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:shadow-sm">
-          <Shield size={18} aria-hidden className="flex-shrink-0 text-violet-600" />
-          <span className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold text-slate-800">Your club portal</span>
-            <span className="block truncate text-xs text-slate-500">{clubs.join(', ')} · teams, players, schedule and billing</span>
-          </span>
-          <ChevronRight size={16} aria-hidden className="flex-shrink-0 text-slate-400" />
-        </Link>
-      )}
-
-      {/* Receipts for what they bought for an event (components/expenses); hidden when there's nothing to show */}
-      <StaffReceipts compact />
-
       {tournaments.length === 0 ? (
         <div className="text-center py-20 text-slate-400">{emptyText ?? 'No tournaments yet.'}</div>
       ) : upcoming.length + pastList.length === 0 ? (
@@ -226,7 +212,7 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
                   <div className={`grid grid-cols-3 gap-2 mt-4 ${SM_COLS[actionsFor(next.id).length] ?? 'sm:grid-cols-6'}`}>
                     {actionsFor(next.id).map((a, i) => (
                       <Link key={a.label} href={a.href}
-                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-colors ${i === 0 ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
+                        className={`flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 py-3.5 rounded-xl text-[13px] sm:text-sm font-semibold transition-colors ${i === 0 ? 'bg-teal-600 text-white hover:bg-teal-700' : 'bg-slate-50 text-slate-700 hover:bg-slate-100'}`}>
                         <a.Icon size={16} className={i === 0 ? 'text-white' : 'text-teal-600'} />{a.label}
                       </Link>
                     ))}
@@ -258,6 +244,25 @@ export default function RoleHome({ roleLabel, actions: actionsFor, homeHref, pro
           )}
         </div>
       )}
+
+      {/* Below the events (Oct 22 2026): on game day the event and its buttons come first. */}
+      <div className="mt-6">
+      {clubs.length > 0 && (
+        <Link href="/dashboard/club-director"
+          className="mb-5 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 hover:border-slate-300 hover:shadow-sm">
+          <Shield size={18} aria-hidden className="flex-shrink-0 text-violet-600" />
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold text-slate-800">Your club portal</span>
+            <span className="block truncate text-xs text-slate-500">{clubs.join(', ')} · teams, players, schedule and billing</span>
+          </span>
+          <ChevronRight size={16} aria-hidden className="flex-shrink-0 text-slate-400" />
+        </Link>
+      )}
+
+      {/* Receipts for what they bought for an event (components/expenses); hidden when there's nothing to show */}
+      <StaffReceipts compact />
+
+      </div>
     </div>
   )
 }

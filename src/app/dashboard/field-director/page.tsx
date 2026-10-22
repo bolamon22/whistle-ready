@@ -1,6 +1,6 @@
 'use client'
 
-import { Radio, Users, CalendarClock, Store, CalendarDays, GraduationCap, ClipboardList, Trophy, TriangleAlert, LayoutGrid, Printer } from 'lucide-react'
+import { Radio, Users, CalendarClock, Store, CalendarDays, GraduationCap, ClipboardList, Trophy, TriangleAlert, LayoutGrid, Printer, Timer, Target } from 'lucide-react'
 import RoleHome from '@/components/RoleHome'
 
 // The field director's home (Oct 13 2026): only the events they're assigned to
@@ -17,6 +17,9 @@ export default function FieldDirectorDashboard() {
       actions={id => [
         { href: `/tournaments/${id}/communications`, Icon: Radio,         label: 'Game day' },
         { href: `/tournaments/${id}/field-board`,    Icon: LayoutGrid,    label: 'Field board' },
+        // Everyone can score (Bo, Oct 22 2026): the field director covers a field when a scorekeeper is short.
+        { href: `/tournaments/${id}/scoring`,        Icon: Timer,         label: 'Live scoring' },
+        { href: `/tournaments/${id}/scores`,         Icon: Target,        label: 'Post scores' },
         { href: `/tournaments/${id}/print-schedule`, Icon: Printer,       label: 'Print schedule' },
         { href: `/tournaments/${id}/tables`,         Icon: ClipboardList, label: 'Score tables' },
         { href: `/tournaments/${id}/incidents`,      Icon: TriangleAlert, label: 'Issues' },
