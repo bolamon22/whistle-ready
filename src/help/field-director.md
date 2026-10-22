@@ -13,7 +13,7 @@ A **Field Director** runs game day at the events you give them. They work with t
 3. If they're signed in already, the change reaches them within a minute, or when they reload the page.
 
 **What a field director sees:**
-- **Their home page:** each of their events, with **Game day**, **Staff roster**, **Availability**, **Vendors**, **Schedule** (the public schedule and teams) and **Training**.
+- **Their home page:** the next event first, with big buttons for **Game day**, **Field board**, **Live scoring**, **Post scores**, **Print schedule**, **Score tables**, **Issues**, **Awards**, **Staff roster**, **Availability**, **Vendors**, **Schedule** (the public schedule and teams) and **Training**. **Your club portal** and receipts sit below the events. On a phone, the other events in the list open with a tap.
 - **Staff roster:** the scorekeepers, athletic trainers and field ops on the event, with phone and email. They can add people from the Staff Pool, remove them, **Invite Staff** by email and **Copy signup link**. They can't edit Staff Pool details, and they see no pay.
 - **Availability** and **Staff applications** for those jobs. Applicants who only want to referee are left out.
 - **Game day:** field requests, incidents, the checklist, the staff directory, **Post scores** and the scorekeeper.

@@ -5,7 +5,9 @@ order: 500
 routes: /dashboard/staff, /dashboard/ref, /dashboard/scorekeeper
 keywords: confirm my games confirm your games can't work a game my games my schedule my assignments staff home portal ref home scorekeeper home sign up to work events check in clock in clock out time clock up next open scorer availability which days can you work all day morning afternoon can't work game times to do answer now take me off w-9 w9 tax form upload w-9 paycheck receipt receipts pay me back
 ---
-When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page with their events, their next game and the game day tools.
+When a ref, scorekeeper, trainer or field ops worker logs in, they land on their own home page. From the top: **Up next** (your next game), the **Game day** buttons, and **My games**. Below them, under **More**: game-day alerts, **My events** (sign-ups and which days you can work), **Training videos**, the W-9, receipts and your totals.
+
+**During an event you work:** the home page leads with your next game and the buttons. The **To do** cards (**Confirm your games**, **Tell us which days you can work**) move down under **More**. Before the event they stay at the top.
 
 **Where:** it opens when you log in.
 
@@ -14,7 +16,7 @@ When a ref, scorekeeper, trainer or field ops worker logs in, they land on their
 2. Once you're on it, it shows **Working** and how many games you're assigned, and asks which days you can work. Can't work the event at all? Tap **Take me off it** (only before you have games).
 
 **To tell us which days you can work:**
-1. Until every day has an answer, a **To do** card at the top says **Tell us which days you can work**. Tap **Answer now**.
+1. Until every day has an answer, a **To do** card (at the top before the event, under **More** during it) says **Tell us which days you can work**. Tap **Answer now**.
 2. Under **Which days can you work?**, tap one for each day: **All day**, **Morning** (games that start before noon), **Afternoon** (noon or later) or **Can't work**. It saves right away and shows **Saved**. **I can work both days, all day** answers every day at once.
 3. Only free part of a day? Once the schedule is published, tap **Only free part of the day? Pick your times**, tick the times you're free, and tap **Save**. This tells the assigner when you can be used; the assigner still decides which games you work (scorekeepers usually stay on one field all day).
 4. To change a day, tap another answer. Each day locks 48 hours before it starts (Saturday locks when Thursday begins); after that, call or text the assigner. Answer as early as you can. If the assigner set a day for you, it says **Set by** and their name.
@@ -35,7 +37,7 @@ A reminder email from the assigner has an **Answer for my 2 days** button (the n
 
 **To clock in (field ops and athletic trainers):** under **Time clock**, tap **Clock In** when you start and **Clock Out** when you finish.
 
-**Game day tools:** buttons for **Field Request**, **Live scoring**, **Post scores**, **Staff contacts**, **Setup checklist** and **Incidents**. You only see the tools for your job.
+**Game day buttons:** **Live scoring** and **Post scores** come first for everyone, so a ref or field ops worker can cover a field when a scorekeeper is short. Then **Field Request**, **Awards & photos** (scorekeepers and field ops), **Setup checklist** (field ops), **Staff contacts**, **Rules** (refs and scorekeepers), **Incidents** and **Emergency plan**.
 
 **My staff ID** opens your printable badge. See [Print your staff ID or add it to Apple Wallet](/dashboard/staff/id-card).
 
