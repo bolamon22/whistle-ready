@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import toast, { Toaster } from 'react-hot-toast'
 import EventBackLink from '@/components/EventBackLink'
-import { Trophy, Medal, Camera, Check, Film, Eye } from 'lucide-react'
+import { Trophy, Medal, Camera, Check, Film, Eye, Printer } from 'lucide-react'
 import { uploadChampionPhoto, uploadChampionVideo, CHAMP_VIDEO_MAX_SECONDS } from '@/lib/championMedia'
 
 // Awards and champion photos (Bo, Oct 14 2026): after each championship the field
@@ -100,6 +100,8 @@ export default function AwardsPage() {
       <EventBackLink id={tid} />
       <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><Trophy size={22} className="text-amber-500" /> Awards and champion photos</h1>
       <p className="text-sm text-slate-500 mb-4">After each championship, hand out the awards and take the champions&apos; photo, then tick both here.{rows && rows.length > 0 ? ` ${done} of ${rows.length} divisions done.` : ''}</p>
+      {/* When each championship should end, so awards go out on time (Bo, Oct 23 2026). */}
+      <a href={`/tournaments/${tid}/print-schedule?day=all&layout=champ`} className="mb-4 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:min-h-0 sm:py-2"><Printer size={15} aria-hidden /> Championship times to print</a>
       {err && <p className="text-sm text-red-600">{err}</p>}
       {rows && rows.length === 0 && <p className="text-sm text-slate-400">No divisions have games yet.</p>}
       <input ref={fileInput} type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) upload(f) }} />

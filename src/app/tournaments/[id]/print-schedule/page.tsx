@@ -37,7 +37,8 @@ const NO_COLOR: DivColor = { bg: '#f8fafc', border: '#cbd5e1', text: '#475569' }
 
 export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [t, setT] = useState<T | null>(null)
-  const [games, setGames] = useState<CpGame[] | null>(null)
+  // champ: the game is a championship (Game.isChampionship), for the Championships sheet.
+  const [games, setGames] = useState<(CpGame & { champ?: boolean })[] | null>(null)
   const [cp, setCp] = useState<Cp | null>(null)
   const [err, setErr] = useState('')
   // Field directors print it too (Bo, Oct 22 2026: "a printable version on the Scorer and
@@ -49,7 +50,7 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     : { href: `/tournaments/${params.id}/field-board`, label: 'Field board' }
   const [day, setDay] = useState('all')
   const [side, setSide] = useState<'all' | 'boys' | 'girls'>('all')
-  const [layout, setLayout] = useState<'grid' | 'time' | 'field'>('grid')
+  const [layout, setLayout] = useState<'grid' | 'time' | 'field' | 'champ'>('grid')
   const [show, setShow] = useState<'both' | 'refs' | 'sk'>('both')
   const [auto, setAuto] = useState(false)
   // The Assigner's print drop-down opens this page with its picks (?day=&layout=&side=&show=)
@@ -59,7 +60,7 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     const d = q.get('day'); if (d && (d === 'all' || /^\d{4}-\d{2}-\d{2}$/.test(d))) setDay(d)
     const sd = q.get('side'); if (sd === 'boys' || sd === 'girls') setSide(sd)
     const sh = q.get('show'); if (sh === 'refs' || sh === 'sk') setShow(sh)
-    const l = q.get('layout'); if (l === 'grid' || l === 'time' || l === 'field') setLayout(l)
+    const l = q.get('layout'); if (l === 'grid' || l === 'time' || l === 'field' || l === 'champ') setLayout(l)
     if (q.get('auto') === '1') setAuto(true)
   }, [])
   useEffect(() => {
@@ -70,16 +71,16 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     ]).then(([tt, g]) => {
       if (!tt || !g || (cid && !Array.isArray(g.checkpoint?.data))) { setErr('That didn’t load. Please try again.'); return }
       setT(tt)
-      if (cid) { setCp(g.checkpoint); setGames(g.checkpoint.data) } else setGames((Array.isArray(g) ? g : []).map(cpGame))
+      if (cid) { setCp(g.checkpoint); setGames(g.checkpoint.data) } else setGames((Array.isArray(g) ? g : []).map((x: any) => ({ ...cpGame(x), champ: !!x.isChampionship })))
     }).catch(() => setErr('That didn’t load. Please try again.'))
   }, [params.id])
 
   const eventSide = teamsSide(t?.teams)
   const days = useMemo(() => eventDayList(t, (games || []).map(g => g.date)).filter(d => (games || []).some(g => g.date === d)), [t, games])
   const shown = useMemo(() => (games || [])
-    .filter(g => !g.isCanceled && (day === 'all' || g.date === day))
+    .filter(g => !g.isCanceled && (day === 'all' || g.date === day) && (layout !== 'champ' || !!g.champ))
     .filter(g => side === 'all' || gameGender(g.division, eventSide) === side || gameGender(g.division, eventSide) === 'both')
-    .sort((a, b) => a.date.localeCompare(b.date) || mins(a.startTime) - mins(b.startTime) || byField(a.location, b.location)), [games, day, side, eventSide])
+    .sort((a, b) => a.date.localeCompare(b.date) || mins(a.startTime) - mins(b.startTime) || byField(a.location, b.location)), [games, day, side, eventSide, layout])
   const refCols = useMemo(() => {
     const r = new Set<string>()
     for (const g of shown) for (const o of g.officials) if (o.role !== 'scorekeeper') r.add(o.role)
@@ -151,8 +152,8 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
           <select value={show} onChange={e => setShow(e.target.value as 'both' | 'refs' | 'sk')} aria-label="Officials" className={sel}>
             <option value="both">Refs and scorekeepers</option><option value="refs">Refs only</option><option value="sk">Scorekeepers only</option>
           </select>
-          <select value={layout} onChange={e => setLayout(e.target.value as 'grid' | 'time' | 'field')} aria-label="Layout" className={sel}>
-            <option value="grid">Grid (fields across)</option><option value="time">List by time</option><option value="field">List by field</option>
+          <select value={layout} onChange={e => setLayout(e.target.value as 'grid' | 'time' | 'field' | 'champ')} aria-label="Layout" className={sel}>
+            <option value="grid">Grid (fields across)</option><option value="time">List by time</option><option value="field">List by field</option><option value="champ">Championships &amp; awards</option>
           </select>
           <button type="button" onClick={() => window.print()} disabled={!shown.length} className="btn-primary inline-flex min-h-[44px] items-center gap-1.5 sm:ml-auto sm:min-h-0"><Printer size={15} aria-hidden />Print</button>
         </div>
@@ -169,7 +170,8 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
             <p className="text-xs text-slate-600">{note} · {shown.length} game{shown.length === 1 ? '' : 's'} · printed {when(new Date().toISOString())}</p>
           </div>
           {layout === 'grid' && groups.map(grp => <GridDay key={grp.key} title={grp.title} games={grp.games} cols={cols} colors={colors} />)}
-          {layout !== 'grid' && groups.map(grp => (
+          {layout === 'champ' && groups.map(grp => <ChampDay key={grp.key} title={grp.title} games={grp.games} all={games || []} cols={cols} colors={colors} />)}
+          {(layout === 'time' || layout === 'field') && groups.map(grp => (
             <section key={grp.key} className="ps-group mb-4">
               <h2 className="mb-1 text-sm font-bold text-slate-800">{grp.title}</h2>
               {/* Phones: a card per game. Wider screens and paper: the table. */}
@@ -299,6 +301,60 @@ function GridDay({ title, games, cols, colors }: { title: string; games: CpGame[
           </div>
         </div>
       ))}
+    </section>
+  )
+}
+
+// Championships and awards (Bo, Oct 23 2026: "a quick reference of the championship games
+// and times" and "we need to know when to bring out awards ... on Sunday"). One row per
+// championship, in the order they finish, with when it should end: the next game's start on
+// that field (that's when the field turns over), or one slot later when it's the field's last
+// game. The slot is that field's usual gap that day, 50 minutes when there's nothing to go by.
+function ChampDay({ title, games, all, cols, colors }: { title: string; games: CpGame[]; all: CpGame[]; cols: string[]; colors: Map<string, DivColor> }) {
+  const who = (g: CpGame, role: string) => g.officials.filter(o => o.role === role).map(o => o.name).filter(Boolean).join(', ')
+  const endOf = (g: CpGame) => {
+    const start = mins(g.startTime)
+    if (start >= 99999) return 99999
+    const same = all.filter(x => !x.isCanceled && x.date === g.date && x.location === g.location && mins(x.startTime) < 99999).map(x => mins(x.startTime)).sort((a, b) => a - b)
+    const next = same.find(m => m > start)
+    if (next !== undefined) return next
+    const gaps = same.slice(1).map((m, i) => m - same[i]).filter(d => d > 0).sort((a, b) => a - b)
+    return start + (gaps.length ? gaps[Math.floor(gaps.length / 2)] : 50)
+  }
+  const hm = (m: number) => (m >= 99999 ? 'TBD' : formatTime(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`))
+  const rows = games.map(g => ({ g, end: endOf(g) })).sort((a, b) => a.end - b.end || mins(a.g.startTime) - mins(b.g.startTime) || byField(a.g.location, b.g.location))
+  return (
+    <section className="ps-group mb-5">
+      <h2 className="mb-1 text-sm font-bold text-slate-800">{title} · Championships</h2>
+      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white print:overflow-visible print:rounded-none">
+        <table className="w-full min-w-[720px] table-fixed text-left text-xs print:min-w-0">
+          <colgroup>
+            <col style={{ width: '12%' }} /><col style={{ width: '9%' }} /><col style={{ width: '8%' }} /><col style={{ width: '17%' }} /><col style={{ width: '5%' }} /><col /><col style={{ width: '25%' }} />
+          </colgroup>
+          <thead className="bg-slate-50 text-[11px] font-semibold text-slate-600">
+            <tr>
+              <th className="px-2 py-1.5">Awards about</th><th className="px-2 py-1.5">Starts</th><th className="px-2 py-1.5">Field</th><th className="px-2 py-1.5">Division</th><th className="px-2 py-1.5">#</th><th className="px-2 py-1.5">Matchup</th><th className="px-2 py-1.5">Officials</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100 align-top [&_td]:break-words">
+            {rows.map(({ g, end }) => {
+              const dc = colors.get(g.division) || NO_COLOR
+              return (
+                <tr key={g.id}>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-sm font-bold text-slate-900">{hm(end)}</td>
+                  <td className="whitespace-nowrap px-2 py-1.5">{time(g.startTime)}</td>
+                  <td className="px-2 py-1.5">{fieldShort(g.location)}</td>
+                  <td className="px-2 py-1.5 font-semibold" style={{ color: dc.text }}>{g.division}</td>
+                  <td className="px-2 py-1.5">{g.gameNumber}</td>
+                  <td className="px-2 py-1.5 font-semibold text-slate-900">{g.team1} <span className="font-normal text-slate-400">v</span> {g.team2}</td>
+                  <td className="px-2 py-1.5 text-slate-700">{cols.map(c => { const n = who(g, c); return n ? `${ROLE_SHORT[c] || c} ${n}` : '' }).filter(Boolean).join(' · ') || <span className="text-slate-400">none yet</span>}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">Awards about = when the game should finish: the next game&apos;s start on that field, or one slot after it starts if it&apos;s the field&apos;s last game.</p>
     </section>
   )
 }

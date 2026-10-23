@@ -7,7 +7,7 @@ import { formatTime, formatDate, certLabel, GRID_ROLES, getDivisionColor, resetD
 import TournamentNav from './TournamentNav'
 import CheckpointBanner from '@/components/CheckpointBanner'
 import { askSideSwitch } from '@/components/askSideSwitch'
-import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid, Printer, History } from 'lucide-react'
+import { Users, Lock, ClipboardList, ChevronUp, ChevronDown, Zap, Trash2, Plus, Upload, X, Send, CheckCheck, Eye, EyeOff, Tags, MoreHorizontal, SlidersHorizontal, ChevronsRight, Pin, AlertTriangle, Search, LayoutGrid, Printer, History, Trophy } from 'lucide-react'
 import { CREW_LABEL, type Crew } from '@/lib/staffRelease'
 import { eventDayList } from '@/lib/eventDays'
 import { divisionAbbr } from '@/lib/names'
@@ -1191,6 +1191,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
                 {dates.length>1&&<Link href={href('all','grid')} className={menuItem} onClick={()=>setPrintOpen(false)}><LayoutGrid size={15} className="text-slate-400"/> Every day · grid</Link>}
                 {activeDay&&<Link href={href(activeDay,'time')} className={menuItem} onClick={()=>setPrintOpen(false)}><ClipboardList size={15} className="text-slate-400"/> {formatDate(activeDay)} · list by time</Link>}
                 {activeDay&&<Link href={href(activeDay,'field')} className={menuItem} onClick={()=>setPrintOpen(false)}><ClipboardList size={15} className="text-slate-400"/> {formatDate(activeDay)} · list by field</Link>}
+                {/* Bo, Oct 23 2026: the championships with when each ends, for bringing out awards. */}
+                {games.some(g=>g.isChampionship)&&<Link href={href('all','champ')} className={menuItem} onClick={()=>setPrintOpen(false)}><Trophy size={15} className="text-amber-500"/> Championships &amp; awards</Link>}
                 <div className="my-1 border-t border-slate-100"/>
                 <Link href={`/tournaments/${params.id}/print-schedule`} className={menuItem} onClick={()=>setPrintOpen(false)}><Printer size={15} className="text-slate-400"/> More print choices…</Link>
               </div>
