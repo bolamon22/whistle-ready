@@ -93,7 +93,10 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
     // A move never changes who keeps score, and scorekeepers aren't messaged about
     // moves: they work a field all day (Bo, Oct 21 2026). The Scheduler asks before
     // handing a moved game to the new field's scorekeeper.
-    const moved = gameMoveChanges(was, updated).filter(c => c.role !== 'scorekeeper')
+    // quiet: true skips the officials' alert (Bo, Oct 23 2026: swapping two teams between
+    // games at the same time, "please keep the game times exactly the same", and no emails
+    // to the refs for what is only a matchup change). Staff-only like the rest of PATCH.
+    const moved = b.quiet === true ? [] : gameMoveChanges(was, updated).filter(c => c.role !== 'scorekeeper')
     await sendOfficialChanges(updated.tournamentId, moved, actorOf(gate))
     // Girls game became a boys game (or back): refs stay on it, and the caller asks whether
     // to take off the ones who work the other side (components/askSideSwitch). Refs set to
