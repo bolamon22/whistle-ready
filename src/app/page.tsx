@@ -1,9 +1,11 @@
 import type { Metadata } from 'next'
 import { getServerSession } from 'next-auth'
+import { headers } from 'next/headers'
 import { authOptions } from '@/lib/auth'
 import { BRAND, brandJsonLd } from '@/lib/brandFaq'
 import Landing from './Landing'
 import HomeClient from './HomeClient'
+import AppStart from './AppStart'
 
 // The domain root. Signed out: the public landing, rendered on the SERVER so
 // crawlers and answer engines that don't run JavaScript read the real page
@@ -27,6 +29,9 @@ export const metadata: Metadata = {
 export default async function HomePage() {
   const session = await getServerSession(authOptions).catch(() => null)
   if (session?.user) return <HomeClient />
+  // Inside the iOS app (lib/pushClient isNativeApp) a signed-out visitor is a parent,
+  // fan, coach or staff member, not an organizer shopping for software.
+  if (/WhistleReadyApp\//.test(headers().get('user-agent') || '')) return <AppStart />
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(brandJsonLd()).replace(/</g, '\\u003c') }} />
