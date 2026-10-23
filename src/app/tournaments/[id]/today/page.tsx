@@ -126,19 +126,21 @@ export default function TodayPage() {
     setBusy(false)
   }
 
-  const venue = t?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}` : `/tournaments/${id}/event?full=1#locations`
-  const fieldMap = `/tournaments/${id}/event?full=1#locations`
+  const venue = t?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}` : `/tournaments/${id}/today/fields`
+  // Every button stays inside game day mode (Bo, Oct 23 2026): field map, rules and
+  // the waiver have their own pages under /today, with the slim Game day header.
+  const fieldMap = `/tournaments/${id}/today/fields`
   // Schedule and standings open inside game day mode (today/schedule), not the full site.
   const schedBase = `/tournaments/${id}/today/schedule`
   const schedHref = team ? `${schedBase}?division=${encodeURIComponent(team.division)}&team=${encodeURIComponent(team.name)}&tab=schedule` : schedBase
   const standHref = team ? `${schedBase}?division=${encodeURIComponent(team.division)}&tab=standings` : schedBase
   const tiles = [
-    { icon: <FileSignature size={21} />, label: 'Player waiver', href: `/tournaments/${id}/player-waiver`, hot: true },
+    { icon: <FileSignature size={21} />, label: 'Player waiver', href: `/tournaments/${id}/today/waiver`, hot: true },
     { icon: <Calendar size={21} />, label: 'Full schedule', href: schedHref },
     { icon: <Trophy size={21} />, label: 'Standings', href: standHref },
     { icon: <Navigation size={21} />, label: 'Directions', href: venue },
     { icon: <Map size={21} />, label: 'Field map', href: fieldMap },
-    { icon: <ScrollText size={21} />, label: 'Rules', href: `/tournaments/${id}/rules` },
+    { icon: <ScrollText size={21} />, label: 'Rules', href: `/tournaments/${id}/today/rules` },
   ]
   const staffRole = role === 'admin' || role === 'director'
   const nextEvent = info?.next
