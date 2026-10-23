@@ -11,7 +11,7 @@ The schedule page shows every division's games, live scores, standings and brack
 **Where:** **View schedule** on the event page (**Schedule** on a phone; it says **Live scores** / **Live** during the event and **View results** / **Results** after), or go to /tournaments/<id>/public.
 
 1. Type your team in **Search for a team…** and tap it, or tap your division's card. Each card shows the status (**Pool play**, **Bracket** or **Final**), the number of games, how many are left, and the leader or champion.
-2. Inside a division, switch between **Standings**, **Schedule** and **Bracket**. Tap **All divisions** to go back.
+2. Inside a division, switch between **Standings**, **Schedule** and **Bracket**. A division opens on **Schedule** until the first score is in; tapping a team from the search opens that team's games. Tap **All divisions** to go back.
 3. **Standings** shows each pool's table, including the last three results (**Last 3**) and which teams advance. Tiebreakers are listed under the table.
 4. **Schedule** lists the games. Narrow it with **All teams** (pick your team), **All fields**, and **All**, **Upcoming** or **Final**. Group by **By time** or **By field**. Tapping a team name also filters to that team.
 5. Tap the calendar icon (**Add to calendar**) on an upcoming game to add it to your phone's calendar.
