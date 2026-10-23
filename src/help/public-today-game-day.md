@@ -4,7 +4,7 @@ category: Public pages
 order: 912
 audience: public
 routes: /tournaments/*/today
-keywords: today, game day, game day mode, game day hub, find my team, my team, next game, up next, directions, field map, player waiver, full site, log in, add to home screen, always open the schedule first, phone
+keywords: mobile view, view mobile, today, game day, game day mode, game day hub, find my team, my team, next game, up next, directions, field map, player waiver, full site, log in, add to home screen, always open the schedule first, phone
 ---
 The Game day screen is the phone view of an event: your team's next game, its games with scores, and one-tap buttons for the player waiver, directions and the field map. No login needed.
 
@@ -16,7 +16,7 @@ The Game day screen is the phone view of an event: your team's next game, its ga
 4. Use the buttons: **Player waiver**, **Full schedule** (opens your team's games), **Standings**, **Directions**, **Field map** and **Rules**.
 5. Tap **Change** to pick a different team.
 6. Staff, referees, coaches and club directors: tap **Log in** at the top.
-7. Tap **Full site** for everything else on the event page. On other pages, the **Back to your team** button at the bottom left brings you back here.
+7. Tap **Full site** for everything else on the event page. On the full site, the **Mobile view** button at the bottom left of a phone screen brings you back here.
 8. Turn off **Always open the schedule first** if you'd rather your phone open the full site. Tap Share, then **Add to Home Screen**, to keep this screen one tap away.
 
 **Common problems:**
