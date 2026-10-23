@@ -9,6 +9,7 @@ import EventHero from '../_eventHero'
 import { buildHeroProps, eventIsOver, fmtRangeShort, shortLocation } from '@/lib/eventHero'
 import { getPublicVisibility } from '@/lib/publicView'
 import PublicChirp from '@/components/PublicChirp'
+import GameDayGate from '@/components/GameDayGate'
 import EventSection from '@/components/EventSection'
 import CountdownBlock from '@/components/CountdownBlock'
 import FaqBlock from '@/components/FaqBlock'
@@ -590,6 +591,8 @@ export default async function TournamentEventPage({ params }: { params: { id: st
       )}
       {org.slug && <OrgFooter org={orgForChrome} contact={contact} socials={socials} base={orgBase(org.slug)} pages={navPages} />}
       <PublicChirp tournamentId={params.id} tournamentName={t.name} />
+      {/* Phones open the Game day screen during the event (lib/gameDay). */}
+      <GameDayGate tournamentId={params.id} redirect />
     </div>
   )
 }

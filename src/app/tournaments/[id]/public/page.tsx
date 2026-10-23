@@ -3,6 +3,7 @@ import { useEffect, useState, useMemo, useCallback, useContext, useRef, createCo
 import { time12 } from '@/lib/time12'
 import { useParams } from 'next/navigation'
 import PublicChirp from '@/components/PublicChirp'
+import GameDayGate from '@/components/GameDayGate'
 import LiveTicker from '@/components/LiveTicker'
 import FollowButton from '@/components/FollowButton'
 import FollowAlertsSheet from '@/components/FollowAlertsSheet'
@@ -378,16 +379,21 @@ function TeamSheet({division,team,divGames,pool,poolRows,overallRows,bracketList
   )
 }
 
-function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false,champMedia,sampleChamps=false,eventName='',initialTab=''}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean;champMedia?:Record<string,ChampMedia>;sampleChamps?:boolean;eventName?:string;initialTab?:DivTab|''}) {
+function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tournamentId,tiebreakers,divTiebreakers=tiebreakers,advanceBy='division',scheduleLive=true,rosters=[],notes,poolOnly=false,champMedia,sampleChamps=false,eventName='',initialTab='',initialTeam=''}:{division:string;games:Game[];isFollowed:(division:string,team:string)=>boolean;anyFollowed:boolean;toggleFollow:(division:string,team:string)=>void;tournamentId:string;tiebreakers:string[];divTiebreakers?:string[];advanceBy?:'division'|'pool';scheduleLive?:boolean;rosters?:PoolRoster[];notes?:{division:string;all:string};poolOnly?:boolean;champMedia?:Record<string,ChampMedia>;sampleChamps?:boolean;eventName?:string;initialTab?:DivTab|'';initialTeam?:string}) {
   // Every team on this view plays in `division`; follows are per (division, team).
   const followed=(team:string)=>isFollowed(division,team)
   const onFollow=(team:string)=>toggleFollow(division,team)
-  const [divTab,setDivTab]=useState<DivTab>(initialTab||'standings')
+  // Schedule first until a score is in (Bo, Oct 23 2026): before then Standings is a
+  // table of zeros, and on game day families want to see when and where they play.
+  const hasScores=games.some(g=>g.division===division&&!g.isCanceled&&g.score1!=null&&g.score2!=null)
+  const [divTab,setDivTab]=useState<DivTab>(initialTab||(initialTeam||!hasScores?'schedule':'standings'))
   // Opened from a link (a shared champions' photo, the Awards page's Preview): bring
   // the division into view under the event's header.
   const viewRef=useRef<HTMLDivElement>(null)
   useEffect(()=>{if(!initialTab)return;const t=setTimeout(()=>{try{viewRef.current?.scrollIntoView({behavior:'smooth',block:'start'})}catch{}},350);return()=>clearTimeout(t)},[])// eslint-disable-line react-hooks/exhaustive-deps
-  const [selectedTeam,setSelectedTeam]=useState<string|null>(null)
+  const [selectedTeam,setSelectedTeam]=useState<string|null>(initialTeam||null)
+  // A team picked from search (or a ?team= link) shows that team's games.
+  useEffect(()=>{if(initialTeam){setSelectedTeam(initialTeam);setDivTab('schedule')}},[initialTeam])
   const [sheetTeam,setSheetTeam]=useState<string|null>(null)
   const [schedStatus,setSchedStatus]=useState<'all'|'upcoming'|'final'|'mine'|'live'>('all')
   const [schedDay,setSchedDay]=useState('')
@@ -731,11 +737,13 @@ export default function PublicTournamentPage() {
   // Links into one division (Bo, Oct 17 2026): Share on the champions' photo opens
   // ?division=<name>&tab=bracket, and the Awards page's Preview adds preview=champions,
   // which shows signed-in staff the champions' photo or video before it is public.
-  const [deepLink,setDeepLink]=useState<{division:string;tab:DivTab|'';preview:boolean;read:boolean}>({division:'',tab:'',preview:false,read:false})
+  const [deepLink,setDeepLink]=useState<{division:string;tab:DivTab|'';preview:boolean;read:boolean;team?:string}>({division:'',tab:'',preview:false,read:false})
+  // The team tapped in search (or named by ?team=), shown on its division's schedule.
+  const [pickedTeam,setPickedTeam]=useState('')
   useEffect(()=>{
-    let division='',tab:DivTab|''='',preview=false
-    try{const q=new URLSearchParams(window.location.search);division=q.get('division')||'';const t=q.get('tab');if(t==='standings'||t==='schedule'||t==='bracket')tab=t;preview=q.get('preview')==='champions'}catch{}
-    setDeepLink({division,tab,preview,read:true})
+    let division='',tab:DivTab|''='',preview=false,team=''
+    try{const q=new URLSearchParams(window.location.search);division=q.get('division')||'';const t=q.get('tab');if(t==='standings'||t==='schedule'||t==='bracket')tab=t;preview=q.get('preview')==='champions';team=q.get('team')||''}catch{}
+    setDeepLink({division,tab,preview,read:true,team});if(team)setPickedTeam(team)
   },[])
   // Photos and clips staff put on the public bracket in Awards (api/.../champion-media),
   // by championship game id; `staff` says the preview was granted.
@@ -955,13 +963,13 @@ export default function PublicTournamentPage() {
         {selectedDiv && (
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <div className="relative">
-              <select value={selectedDiv} onChange={e=>setSelectedDiv(e.target.value)}
+              <select value={selectedDiv} onChange={e=>{setPickedTeam('');setSelectedDiv(e.target.value)}}
                 className="appearance-none bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-sm font-semibold text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400">
                 {divisions.map(d=><option key={d} value={d}>{d}</option>)}
               </select>
               <ChevronDown size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
             </div>
-            <button onClick={()=>setSelectedDiv(null)} className="text-sm text-slate-500 hover:text-teal-700 font-medium">All divisions</button>
+            <button onClick={()=>{setPickedTeam('');setSelectedDiv(null)}} className="text-sm text-slate-500 hover:text-teal-700 font-medium">All divisions</button>
           </div>
         )}
 
@@ -991,7 +999,7 @@ export default function PublicTournamentPage() {
                     <div key={t.name} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 last:border-0 hover:bg-gray-50 transition-colors">
                       <TeamAvatar name={t.name} size="sm" />
                       <div className="flex-1 min-w-0">
-                        <button onClick={()=>{setSelectedDiv(t.division);setTeamSearch('')}} className="font-semibold text-sm text-blue-700 hover:underline text-left">{t.name}</button>
+                        <button onClick={()=>{setPickedTeam(t.name);setSelectedDiv(t.division);setTeamSearch('')}} className="font-semibold text-sm text-blue-700 hover:underline text-left">{t.name}</button>
                         <div className="text-xs text-gray-400 flex items-center gap-2">{t.division}{t.pool ? ` · ${poolLabel(t.pool)}` : ''}<FollowerCount division={t.division} team={t.name}/></div>
                       </div>
                       <FollowButton team={t.name} following={isFollowed(t.division,t.name)} onToggle={n=>toggleFollow(t.division,n)} />
@@ -1024,7 +1032,7 @@ export default function PublicTournamentPage() {
                       <div key={teamRefKey(division,team)} className="bg-white border border-slate-200 rounded-xl px-4 py-3 flex items-center gap-3">
                         <TeamAvatar name={team} size="sm" />
                         <div className="flex-1 min-w-0">
-                          <button onClick={()=>setSelectedDiv(teamMeta?.division||division)} className="font-bold text-sm text-gray-800 hover:text-blue-700 hover:underline text-left truncate block">{team} <span className="font-normal text-xs text-gray-400">· {division}</span></button>
+                          <button onClick={()=>{setPickedTeam(team);setSelectedDiv(teamMeta?.division||division)}} className="font-bold text-sm text-gray-800 hover:text-blue-700 hover:underline text-left truncate block">{team} <span className="font-normal text-xs text-gray-400">· {division}</span></button>
                           {nextGame ? (
                             <div className="text-xs text-gray-500 mt-0.5">
                               Next: <span className="font-medium">{fmtDate(nextGame.date)} {time12(nextGame.startTime)}</span> vs <span className="font-medium">{nextGame.team1===team?nextGame.team2:nextGame.team1}</span> · {nextGame.location}
@@ -1053,7 +1061,7 @@ export default function PublicTournamentPage() {
                 const pre=pubVis.schedule!=='live'
                 const teamCount=pre?(m.rosterTeams||m.teams):m.teams
                 return (
-                  <button key={div} onClick={()=>setSelectedDiv(div)}
+                  <button key={div} onClick={()=>{setPickedTeam('');setSelectedDiv(div)}}
                     className="text-left bg-white border border-slate-200 rounded-xl p-3.5 hover:border-teal-300 hover:shadow-sm transition-all group">
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <h3 className="font-semibold text-slate-900 text-sm truncate group-hover:text-teal-700 transition-colors">{div}</h3>
@@ -1095,6 +1103,7 @@ export default function PublicTournamentPage() {
         {selectedDiv && (
           <div>
             <DivisionView
+              key={selectedDiv}
               division={selectedDiv}
               games={games}
               isFollowed={isFollowed}
@@ -1112,6 +1121,7 @@ export default function PublicTournamentPage() {
               sampleChamps={deepLink.preview&&champMedia.staff}
               eventName={tournament?.name||''}
               initialTab={deepLink.division&&nameKey(deepLink.division)===nameKey(selectedDiv)?deepLink.tab:''}
+              initialTeam={pickedTeam}
             />
           </div>
         )}
@@ -1121,6 +1131,7 @@ export default function PublicTournamentPage() {
         <p className="text-xs text-slate-400 mt-1">Powered by <a href="https://whistleready.app" className="font-semibold text-slate-500 hover:text-slate-700 hover:underline">Whistle Ready</a></p>
       </footer>
       <PublicChirp tournamentId={id as string} tournamentName={tournament?.name} />
+      <GameDayGate tournamentId={id as string} />
     </div>
     </FollowCountsContext.Provider>
     </LogosContext.Provider>

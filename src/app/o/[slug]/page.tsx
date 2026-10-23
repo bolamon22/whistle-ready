@@ -10,6 +10,7 @@ import { sponsorList, sponsorPitch } from '@/lib/sponsors'
 import { computeOrgHistory, type OrgHistory } from '@/lib/orgHistory'
 import OrgHomeView from '@/components/site/OrgHomeView'
 import SiteEditBar from '@/components/site/SiteEditBar'
+import GameDayGate from '@/components/GameDayGate'
 import { siteLayout } from '@/lib/siteLayout'
 
 // Cache policy for published pages.
@@ -161,6 +162,8 @@ export default async function OrgSite({ params }: { params: { slug: string } }) 
         gallery={gallery} spons={spons} spitch={spitch} ig={ig} igItems={igItems} socials={socials}
         base={base} registerHref={registerHref} layout={siteLayout(content.layout)} />
       <SiteEditBar slug={params.slug} />
+      {/* During an event, phones go straight to its Game day screen (lib/gameDay). */}
+      {upcoming[0] && <GameDayGate tournamentId={String(upcoming[0].id)} redirect />}
       <OrgFooter org={org} contact={contact} socials={socials} base={base} pages={pages} />
     </div>
   )
