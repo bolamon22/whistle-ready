@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { Trophy, ChevronDown, ChevronUp } from 'lucide-react'
 import { useRole } from '@/lib/role-context'
 import { roleCanAccess } from '@/lib/routeAccess'
+import { seesSeeding } from '@/lib/seedingRoles'
 
 // Ready to seed (Bo, Oct 23 2026: "some sort of indication of when divisions need to be
 // seeded ... it's hard to tell when they're ready"). Each division with a bracket: how many
@@ -41,8 +42,11 @@ function Card({ tid, compact }: { tid: string; compact?: boolean }) {
   const { effectiveRole, planOff } = useRole()
   const canSeed = roleCanAccess(effectiveRole, `/tournaments/${tid}/divisions`, planOff)
   const canScore = roleCanAccess(effectiveRole, `/tournaments/${tid}/scores`, planOff)
+  // Directors, admins, schedulers, field directors and assigners only (lib/seedingRoles).
+  const allowed = seesSeeding(effectiveRole)
 
   useEffect(() => {
+    if (!allowed) return
     let live = true
     const load = () => fetch(`/api/tournaments/${tid}/seeding`).then(r => (r.ok ? r.json() : null)).then(d => { if (live && d && Array.isArray(d.divisions)) { setRows(d.divisions); setNow(Date.now()) } }).catch(() => {})
     load()
@@ -50,9 +54,9 @@ function Card({ tid, compact }: { tid: string; compact?: boolean }) {
     const onFocus = () => load()
     window.addEventListener('focus', onFocus)
     return () => { live = false; window.clearInterval(iv); window.removeEventListener('focus', onFocus) }
-  }, [tid])
+  }, [tid, allowed])
 
-  if (!rows || !rows.length) return null
+  if (!allowed || !rows || !rows.length) return null
   const state = (r: Row) => r.seeded ? 'seeded' : r.poolTotal > 0 && r.poolFinal >= r.poolTotal ? 'ready' : r.poolTotal - r.poolFinal === 1 ? 'one' : 'playing'
   const startMs = (r: Row) => (r.firstBracket ? at(r.firstBracket) : NaN)
   const urgent = (r: Row) => state(r) === 'ready' && Number.isFinite(startMs(r)) && startMs(r) - now < 60 * 60000

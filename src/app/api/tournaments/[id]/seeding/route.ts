@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import prisma from '@/lib/db'
 import { requireStaff, orgGate } from '@/lib/apiAuth'
+import { seesSeeding } from '@/lib/seedingRoles'
 
 // Which divisions are ready to seed (Bo, Oct 23 2026: "some sort of indication of when
 // divisions need to be seeded. If the games are over, sometimes with so many going on,
@@ -16,6 +17,7 @@ const isBracket = (n: string) => /^B/i.test(String(n || '').trim())
 
 export async function GET(_: Request, { params }: { params: { id: string } }) {
   const gate = await requireStaff(); if (!gate.ok) return gate.res
+  if (!seesSeeding(gate.role)) return NextResponse.json({ error: 'Not available for this role' }, { status: 403 })
   const away = await orgGate(gate, params.id); if (away) return away
   try {
     const [games, brackets] = await Promise.all([
