@@ -16,12 +16,13 @@ import { teamsSide } from '@/lib/eventTeams'
 import { isOnline, presenceLabel } from '@/lib/presenceTime'
 import { useRole } from '@/lib/role-context'
 import RefLevelPill from '@/components/RefLevelPill'
+import { TRAINEE_ROLE, staffTypeOf } from '@/lib/staffType'
 import { scoresShown } from '@/lib/eventScores'
 import { byLastName, lastFirst } from '@/lib/personName'
 import ScheduleBuilder from './ScheduleBuilder'
 
 // refLevel (lib/refLevel) comes back only for those who see this person's pay (api/workers).
-interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null;refLevel?:number|null }
+interface Worker { id:string;name:string;certLevel:string;defaultRole:string;roles:string;gender:string;payRateOverride:number|null;appStatus?:string;lastSeenAt?:string|null;lastLoginAt?:string|null;refLevel?:number|null;staffType?:string|null }
 interface Assignment { id:string;workerId:string;role:string;payRate:number|null;worker:Worker }
 interface Game { id:string;gameNumber:string;date:string;startTime:string;division:string;pool:string|null;location:string;team1:string;team2:string;score1:number|null;score2:number|null;refCount:number;isChampionship:boolean;isCanceled:boolean;assignments:Assignment[];ownClub?:boolean }
 // ownClub: the viewer's own club plays, so someone else posts the score (lib/ownClub).
@@ -625,6 +626,8 @@ export default function GridPage({ params }: { params:{id:string} }) {
 
   const rosterIds=new Set(roster.map(r=>r.workerId))
   const rosterWorkers=workers.filter(w=>rosterIds.has(w.id))
+  // Refs in training on this event (lib/staffType): each game gets a TR slot for them.
+  const hasTrainees=rosterWorkers.some(w=>staffTypeOf(w.staffType)==='trainee')
 
   // Last names for the compact chips: at 10 fields across a chip is ~70 px, and
   // "Andriesse 6" fits where "Mark Andriesse 6" does not. Two people sharing a
@@ -1618,6 +1621,11 @@ export default function GridPage({ params }: { params:{id:string} }) {
           const dropWorkerOnGame=(e:React.DragEvent,game:Game)=>{
             // A name dropped on a one-line game goes into its first open slot.
             const wid=e.dataTransfer.getData('workerId'); if(!wid||locked)return false
+            // A ref in training rides along in the TR slot (lib/staffType), never a crew slot.
+            if(staffTypeOf(workers.find(w=>w.id===wid)?.staffType)==='trainee'){
+              if(game.assignments.some(a=>a.role===TRAINEE_ROLE.value))toast.error('That game already has a ref in training');else assign(game.id,TRAINEE_ROLE.value,wid)
+              return true
+            }
             const rc=slotsOf(game); const openRole=[...(crewShow==='sk'?[]:slotRoles(rc)),...(crewShow==='refs'?[]:['scorekeeper'])].find(r=>!game.assignments.some(a=>a.role===r))
             if(openRole)assign(game.id,openRole,wid); else toast.error('Every slot on that game is filled')
             return true
@@ -1631,6 +1639,10 @@ export default function GridPage({ params }: { params:{id:string} }) {
             })
             const sk=game.assignments.find(a=>a.role==='scorekeeper')
             if(crewShow!=='refs')nodes.push(<div key="scorekeeper" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':scorekeeper')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,'scorekeeper',wid)}} className={dragSlot===game.id+':scorekeeper'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={{value:'scorekeeper',label:'Scorekeeper',short:'SK',color:'#059669'}} existing={sk} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,'scorekeeper',wid)} getGameCount={getGameCount} doubled={doubled} slotType="scorekeeper" chip={chip} mark={markFor(game.id,'scorekeeper')} displayName={sk?.worker?lastNameOf(sk.worker):undefined}/></div>)
+            // The ride-along slot for a ref in training (lib/staffType): only on events with
+            // one, never counted in the crew (crewOf reads the ref slots and SK only).
+            const tr=game.assignments.find(a=>a.role===TRAINEE_ROLE.value)
+            if(crewShow!=='sk'&&(tr||hasTrainees))nodes.push(<div key="trainee" onDragOver={e=>{if(dragWorker&&!locked){e.preventDefault();e.stopPropagation();setDragSlot(game.id+':trainee')}}} onDragLeave={()=>setDragSlot(null)} onDrop={e=>{e.preventDefault();e.stopPropagation();const wid=e.dataTransfer.getData('workerId');setDragSlot(null);if(wid&&!locked)assign(game.id,TRAINEE_ROLE.value,wid)}} className={dragSlot===game.id+':trainee'?'rounded ring-1 ring-sky-400 bg-sky-50':''}><AssignSelect roleObj={TRAINEE_ROLE} existing={tr} workers={rosterWorkers} avails={avails} date={game.date} busyFor={wid=>busyFor(game,wid)} time={game.startTime} disabled={isAssigning||locked} division={game.division} side={side} onAssign={wid=>assign(game.id,TRAINEE_ROLE.value,wid)} getGameCount={getGameCount} doubled={doubled} slotType="trainee" chip={chip} displayName={tr?.worker?lastNameOf(tr.worker):undefined}/></div>)
             return nodes
           }
           // One line: status dot, game, division, the crew by last name. Used by the
@@ -1962,7 +1974,7 @@ export default function GridPage({ params }: { params:{id:string} }) {
 }
 
 function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,division,side,onAssign,getGameCount,doubled,slotType,chip,displayName,busyFor,mark }:{
-  roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'
+  roleObj:{value:string;label:string;short:string;color:string};existing?:Assignment;workers:Worker[];avails:Availability[];date:string;time:string;disabled:boolean;division:string;onAssign:(w:string)=>void;getGameCount:(id:string)=>number;doubled:Set<string>;slotType:'ref'|'scorekeeper'|'trainee'
   /** Compact board chip; displayName is the short (last) name to show on it. */
   chip?:boolean;displayName?:string
   /** Where this worker already is at this time (another game), if anywhere. */
@@ -1991,13 +2003,16 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
   // in their roles (refs, field ops, trainers). It used to be refs only.
   // For ref slots: show only refs with gender match
   function hasSkRole(w:Worker){try{const r=JSON.parse(w.roles||'[]');return Array.isArray(r)&&r.includes('scorekeeper')}catch{return false}}
+  // Refs in training (lib/staffType) are picked only for the TR slot, and only they are.
+  const trainee=(w:Worker)=>staffTypeOf(w.staffType)==='trainee'
+  const pool=workers.filter(w=>(slotType==='trainee')===trainee(w))
   const eligible=slotType==='scorekeeper'
     ?[
-        ...workers.filter(w=>w.defaultRole==='scorekeeper').sort((a,b)=>byLastName(a.name,b.name)),
-        ...workers.filter(w=>w.defaultRole!=='scorekeeper'&&hasSkRole(w)).sort((a,b)=>byLastName(a.name,b.name)),
+        ...pool.filter(w=>w.defaultRole==='scorekeeper').sort((a,b)=>byLastName(a.name,b.name)),
+        ...pool.filter(w=>w.defaultRole!=='scorekeeper'&&hasSkRole(w)).sort((a,b)=>byLastName(a.name,b.name)),
       ]
-    :workers.filter(w=>{
-        if(w.defaultRole!=='ref')return false
+    :pool.filter(w=>{
+        if(slotType==='ref'&&w.defaultRole!=='ref')return false
         if(gg==='boys')return w.gender==='boys'||w.gender==='both'
         if(gg==='girls')return w.gender==='girls'||w.gender==='both'
         return true
@@ -2016,7 +2031,7 @@ function AssignSelect({ roleObj,existing,workers,avails,date,time,disabled,divis
       dot:staffKind(w).dot,
       // Ref level (lib/refLevel): ref slots only; it's the assigners' rank of their refs.
       level:slotType==='ref'?w.refLevel:null,
-      sublabel:`${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
+      sublabel:`${staffTypeOf(w.staffType)==='volunteer'?'Volunteer · ':''}${certLabel(w.certLevel)}${!avail?' · ⚠ unavailable':''}${isDoubled?' · ⚠ double-booked':''}`,
       warning:!avail||isDoubled,
       busy:busyFor?.(w.id),
     }

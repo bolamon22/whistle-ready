@@ -7,6 +7,8 @@ import { payScopeFor } from '@/lib/payScope'
 import { createClient } from '@libsql/client'
 import { presenceByEmail, canSeePresence } from '@/lib/presence'
 import { setRefLevel } from '@/lib/refLevelDb'
+import { setStaffType } from '@/lib/staffTypeDb'
+import { staffTypeOf } from '@/lib/staffType'
 import { tournamentOrgId } from '@/lib/org'
 
 function db() {
@@ -168,6 +170,11 @@ export async function POST(req: Request) {
   if (body.refLevel !== undefined && body.refLevel !== null && body.refLevel !== ''
     && seesWorkerPay({ roles: JSON.stringify(roles ?? [defaultRole ?? 'ref']), defaultRole: defaultRole ?? 'ref', gender: gender ?? 'both' }, gatePost.role, await payScopeFor(gatePost.role, gatePost.userId))) {
     await setRefLevel(id, body.refLevel)
+  }
+  // Volunteer or ref in training (lib/staffType): the same rule as the level.
+  if (staffTypeOf(body.staffType)
+    && seesWorkerPay({ roles: JSON.stringify(roles ?? [defaultRole ?? 'ref']), defaultRole: defaultRole ?? 'ref', gender: gender ?? 'both' }, gatePost.role, await payScopeFor(gatePost.role, gatePost.userId))) {
+    await setStaffType(id, body.staffType)
   }
 
   const created = await client.execute({ sql: `SELECT * FROM "Worker" WHERE id = ?`, args: [id] })

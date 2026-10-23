@@ -6,6 +6,7 @@ import { gameGender, type GameGender } from '@/lib/gameGender'
 import { eventSideOf } from '@/lib/eventTeamsStore'
 import { effectiveUnavailability } from '@/lib/availability'
 import { actorOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
+import { staffTypesFor } from '@/lib/staffTypeDb'
 
 interface WorkerRow {
   id: string; name: string; certLevel: string; defaultRole: string
@@ -64,7 +65,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const addedNow: OfficialChange[] = []
     const pickGames = await prisma.game.findMany({ where: { tournamentId: params.id, id: { in: gameIds } }, include: { assignments: true } })
     const roster = await prisma.rosterEntry.findMany({ where: { tournamentId: params.id }, include: { worker: true } })
-    const onRoster = new Map<string, WorkerRow>(roster.map(e => [e.workerId, e.worker as unknown as WorkerRow] as [string, WorkerRow]))
+    // Unpaid staff (lib/staffType): a volunteer works for $0; a ref in training is never
+    // auto-assigned into a crew slot (they ride along in the TR slot, set by hand).
+    const types = await staffTypesFor(roster.map(e => e.workerId))
+    const onRoster = new Map<string, WorkerRow>(roster.filter(e => types.get(e.workerId) !== 'trainee').map(e => [e.workerId, e.worker as unknown as WorkerRow] as [string, WorkerRow]))
     const dates = Array.from(new Set(pickGames.map(g => g.date)))
     const sameDay = await prisma.game.findMany({ where: { tournamentId: params.id, date: { in: dates } }, include: { assignments: true } })
     const busyAt = new Set<string>()   // workerId|date|time
@@ -75,7 +79,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const w = onRoster.get(x.workerId!)
       const k = `${x.workerId}|${g?.date}|${g?.startTime}`
       if (!g || !w || g.assignments.some(a => a.role === x.role) || busyAt.has(k)) { skipped++; continue }
-      const payRate = w.payRateOverride ?? getPayRate(w.certLevel, x.role!, payRates)
+      const payRate = types.has(w.id) ? 0 : w.payRateOverride ?? getPayRate(w.certLevel, x.role!, payRates)
       await prisma.assignment.create({ data: { gameId: g.id, workerId: w.id, role: x.role!, payRate } })
       g.assignments.push({ role: x.role! } as any)
       busyAt.add(k)
@@ -102,7 +106,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     where: { tournamentId: params.id },
     include: { worker: true },
   })
-  const allWorkers: WorkerRow[] = rosterEntries.map(e => e.worker as unknown as WorkerRow)
+  // Unpaid staff (lib/staffType): volunteers fill slots at $0; refs in training never
+  // fill a crew slot here (the TR slot is set by hand on the board).
+  const types = await staffTypesFor(rosterEntries.map(e => e.workerId))
+  const allWorkers: WorkerRow[] = rosterEntries.filter(e => types.get(e.workerId) !== 'trainee').map(e => e.worker as unknown as WorkerRow)
+  const priceFor = (w: WorkerRow, role: string) => types.has(w.id) ? 0 : w.payRateOverride ?? getPayRate(w.certLevel, role, payRates)
 
   // Refs: only workers whose primary role is ref
   const refs = allWorkers.filter(w => w.defaultRole === 'ref')
@@ -254,7 +262,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
         if (skId) {
           const worker = allWorkers.find(w => w.id === skId)!
-          const payRate = worker.payRateOverride ?? getPayRate(worker.certLevel, 'scorekeeper', payRates)
+          const payRate = priceFor(worker, 'scorekeeper')
           markBusy(skId, game.startTime)
           gameCounts.set(skId, (gameCounts.get(skId) ?? 0) + 1)
           created.push({ gameId: game.id, role: 'scorekeeper', workerId: skId, payRate })
@@ -276,7 +284,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         ).sort((a, b) => flex(a) - flex(b))
         const worker = eligible[0]
         if (worker) {
-          const payRate = worker.payRateOverride ?? getPayRate(worker.certLevel, role, payRates)
+          const payRate = priceFor(worker, role)
           markBusy(worker.id, game.startTime)
           gameCounts.set(worker.id, (gameCounts.get(worker.id) ?? 0) + 1)
           created.push({ gameId: game.id, role, workerId: worker.id, payRate })

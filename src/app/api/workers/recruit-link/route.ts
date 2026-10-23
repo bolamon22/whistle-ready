@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
-import { prisma } from '@/lib/db'
+import { joinCodeFor } from '@/lib/joinCode'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
@@ -15,7 +14,7 @@ export async function POST(req: Request) {
   const gate = await requireStaff()
   if (!gate.ok) return gate.res
 
-  let body: { regenerate?: unknown; viewOrgId?: unknown } = {}
+  let body: { regenerate?: unknown; viewOrgId?: unknown; kind?: unknown } = {}
   try { body = await req.json() } catch { /* optional body */ }
   // A new code turns off every link already shared, so only a director or admin may
   // rotate it. Any staff could (found Oct 13 2026, adding field directors, who copy
@@ -29,21 +28,8 @@ export async function POST(req: Request) {
     : String(gate.orgId || '')
   if (!orgId) return NextResponse.json({ error: 'No organization on your account' }, { status: 400 })
 
-  const key = `joinCode:${orgId}`
-  const existing = await prisma.appSetting.findUnique({ where: { key } })
-  let code = existing?.value || ''
-  // Mint when absent, on explicit regenerate, or when the stored code predates short
-  // links (legacy 24-hex from the first build) — Bo wanted a textable URL, not
-  // /join?org=<uuid>&code=<24 hex>.
-  if (!code || body.regenerate === true || code.length > 16) {
-    const old = code
-    code = crypto.randomBytes(6).toString('base64url') // 8 URL-safe chars
-    await prisma.appSetting.upsert({ where: { key }, update: { value: code }, create: { key, value: code } })
-    if (old) { try { await prisma.appSetting.delete({ where: { key: `joinCodeMap:${old}` } }) } catch { /* no map */ } }
-  }
-  // Reverse map so /join/<code> resolves the org from the code alone
-  const mapKey = `joinCodeMap:${code}`
-  await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
+  // kind 'unpaid': the volunteers and refs-in-training link (lib/joinCode, lib/staffType).
+  const code = await joinCodeFor(orgId, body.kind === 'unpaid' ? 'unpaid' : 'staff', body.regenerate === true)
 
   // On the org's own domain when it has one. A ref being recruited has never
   // heard of Whistle Ready -- the link has to read as the tournament company's.

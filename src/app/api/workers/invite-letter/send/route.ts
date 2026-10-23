@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
-import { prisma } from '@/lib/db'
+import { joinCodeFor } from '@/lib/joinCode'
 import { requireStaff } from '@/lib/apiAuth'
 import { orgById } from '@/lib/org'
 import { orgBaseUrl } from '@/lib/orgDomains'
@@ -38,17 +37,9 @@ export async function POST(req: Request) {
   if (!emails.length) return NextResponse.json({ error: 'No valid email addresses' }, { status: 400 })
   if (emails.length > 10) return NextResponse.json({ error: 'Max 10 addresses per send' }, { status: 400 })
 
-  // The org's live join link — same minting rules as /api/workers/recruit-link, so
-  // whichever route runs first creates the code and the other reuses it.
-  const key = `joinCode:${orgId}`
-  const existing = await prisma.appSetting.findUnique({ where: { key } })
-  let code = existing?.value || ''
-  if (!code || code.length > 16) {
-    code = crypto.randomBytes(6).toString('base64url')
-    await prisma.appSetting.upsert({ where: { key }, update: { value: code }, create: { key, value: code } })
-  }
-  const mapKey = `joinCodeMap:${code}`
-  await prisma.appSetting.upsert({ where: { key: mapKey }, update: { value: orgId }, create: { key: mapKey, value: orgId } })
+  // The org's live join link (lib/joinCode): its unpaid one for the volunteers and
+  // refs-in-training letter, else the recruiting one.
+  const code = await joinCodeFor(orgId, body.audience === 'unpaid' ? 'unpaid' : 'staff')
   // The org is looked up before the link, not after: {link} in the letter has to
   // point at the org's domain, same rule as /api/workers/recruit-link.
   const org = await orgById(orgId)
@@ -59,7 +50,7 @@ export async function POST(req: Request) {
   // assigner letter added, a send whose subject or body arrived empty would have gone
   // out as the wrong letter entirely (Sep 29 2026).
   const audience: InviteAudience =
-    body.audience === 'assigner' ? 'assigner' : body.audience === 'staff' ? 'staff' : 'recruit'
+    body.audience === 'assigner' ? 'assigner' : body.audience === 'staff' ? 'staff' : body.audience === 'unpaid' ? 'unpaid' : 'recruit'
   const saved = await inviteLetterFor(orgId, audience)
   const subjectTpl = String(body.subject ?? '').trim().slice(0, 200) || saved.subject
   const bodyTpl = String(body.body ?? '').trim().slice(0, 4000) || saved.body
@@ -97,7 +88,7 @@ export async function POST(req: Request) {
         Join the staff &rarr;
       </a>
       <p style="color: #94a3b8; font-size: 13px; margin: 24px 0 0;">
-        Takes about two minutes — pick your role, check the events you can work, and you're in.
+        Takes about two minutes${audience === 'unpaid' ? ', with no payment details to fill in' : ' — pick your role, check the events you can work, and you\'re in'}.
       </p>
     </div>
   `

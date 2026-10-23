@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react'
 import PasswordInput from '@/components/PasswordInput'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { CalendarDays, Check, Clock, CreditCard, Camera, Printer } from 'lucide-react'
+import { CalendarDays, Check, Clock, CreditCard, Camera, Printer, PlayCircle } from 'lucide-react'
 import StaffIdCard from '@/components/StaffIdCard'
 
 const ROLES = [
@@ -78,6 +78,10 @@ function JoinForm() {
 
   const [linkState, setLinkState] = useState<'loading' | 'invalid' | 'valid'>('loading')
   const [orgName, setOrgName] = useState<string | null>(null)
+  // The org's unpaid link (lib/joinCode, lib/staffType): volunteers and refs in training.
+  // No payment details or W-9; they pick which one they are.
+  const [unpaid, setUnpaid] = useState(false)
+  const [staffType, setStaffType] = useState<'' | 'volunteer' | 'trainee'>('')
   const [events, setEvents] = useState<JoinEvent[]>([])
   const [selEvents, setSelEvents] = useState<Set<string>>(new Set())
 
@@ -119,6 +123,7 @@ function JoinForm() {
         const d = await r.json().catch(() => ({}))
         if (!r.ok) { setLinkState('invalid'); return }
         setOrgName(d.orgName ?? null)
+        setUnpaid(d.unpaid === true)
         setEvents(Array.isArray(d.events) ? d.events : [])
         setLinkState('valid')
       })
@@ -155,6 +160,7 @@ function JoinForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    if (unpaid && !staffType) { setError('Pick Ref in training or Volunteer'); return }
     if (!role) { setError('Please select your role'); return }
     if (password.length < 6) { setError('Password must be at least 6 characters'); return }
     if (password !== confirm) { setError('Passwords do not match'); return }
@@ -168,7 +174,7 @@ function JoinForm() {
       body: JSON.stringify({
         org: orgId, code, name, email, phone: phone || null, smsConsent: !!(phone.trim() && smsOk), role, gender, certLevel, password,
         tournamentIds: Array.from(selEvents), photo: photo || null, hp_extra: hpExtra,
-        payMethod, venmoHandle: venmoHandle || null, zelleHandle: zelleHandle || null, mailingAddress: mailingAddress || null,
+        ...(unpaid ? { staffType } : { payMethod, venmoHandle: venmoHandle || null, zelleHandle: zelleHandle || null, mailingAddress: mailingAddress || null }),
         referredBy: referredBy.trim() || null,
       }),
     })
@@ -251,7 +257,7 @@ function JoinForm() {
         <div className="text-left mt-6 space-y-3">
           {['Sign in to your staff portal — your events and schedule live there.',
             'Set your availability for each event you signed up for.',
-            'Game assignments land in your portal; pay follows each event.',
+            unpaid ? 'Game assignments land in your portal.' : 'Game assignments land in your portal; pay follows each event.',
             'Watch the training videos for your job in your portal, about a minute each.'].map((step, i) => (
             <div key={i} className="flex gap-3 items-start">
               <div className="w-6 h-6 rounded-full bg-[#0f1f3d] text-white text-xs font-extrabold flex items-center justify-center shrink-0">{i + 1}</div>
@@ -273,9 +279,9 @@ function JoinForm() {
 
         {/* Header */}
         <div className="bg-[#0f1f3d] px-6 py-5">
-          <p className="text-xs text-teal-400 font-semibold tracking-wide mb-1.5">{(orgName ?? 'Whistle Ready').toUpperCase()} · STAFF SIGNUP</p>
-          <h1 className="text-lg font-bold text-white leading-snug">Work our tournaments this season</h1>
-          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">Refs, scorekeepers, trainers, and field ops — one profile gets you scheduled, paid, and on the field.</p>
+          <p className="text-xs text-teal-400 font-semibold tracking-wide mb-1.5">{(orgName ?? 'Whistle Ready').toUpperCase()} · {unpaid ? 'VOLUNTEER SIGNUP' : 'STAFF SIGNUP'}</p>
+          <h1 className="text-lg font-bold text-white leading-snug">{unpaid ? 'Join the game-day crew' : 'Work our tournaments this season'}</h1>
+          <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">{unpaid ? 'Volunteers and refs in training — one profile gets you your schedule, your games and the training videos.' : 'Refs, scorekeepers, trainers, and field ops — one profile gets you scheduled, paid, and on the field.'}</p>
           <div className="flex gap-2 mt-3.5">
             <div className="flex-1 bg-white/[0.07] border border-teal-400/40 rounded-xl px-2.5 py-2">
               <CalendarDays size={15} className="text-teal-300" />
@@ -286,8 +292,8 @@ function JoinForm() {
               <p className="text-[10px] font-bold text-slate-200 mt-1">Pick your events</p>
             </div>
             <div className="flex-1 bg-white/[0.07] border border-teal-400/40 rounded-xl px-2.5 py-2">
-              <CreditCard size={15} className="text-teal-300" />
-              <p className="text-[10px] font-bold text-slate-200 mt-1">Get paid fast</p>
+              {unpaid ? <PlayCircle size={15} className="text-teal-300" /> : <CreditCard size={15} className="text-teal-300" />}
+              <p className="text-[10px] font-bold text-slate-200 mt-1">{unpaid ? 'Training videos' : 'Get paid fast'}</p>
             </div>
           </div>
         </div>
@@ -336,7 +342,24 @@ function JoinForm() {
               value={email} onChange={e => setEmail(e.target.value)} type="email" placeholder="you@example.com" required autoComplete="email" />
           </div>
 
-          <div>
+          {unpaid && (
+            <div>
+              <p className="text-xs text-teal-800 bg-teal-50 border border-teal-100 rounded-xl px-3 py-2.5 mb-3"><strong>This is an unpaid position.</strong> No payment details or W-9 needed.</p>
+              <label className="block text-xs font-semibold text-slate-600 mb-2">I'm joining as *</label>
+              <div className="grid grid-cols-2 gap-2">
+                {([['trainee', 'Ref in training', 'Work games with a crew and learn'], ['volunteer', 'Volunteer', 'Scoreboard, field help, check-in']] as const).map(([v, l, d]) => (
+                  <button key={v} type="button" aria-pressed={staffType === v}
+                    onClick={() => { setStaffType(v); setRole(v === 'trainee' ? 'ref' : role === 'ref' && staffType === 'trainee' ? '' : role) }}
+                    className={`p-3 rounded-xl border text-left transition-all ${staffType === v ? 'border-teal-400 bg-teal-50 ring-1 ring-teal-400 text-teal-700' : 'border-slate-200 hover:border-slate-300'}`}>
+                    <div className={`text-xs font-bold ${staffType === v ? 'text-teal-700' : 'text-slate-700'}`}>{l}</div>
+                    <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">{d}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {(!unpaid || staffType === 'volunteer') && <div>
             <label className="block text-xs font-semibold text-slate-600 mb-2">What's your role? *</label>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {ROLES.map(r => (
@@ -348,7 +371,7 @@ function JoinForm() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {role && (
             <div>
@@ -418,6 +441,8 @@ function JoinForm() {
             </div>
           )}
 
+          {/* Nobody pays the unpaid link's volunteers and refs in training. */}
+          {!unpaid && <>
           <div>
             <div className="flex items-baseline justify-between mb-1">
               <label className="text-xs font-semibold text-slate-600">Getting paid</label>
@@ -451,6 +476,7 @@ function JoinForm() {
               </div>
             </div>
           </div>
+          </>}
 
           <div className="lg:hidden">
             <div className="flex items-baseline justify-between mb-2">

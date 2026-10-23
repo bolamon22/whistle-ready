@@ -19,7 +19,7 @@ interface TERow{date:string;clockIn:string|null;clockOut:string|null;hoursManual
 // set to boys refs looking at a ref who also scorekept). Only the director marks
 // them paid, since one pay record covers all of their pay at the event.
 interface WS{worker:{id:string;name:string;certLevel:string;defaultRole:string;roles?:string;gender?:string;hourlyRate:number|null;payMethod:string;payHandle:string|null;photoUrl:string|null};games:GameEntry[];timeEntries:TERow[];totalPay:number;partial?:boolean}
-interface Data{summary:WS[];tournamentName:string;tournamentLogo:string;scope?:{all:boolean;groups:string[];label:string}}
+interface Data{summary:WS[];tournamentName:string;tournamentLogo:string;scope?:{all:boolean;groups:string[];label:string};unpaid?:{people:number;games:number}}
 // payer: who paid it (lib/officialsPayer): the tournament director or this organization.
 interface PayRecord{id:string;workerId:string;amount:number|null;method:string;paidAt:string;notes:string|null;payer?:'td'|'org'}
 
@@ -191,6 +191,8 @@ export default function PaySummaryPage({ params }: { params:{id:string} }) {
           <button onClick={exportCSV} className="btn-primary btn-sm" disabled={!data.summary.length}><Download size={14} className="inline align-text-bottom mr-1" />CSV</button>
         </div>
       </div>
+      {/* Volunteers and refs in training (lib/staffType) worked games but aren't paid, so they aren't listed. */}
+      {!!data.unpaid?.people&&<p className="text-xs text-slate-500 mb-3">Volunteers &amp; refs in training: <strong className="text-slate-700">{data.unpaid.people} {data.unpaid.people===1?'person':'people'}, {data.unpaid.games} {data.unpaid.games===1?'game':'games'}, $0</strong>. Unpaid, so they aren’t on this sheet, the 1099 export or the bill.</p>}
       {setsRates&&showRates&&<PayRatesPanel id={params.id} onClose={()=>setShowRates(false)} />}
       {clientBar&&<AssigningFeeBar tournamentId={params.id} refresh={feeRefresh} onPaidByChange={load} />}
 

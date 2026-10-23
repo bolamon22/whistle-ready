@@ -8,13 +8,15 @@ import { mergeLetter, letterCopyHtml } from '@/lib/inviteLetterText'
 import PersonEvents from '@/components/staff/PersonEvents'
 import PersonTraining from '@/components/staff/PersonTraining'
 import RefLevelPill from '@/components/RefLevelPill'
+import StaffTypePill from '@/components/StaffTypePill'
+import { STAFF_TYPES, isUnpaid, staffTypeOf } from '@/lib/staffType'
 import { REF_LEVELS, refLevelOf } from '@/lib/refLevel'
 import { canSeeRefLevel } from '@/lib/roleScope'
 import { useRole } from '@/lib/role-context'
 import { importName } from '@/lib/importName'
 import { byLastName } from '@/lib/personName'
 
-interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
+interface Worker { id:string;name:string;email:string|null;phone:string|null;certLevel:string;refLevel?:number|null;staffType?:string|null;association:string;defaultRole:string;roles:string;isAssigner:boolean;gender:string;payRateOverride:number|null;hourlyRate:number|null;payMethod:string;payHandle:string|null;notes:string|null;photoUrl:string|null;mailingAddress?:string|null;referredBy?:string|null;venmoHandle?:string|null;zelleHandle?:string|null;w9OnFile?:number|boolean;appStatus?:string;appRole?:string|null;invitedAt?:string|null }
 
 const GENDERS=[{value:'both',label:'Girls & Boys'},{value:'boys',label:'Boys'},{value:'girls',label:'Girls'}]
 const EMPTY_FORM={name:'',email:'',phone:'',certLevel:'youth',defaultRole:'ref',roles:['ref'],isAssigner:false,gender:'both',payRateOverride:'',hourlyRate:'',payMethod:'check',payHandle:'',venmoHandle:'',zelleHandle:'',mailingAddress:'',referredBy:'',notes:''}
@@ -46,12 +48,24 @@ function StaffEditForm({
   })
   const hasRef=roles.includes('ref')
   const hasHourly=roles.some(r=>isHourlyRole(r))
+  // Volunteers and refs in training (lib/staffType) aren't paid: no pay fields.
+  const unpaid=isUnpaid(form.staffType)
 
   return (
     <form onSubmit={onSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <div><label className="label">Name *</label><input className="input" value={String(form.name)} onChange={e=>setForm(f=>({...f,name:e.target.value}))} required autoFocus/></div>
       <div><label className="label">Email</label><input className="input" type="email" value={String(form.email??'')} onChange={e=>setForm(f=>({...f,email:e.target.value}))}/></div>
       <div><label className="label">Phone</label><input className="input" type="tel" value={String(form.phone??'')} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/></div>
+      {levels&&<div className="sm:col-span-2 lg:col-span-3">
+        <span className="label" id="staff-type-label">Type</span>
+        <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="staff-type-label">
+          {STAFF_TYPES.map(t=>{const on=staffTypeOf(form.staffType)===t.value;return(
+            <button key={t.value||'paid'} type="button" role="radio" aria-checked={on} onClick={()=>setForm(f=>({...f,staffType:t.value}))}
+              className={`px-3 py-1.5 rounded-full border text-sm font-semibold transition-colors ${on?'bg-teal-700 border-teal-700 text-white':'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>{t.label}</button>
+          )})}
+        </div>
+        {unpaid&&<p className="text-xs text-slate-500 mt-1">Unpaid: their games are $0 and they stay off the pay sheet. They see their schedule, games and training, with no pay or W-9.</p>}
+      </div>}
 
       {/* Multi-role checkboxes */}
       <div className="sm:col-span-2 lg:col-span-3">
@@ -71,12 +85,12 @@ function StaffEditForm({
         <div><label className="label">Cert Level</label><select className="select" value={String(form.certLevel??'youth')} onChange={e=>setForm(f=>({...f,certLevel:e.target.value}))}>{CERT_LEVELS.map(c=><option key={c.value} value={c.value}>{c.label}</option>)}</select></div><div><label className="label">Association</label><input className="input" value={form.association??''} onChange={e=>setForm(f=>({...f,association:e.target.value}))} placeholder="e.g. SFLOA, Tampa"/></div>
         <div><label className="label">Can Ref</label><select className="select" value={String(form.gender??'both')} onChange={e=>setForm(f=>({...f,gender:e.target.value}))}>{GENDERS.map(g=><option key={g.value} value={g.value}>{g.label}</option>)}</select></div>
         {levels&&<div><label className="label">Ref level <span className="text-slate-400 font-normal">(not shown to refs)</span></label><select className="select" value={String(form.refLevel??'')} onChange={e=>setForm(f=>({...f,refLevel:e.target.value}))}><option value="">Not ranked</option>{REF_LEVELS.map(l=><option key={l.value} value={l.value}>{l.label} ({l.color})</option>)}</select></div>}
-        <div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>
+        {!unpaid&&<div><label className="label">Pay Rate Override ($/game)</label><input className="input" type="number" min="0" step="0.01" value={String(form.payRateOverride??'')} onChange={e=>setForm(f=>({...f,payRateOverride:e.target.value}))} placeholder="Leave blank = default"/></div>}
       </>}
-      {hasHourly&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
-      <div><label className="label">Preferred pay method</label><select className="select" value={String(form.payMethod??'check')} onChange={e=>setForm(f=>({...f,payMethod:e.target.value}))}>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
+      {hasHourly&&!unpaid&&<div><label className="label">Hourly Rate ($/hr)</label><input className="input" type="number" min="0" step="0.01" value={String(form.hourlyRate??'')} onChange={e=>setForm(f=>({...f,hourlyRate:e.target.value}))}/></div>}
+      {!unpaid&&<><div><label className="label">Preferred pay method</label><select className="select" value={String(form.payMethod??'check')} onChange={e=>setForm(f=>({...f,payMethod:e.target.value}))}>{PAY_METHODS.map(p=><option key={p.value} value={p.value}>{p.label}</option>)}</select></div>
       <div><label className="label">Zelle <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.zelleHandle??'')} onChange={e=>setForm(f=>({...f,zelleHandle:e.target.value}))} placeholder="phone or email"/></div>
-      <div><label className="label">Venmo <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.venmoHandle??'')} onChange={e=>setForm(f=>({...f,venmoHandle:e.target.value}))} placeholder="@username"/></div>
+      <div><label className="label">Venmo <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.venmoHandle??'')} onChange={e=>setForm(f=>({...f,venmoHandle:e.target.value}))} placeholder="@username"/></div></>}
       <div><label className="label">Referred by <span className="text-slate-400 font-normal">(optional)</span></label><input className="input" value={String(form.referredBy??'')} onChange={e=>setForm(f=>({...f,referredBy:e.target.value}))} placeholder="Who brought them in"/></div>
       <div className="flex items-end"><label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={Boolean(form.isAssigner)} onChange={e=>setForm(f=>({...f,isAssigner:e.target.checked}))}/>Also serves as Assigner</label></div>
       <div className="sm:col-span-2 lg:col-span-3">
@@ -109,7 +123,7 @@ function StaffEditForm({
 // what /api/workers/onboard emails with each person's claim link; 'recruit' is copy-paste
 // text carrying the public /join link. Saved per org via /api/workers/invite-letter.
 function InviteLetterPanel({workers}:{workers:Worker[]}){
-  type Aud='staff'|'recruit'|'assigner'
+  type Aud='staff'|'recruit'|'assigner'|'unpaid'
   const [aud,setAud]=useState<Aud>('staff')
   const [tpl,setTpl]=useState<Record<Aud,{subject:string;body:string;custom?:boolean}>|null>(null)
   const [orgName,setOrgName]=useState('')
@@ -125,7 +139,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
     const v=viewOrg()
     fetch(`/api/workers/invite-letter${v?`?viewOrgId=${encodeURIComponent(v)}`:''}`)
       .then(r=>r.ok?r.json():null)
-      .then(d=>{if(d){setTpl({staff:d.staff,recruit:d.recruit,assigner:d.assigner});setOrgName(d.orgName||'')}})
+      .then(d=>{if(d){setTpl({staff:d.staff,recruit:d.recruit,assigner:d.assigner,unpaid:d.unpaid});setOrgName(d.orgName||'')}})
       .catch(()=>{})
     fetch('/api/tournaments').then(r=>r.ok?r.json():[]).then((ts:{id:string;name:string;startDate?:string;endDate?:string}[])=>{
       const cutoff=Date.now()-86400000
@@ -201,7 +215,7 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
     try{
       let link=''
       if(cur.body.includes('{link}')||cur.subject.includes('{link}')){
-        const r=await fetch('/api/workers/recruit-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewOrgId:viewOrg()})})
+        const r=await fetch('/api/workers/recruit-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({viewOrgId:viewOrg(),...(aud==='unpaid'?{kind:'unpaid'}:{})})})
         if(r.ok)link=(await r.json()).url||''
       }
       const vals={org:orgName||'our organization',link,firstName:'{firstName}',name:'{name}'}
@@ -235,11 +249,14 @@ function InviteLetterPanel({workers}:{workers:Worker[]}){
           <option value="staff">Existing staff — in your pool already</option>
           <option value="recruit">New recruits — not in the pool yet</option>
         <option value="assigner">Assigner — to forward to their officials</option>
+          <option value="unpaid">Volunteers &amp; refs in training — unpaid</option>
         </select>
         {cur.custom&&<span className="badge bg-teal-50 text-teal-700">Customized</span>}
       </div>
       <p className="text-xs text-slate-400 mb-4">{aud==='staff'
         ?'Goes out when you use “Send app invites” — each email carries that person’s own login link on the button.'
+        :aud==='unpaid'
+        ?'For volunteers and refs in training. {link} becomes your unpaid signup link: it asks for no payment details or W-9, and everyone who joins from it is marked unpaid (Volunteer or Ref in training, their pick).'
         :aud==='assigner'
         ?'Written to be forwarded — copy it into your own email to the assigner, and they pass it to their officials. {link} becomes your live signup link, clickable when pasted into Gmail.'
         :'Copy this into an email or text (or hand it to your assigner) — {link} becomes your live signup link. People inquiring on the website use the signup form itself.'}</p>
@@ -293,6 +310,7 @@ export default function StaffPage() {
   const [roleFilter,setRoleFilter]=useState('all')
   const [genderFilter,setGenderFilter]=useState('all')
   const [appFilter,setAppFilter]=useState('all')
+  const [typeFilter,setTypeFilter]=useState('all')   // paid / volunteer / trainee (lib/staffType)
   const [inviting,setInviting]=useState(false)
   const [recruitBusy,setRecruitBusy]=useState(false)
   const [letterOpen,setLetterOpen]=useState(false)
@@ -367,6 +385,7 @@ export default function StaffPage() {
     .filter(w=>genderFilter==='all'||w.gender===genderFilter)
     .filter(w=>!showLevels||levelFilter==='all'||(parseRoles(w).includes('ref')&&(levelFilter==='none'?!refLevelOf(w.refLevel):String(refLevelOf(w.refLevel))===levelFilter)))
     .filter(w=>appFilter==='all'||(w.appStatus??'none')===appFilter)
+    .filter(w=>typeFilter==='all'||(staffTypeOf(w.staffType)||'paid')===typeFilter)
     .filter(w=>!search||w.name.toLowerCase().includes(search.toLowerCase()))
     .sort((a,b)=>{
       // Name sorts by last name (James Vacco, Oct 21 2026; lib/personName).
@@ -379,7 +398,7 @@ export default function StaffPage() {
     if(expandedId===w.id&&expandMode===mode){setExpandedId(null);return}
     setExpandedId(w.id);setExpandMode(mode)
     if(mode==='edit'){
-      setEditForm({...(showLevels?{refLevel:refLevelOf(w.refLevel)??''}:{}),name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',venmoHandle:w.venmoHandle??(w.payMethod==='venmo'?w.payHandle??'':''),zelleHandle:w.zelleHandle??(w.payMethod==='zelle'?w.payHandle??'':''),mailingAddress:w.mailingAddress??'',referredBy:w.referredBy??'',notes:w.notes??''})
+      setEditForm({...(showLevels?{refLevel:refLevelOf(w.refLevel)??'',staffType:staffTypeOf(w.staffType)}:{}),name:w.name,email:w.email??'',phone:w.phone??'',certLevel:w.certLevel,association:w.association??''  ,defaultRole:w.defaultRole,roles:parseRoles(w),isAssigner:w.isAssigner,gender:w.gender,payRateOverride:w.payRateOverride??'',hourlyRate:w.hourlyRate??'',payMethod:w.payMethod,payHandle:w.payHandle??'',venmoHandle:w.venmoHandle??(w.payMethod==='venmo'?w.payHandle??'':''),zelleHandle:w.zelleHandle??(w.payMethod==='zelle'?w.payHandle??'':''),mailingAddress:w.mailingAddress??'',referredBy:w.referredBy??'',notes:w.notes??''})
     }
   }
 
@@ -825,6 +844,12 @@ export default function StaffPage() {
               <option value="none">Not invited</option>
               <option value="no_email">No email</option>
             </select>
+            {workers.some(w=>isUnpaid(w.staffType))&&<select className="select !w-auto min-w-0 text-sm" aria-label="Paid or unpaid" value={typeFilter} onChange={e=>{setTypeFilter(e.target.value);setSelected(new Set())}}>
+              <option value="all">Type: all</option>
+              <option value="paid">Paid ({workers.filter(w=>!isUnpaid(w.staffType)).length})</option>
+              <option value="volunteer">Volunteers ({workers.filter(w=>staffTypeOf(w.staffType)==='volunteer').length})</option>
+              <option value="trainee">In training ({workers.filter(w=>staffTypeOf(w.staffType)==='trainee').length})</option>
+            </select>}
             </div>
           </div>
           <div className="flex items-center gap-3 mb-3 flex-wrap">
@@ -833,7 +858,7 @@ export default function StaffPage() {
             <span className="text-xs text-slate-400"><span className="font-semibold text-emerald-600">{workers.filter(w=>w.appStatus==='registered').length}</span> registered · <span className="font-semibold text-amber-600">{workers.filter(w=>w.appStatus==='invited').length}</span> invited · <span className="font-semibold text-slate-500">{workers.filter(w=>w.appStatus==='none'||w.appStatus==='no_email').length}</span> not on app</span>
             {dupePairs.length>0&&<button onClick={()=>setShowDupes(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">{dupePairs.length} possible duplicate{dupePairs.length===1?'':'s'}</button>}
             {emptyProfiles.length>0&&<button onClick={()=>setShowEmpty(v=>!v)} className="text-xs font-semibold px-2.5 py-1 rounded-full bg-slate-200 text-slate-700 hover:bg-slate-300 transition-colors" title="Profiles with no email that can be removed">{emptyProfiles.length} without email</button>}
-            {(search||roleFilter!=='all'||appFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all')}}>Clear filters</button>}
+            {(search||roleFilter!=='all'||appFilter!=='all'||typeFilter!=='all')&&<button className="text-xs text-slate-400 hover:text-slate-600" onClick={()=>{setSearch('');setRoleFilter('all');setAppFilter('all');setTypeFilter('all')}}>Clear filters</button>}
           </div>
 
           {selected.size>0&&(
@@ -990,6 +1015,7 @@ export default function StaffPage() {
                       </div>
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}
+                        <StaffTypePill type={w.staffType}/>
                         {wRoles.includes('ref')&&<>
                           <span className={`badge ${w.certLevel==='college'?'bg-purple-100 text-purple-700':w.certLevel==='hs'?'bg-sky-100 text-sky-700':'bg-slate-100 text-slate-600'}`}>{certLabel(w.certLevel)}</span>
                           {showLevels&&<RefLevelPill level={w.refLevel} className="self-center"/>}
@@ -1049,7 +1075,7 @@ export default function StaffPage() {
                   <>
                     <tr key={w.id} className={`border-b border-slate-100 ${selected.has(w.id)?'bg-sky-50':isExpanded?'bg-slate-50 border-b-0':'hover:bg-slate-50'}`}>
                       <td className="px-4 py-3"><input type="checkbox" checked={selected.has(w.id)} onChange={()=>toggleSelect(w.id)}/></td>
-                      <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-sky-600 transition-colors" onClick={()=>expand(w,'profile')}>{w.name}{!!w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}</td>
+                      <td className="px-4 py-3 font-semibold text-slate-900 cursor-pointer hover:text-sky-600 transition-colors" onClick={()=>expand(w,'profile')}>{w.name}{!!w.isAssigner&&<span className="ml-2 badge bg-amber-100 text-amber-700">Assigner</span>}<StaffTypePill type={w.staffType} className="ml-2"/></td>
                       <td className="px-4 py-3">
                         <div className="flex flex-wrap gap-1">
                           {wRoles.map(r=><span key={r} className="badge bg-slate-100 text-slate-600">{rLabel(r)}</span>)}

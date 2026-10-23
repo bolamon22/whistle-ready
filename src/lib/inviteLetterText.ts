@@ -12,7 +12,10 @@
 //               written to be FORWARDED, so it addresses the assigner and then speaks
 //               to their refs, and it carries no {firstName} because Bo pastes it into
 //               Gmail and types the greeting himself (Bo, Sep 29 2026).
-export type InviteAudience = 'staff' | 'recruit' | 'assigner'
+//   'unpaid'   — volunteers and refs in training (lib/staffType, Oct 23 2026). {link} is
+//               the org's unpaid signup link (lib/joinCode), which asks for no payment
+//               details or W-9 and marks whoever joins unpaid.
+export type InviteAudience = 'staff' | 'recruit' | 'assigner' | 'unpaid'
 
 export const INVITE_LETTER_DEFAULTS: Record<InviteAudience, { subject: string; body: string }> = {
   staff: {
@@ -32,6 +35,14 @@ It takes about two minutes: pick your role, check the events you can work, and y
 Sign up here: {link}
 
 Anyone already in our pool can ignore it — they're set.`,
+  },
+  unpaid: {
+    subject: 'Join the {org} game-day crew',
+    body: `We'd love your help at our events. This is a volunteer spot, unpaid, and refs in training work games alongside our crews to learn.
+
+Sign up here and you'll see your schedule, your games and the training videos in the app. It takes about two minutes, with no payment details to fill in.
+
+Sign up here: {link}`,
   },
   recruit: {
     subject: 'Come work {org} events this season',

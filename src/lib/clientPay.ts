@@ -13,6 +13,8 @@ import { entryHours } from '@/lib/payGroups'
 import { roleLabel } from '@/lib/utils'
 import { byLastName } from '@/lib/personName'
 import { effectivePayers, type Payer } from '@/lib/officialsPayer'
+import { unpaidIds } from '@/lib/staffTypeDb'
+import { TRAINEE_ROLE } from '@/lib/staffType'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 
@@ -37,6 +39,8 @@ export async function clientPay(tournamentId: string): Promise<{ people: ClientP
     prisma.paymentRecord.findMany({ where: { tournamentId }, orderBy: { paidAt: 'asc' } }),
   ])
   const payers = await effectivePayers(records)
+  // Volunteers and refs in training (lib/staffType) aren't paid: not on the bill.
+  const unpaid = await unpaidIds([...assignments.map(a => a.workerId), ...entries.map(t => t.workerId)])
   const map = new Map<string, ClientPayPerson>()
   const ensure = (w: { id: string; name: string; phone: string | null; payMethod: string; payHandle: string | null }) => {
     let e = map.get(w.id)
@@ -44,11 +48,13 @@ export async function clientPay(tournamentId: string): Promise<{ people: ClientP
     return e
   }
   for (const a of assignments) {
+    if (unpaid.has(a.workerId)) continue
     const e = ensure(a.worker)
     e.games.push({ gameNumber: a.game.gameNumber, date: a.game.date, startTime: a.game.startTime, division: a.game.division, location: a.game.location, role: roleLabel(a.role), pay: a.payRate })
     e.total += a.payRate
   }
   for (const te of entries) {
+    if (unpaid.has(te.workerId)) continue
     const e = ensure(te.worker)
     const hours = entryHours(te)
     const pay = hours * (te.worker.hourlyRate ?? 0)
@@ -71,5 +77,6 @@ export async function clientPay(tournamentId: string): Promise<{ people: ClientP
 
 /** Games that have at least one official and aren't canceled: what a per-game assigning fee counts. */
 export async function staffedGames(tournamentId: string): Promise<number> {
-  return prisma.game.count({ where: { tournamentId, isCanceled: false, assignments: { some: {} } } })
+  // A ref in training alone (the TR slot, lib/staffType) doesn't staff a game.
+  return prisma.game.count({ where: { tournamentId, isCanceled: false, assignments: { some: { role: { not: TRAINEE_ROLE.value } } } } })
 }

@@ -14,6 +14,7 @@
 import prisma from '@/lib/db'
 import { getPayRate, parsePayRates } from '@/lib/utils'
 import { payEditsFor } from '@/lib/payEdit'
+import { unpaidIds } from '@/lib/staffTypeDb'
 
 const round2 = (n: number) => Math.round(n * 100) / 100
 const WINDOW_DAYS = 60
@@ -36,13 +37,16 @@ async function reprice(where: object): Promise<number> {
   ])
   const rates = new Map(events.map(e => [e.id, parsePayRates(e.payRates)]))
   const edited = await payEditsFor(rows)
+  // Volunteers and refs in training (lib/staffType) are $0, hand edits included.
+  const unpaid = await unpaidIds(rows.map(r => r.workerId))
   const isPaid = new Set(paid.map(p => p.workerId + '|' + p.tournamentId))
   let changed = 0
   for (const r of rows) {
-    if (isPaid.has(r.workerId + '|' + r.game.tournamentId) || edited.has(r.id)) continue
+    if (isPaid.has(r.workerId + '|' + r.game.tournamentId)) continue
+    if (edited.has(r.id) && !unpaid.has(r.workerId)) continue
     const pr = rates.get(r.game.tournamentId)
     if (!pr) continue
-    const want = payFor(r.worker, r.role, pr)
+    const want = unpaid.has(r.workerId) ? 0 : payFor(r.worker, r.role, pr)
     if (Math.abs(want - r.payRate) < 0.005) continue
     await prisma.assignment.update({ where: { id: r.id }, data: { payRate: want } })
     changed++

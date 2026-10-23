@@ -5,6 +5,7 @@ import { redactWorker, stripWorkerUpdate, fieldDirectorSees } from '@/lib/roleSc
 import { payScopeFor } from '@/lib/payScope'
 import { setRefLevel, refLevelsFor } from '@/lib/refLevelDb'
 import { repriceWorker } from '@/lib/repricePay'
+import { setStaffType, staffTypeOfWorker } from '@/lib/staffTypeDb'
 // Staff-only since Aug 2026 — these were fully public (anyone with an id could read pay
 // handles or edit/delete workers). An assigner reads and edits pay only for staff in
 // their pay groups (lib/payGroups, Oct 13 2026). A director, scheduler, assigner or
@@ -23,7 +24,8 @@ export async function GET(_: Request, { params }: { params:{id:string} }) {
   // Ref level (lib/refLevel) is a raw column Prisma doesn't read; redactWorker blanks
   // it for anyone who doesn't see this person's pay.
   const refLevel = (await refLevelsFor([w.id]).catch(() => new Map<string, number>())).get(w.id) ?? null
-  return NextResponse.json(redactWorker({ ...w, refLevel }, gate.role, scope))
+  const staffType = await staffTypeOfWorker(w.id).catch(() => '')
+  return NextResponse.json(redactWorker({ ...w, refLevel, staffType }, gate.role, scope))
 }
 export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   const gate = await requireStaff()
@@ -53,6 +55,14 @@ export async function PATCH(req: Request, { params }: { params:{id:string} }) {
   if (b.refLevel !== undefined) {
     await setRefLevel(params.id, b.refLevel)
     delete b.refLevel
+  }
+  // Paid, volunteer or ref in training (lib/staffType): a raw TEXT column, the pay rule
+  // above. Their games are priced again ($0 when unpaid, their rate when paid again).
+  if (b.staffType !== undefined) {
+    const was = await staffTypeOfWorker(params.id)
+    const now = await setStaffType(params.id, b.staffType)
+    delete b.staffType
+    if (was !== now) await repriceWorker(params.id).catch(e => console.error('reprice worker', e))
   }
   // Association: a raw column too. It left the Prisma schema on Jun 9 (ee0e621), so
   // passing it to prisma.worker.update threw "Unknown argument" and every Staff Pool

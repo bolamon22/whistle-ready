@@ -6,6 +6,7 @@ import { staffAvailability, type StaffAvailDay } from '@/lib/availability'
 import { availLocked } from '@/lib/availabilityAnswers'
 import { confirmLink, pendingFor, readAsk } from '@/lib/officialConfirm'
 import { releaseFilter } from '@/lib/staffReleaseStore'
+import { isUnpaid } from '@/lib/staffType'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -108,7 +109,9 @@ export async function GET() {
     // call that page already makes.
     walletEnabled: walletEnabled(),
     worker: worker
-      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), gender: String(worker.gender ?? 'both'), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null }
+      ? { id: String(worker.id), name: String(worker.name ?? ''), defaultRole: String(worker.defaultRole ?? 'ref'), roles: workerRoles(worker), gender: String(worker.gender ?? 'both'), photoUrl: (worker.photoUrl as string | null) ?? null, certLevel: String(worker.certLevel ?? ''), association: (worker.association as string | null) ?? null,
+          // A volunteer or ref in training (lib/staffType): their pages show no pay and ask for no W-9.
+          unpaid: isUnpaid(worker.staffType) }
       : null,
     events: upcoming.map(t => ({
       id: String(t.id), name: String(t.name ?? ''), startDate: String(t.startDate || ''), endDate: String(t.endDate || ''),

@@ -5,6 +5,7 @@ import { payAccess, payKey, payScopeFor } from '@/lib/payScope'
 import { payEditsFor, setPayEdit } from '@/lib/payEdit'
 import { payFor } from '@/lib/repricePay'
 import { parsePayRates } from '@/lib/utils'
+import { staffTypeOfWorker } from '@/lib/staffTypeDb'
 
 // Set one game's pay by hand on Staff pay (lib/payEdit; Bo, Oct 22 2026).
 // PATCH { pay: number, note? }  -> sets it and keeps it through rate changes
@@ -26,6 +27,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!scope.all) {
     const acc = (await payAccess(scope, [{ workerId: a.workerId, tournamentId: tid }])).get(payKey(a.workerId, tid))
     if (acc?.access !== 'full') return NextResponse.json({ error: 'Only the director can change this person’s pay.' }, { status: 403 })
+  }
+  // Volunteers and refs in training (lib/staffType) are never paid, so no hand edit either.
+  if (await staffTypeOfWorker(a.workerId)) {
+    return NextResponse.json({ error: 'Volunteers and refs in training aren’t paid. Change them to Paid in the Staff Pool first.' }, { status: 409 })
   }
   if (await prisma.paymentRecord.findFirst({ where: { workerId: a.workerId, tournamentId: tid }, select: { id: true } })) {
     return NextResponse.json({ error: 'They’re already marked paid at this event. Unpay them first, then change the pay.' }, { status: 409 })

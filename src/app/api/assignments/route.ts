@@ -10,6 +10,8 @@ import { releaseFilter } from '@/lib/staffReleaseStore'
 import { eventSideOf } from '@/lib/eventTeamsStore'
 import type { GameGender } from '@/lib/gameGender'
 import { actorOf, sendOfficialChanges, spotOf, type OfficialChange } from '@/lib/officialChangeAlerts'
+import { staffTypeOfWorker } from '@/lib/staffTypeDb'
+import { isTraineeRole } from '@/lib/staffType'
 
 // Staff only. These had no sign-in check: anyone with a tournament id could
 // read every official's contact and pay, or assign and unassign games. Pay
@@ -32,8 +34,11 @@ export async function POST(req: Request) {
   const away = await orgGate(gate, game.tournamentId); if (away) return NextResponse.json({error:'Game not found'},{status:404})
   const worker=await prisma.worker.findUnique({where:{id:workerId}})
   if(!worker || orgGateFor(gate, worker.orgId))return NextResponse.json({error:'Worker not found'},{status:404})
+  // Unpaid staff (lib/staffType) work for $0. The TR slot is for a ref in training only.
+  const type=await staffTypeOfWorker(worker.id)
+  if(isTraineeRole(role)&&type!=='trainee')return NextResponse.json({error:'The TR slot is for a ref in training. Set them to “Ref in training” in the Staff Pool first.'},{status:400})
   const payRates=parsePayRates(game.tournament.payRates)
-  const payRate=worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
+  const payRate=type?0:worker.payRateOverride??getPayRate(worker.certLevel,role,payRates)
   const scope=await payScopeFor(gate.role,gate.userId)
   // Who held the slot before, so a published official taken off it is told too (lib/officialChangeAlerts).
   const prev=await prisma.assignment.findUnique({where:{gameId_role:{gameId,role}},select:{workerId:true}})

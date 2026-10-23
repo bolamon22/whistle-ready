@@ -31,6 +31,9 @@ export const ALL_ROLES = [
   { value: 'ref3',             label: 'Ref 3',            short: 'R3', color: '#db2777' },
   { value: 'athletic_trainer', label: 'Athletic Trainer', short: 'AT', color: '#d97706' },
   { value: 'field_ops',        label: 'Field Ops',        short: 'FO', color: '#0d9488' },
+  // A game's ride-along slot for a ref in training (lib/staffType TRAINEE_ROLE). Not in
+  // GRID_ROLES, so it never counts toward a crew.
+  { value: 'trainee',          label: 'Ref in training',  short: 'TR', color: '#475569' },
 ]
 
 export const WORKER_ROLES = [

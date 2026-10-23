@@ -26,6 +26,8 @@ async function upcomingEvents(client: ReturnType<typeof db>, orgId: string) {
 import { allowRequest, clientIp, rateLimitedResponse } from '@/lib/rateLimit'
 import { setSmsConsent } from '@/lib/smsConsentDb'
 import { sendTrainingWelcome } from '@/lib/trainingWelcome'
+import { resolveJoinCode } from '@/lib/joinCode'
+import { setStaffType } from '@/lib/staffTypeDb'
 
 function db() {
   return createClient({ url: process.env.TURSO_DATABASE_URL!, authToken: process.env.TURSO_AUTH_TOKEN })
@@ -53,34 +55,20 @@ const ROLES = new Set(['ref', 'scorekeeper', 'field_ops', 'athletic_trainer'])
 const GENDERS = new Set(['boys', 'girls', 'both'])
 const CERTS = new Set(['youth', 'hs', 'college', 'none'])
 
-async function validCode(orgId: string, code: string): Promise<boolean> {
-  if (!orgId || !code) return false
-  const setting = await prisma.appSetting.findUnique({ where: { key: `joinCode:${orgId}` } })
-  return !!setting && setting.value === code
-}
-
-/** Short links carry only the code — resolve the org via joinCodeMap:{code},
- *  double-checked against joinCode:{orgId} so rotated codes die. Legacy links
- *  still pass an explicit org. Returns the orgId, or null when invalid. */
-async function resolveOrg(orgId: string, code: string): Promise<string | null> {
-  if (!code) return null
-  if (orgId) return (await validCode(orgId, code)) ? orgId : null
-  const map = await prisma.appSetting.findUnique({ where: { key: `joinCodeMap:${code}` } })
-  const mapped = map?.value || ''
-  if (!mapped) return null
-  return (await validCode(mapped, code)) ? mapped : null
-}
+// The code is checked by lib/joinCode, which also says whether it is the org's unpaid
+// link (volunteers and refs in training, lib/staffType, Oct 23 2026): that signup asks
+// for no payment details or W-9, and marks whoever joins unpaid.
 
 // GET /api/join?org=&code= — validate a recruiting link, return the org name
 export async function GET(req: NextRequest) {
   const url = new URL(req.url)
   const code = url.searchParams.get('code') || ''
-  const orgId = await resolveOrg(url.searchParams.get('org') || '', code)
-  if (!orgId) {
+  const link = await resolveJoinCode(url.searchParams.get('org') || '', code)
+  if (!link) {
     return NextResponse.json({ error: 'This signup link is not active. Ask your coordinator for the current link.' }, { status: 404 })
   }
-  const org = await orgById(orgId)
-  return NextResponse.json({ orgName: org?.name ?? null, events: await upcomingEvents(db(), orgId) })
+  const org = await orgById(link.orgId)
+  return NextResponse.json({ orgName: org?.name ?? null, events: await upcomingEvents(db(), link.orgId), unpaid: link.kind === 'unpaid' })
 }
 
 // POST — create (or link) a Worker + staff login
@@ -96,26 +84,31 @@ export async function POST(req: NextRequest) {
     if (body.hp_extra) return NextResponse.json({ ok: true }, { status: 201 })
 
     const code = String(body.code ?? '')
-    const orgId = await resolveOrg(String(body.org ?? ''), code)
-    if (!orgId) {
+    const link = await resolveJoinCode(String(body.org ?? ''), code)
+    if (!link) {
       return NextResponse.json({ error: 'This signup link is no longer active.' }, { status: 403 })
     }
+    const orgId = link.orgId
+    // The unpaid link: a volunteer, or a ref in training (always a ref).
+    const unpaid = link.kind === 'unpaid'
+    const staffType = unpaid ? (body.staffType === 'trainee' ? 'trainee' : 'volunteer') : ''
 
     const name = String(body.name ?? '').trim()
     const email = String(body.email ?? '').trim().toLowerCase()
     const phone = body.phone ? String(body.phone).trim() : null
     const smsConsent = !!phone && body.smsConsent === true
-    const role = ROLES.has(String(body.role)) ? String(body.role) : 'ref'
+    const role = staffType === 'trainee' ? 'ref' : ROLES.has(String(body.role)) ? String(body.role) : 'ref'
     const gender = GENDERS.has(String(body.gender)) ? String(body.gender) : 'both'
     const certLevel = CERTS.has(String(body.certLevel)) ? String(body.certLevel) : 'youth'
     const password = String(body.password ?? '')
     // Payment details — ALL methods are collected and stored on the Worker (Bo: "if we
     // can't pay them one way, we'd rather try the next"); payMethod is the PREFERENCE.
     // payHandle mirrors the preferred method's handle so existing payroll code keeps working.
-    const payMethod = ['check', 'venmo', 'zelle'].includes(String(body.payMethod)) ? String(body.payMethod) : 'check'
-    const venmoHandle = body.venmoHandle ? String(body.venmoHandle).slice(0, 120) : null
-    const zelleHandle = body.zelleHandle ? String(body.zelleHandle).slice(0, 120) : null
-    const mailingAddress = body.mailingAddress ? String(body.mailingAddress).slice(0, 400) : null
+    // None of it from the unpaid link: nobody pays them.
+    const payMethod = !unpaid && ['check', 'venmo', 'zelle'].includes(String(body.payMethod)) ? String(body.payMethod) : 'check'
+    const venmoHandle = !unpaid && body.venmoHandle ? String(body.venmoHandle).slice(0, 120) : null
+    const zelleHandle = !unpaid && body.zelleHandle ? String(body.zelleHandle).slice(0, 120) : null
+    const mailingAddress = !unpaid && body.mailingAddress ? String(body.mailingAddress).slice(0, 400) : null
     const payHandle = payMethod === 'venmo' ? venmoHandle : payMethod === 'zelle' ? zelleHandle : null
     // Optional "who referred you?" (Oct 2026): scorekeepers mostly come through other
     // scorekeepers, and Bo pairs people who want to work together.
@@ -175,6 +168,9 @@ export async function POST(req: NextRequest) {
         args: [workerId, name, email, phone, certLevel, role, JSON.stringify([role]), gender, payMethod, payHandle, venmoHandle, zelleHandle, mailingAddress, orgId],
       })
       if (referredBy) await client.execute({ sql: `UPDATE "Worker" SET "referredBy" = ? WHERE id = ?`, args: [referredBy, workerId] })
+      // A new record from the unpaid link. Someone already in the pool keeps the type
+      // the organizer gave them (fill gaps only, as above).
+      if (staffType) await setStaffType(workerId, staffType)
     }
 
     // Optional headshot (client-compressed data URL) — goes on their staff ID card.
@@ -186,7 +182,7 @@ export async function POST(req: NextRequest) {
     // W-9 (photo or PDF): the form stopped asking on Sep 4, and staff upload it on their
     // portal now. One still sent here is checked and stored the same way (lib/staffW9:
     // its type read from its own bytes, encrypted, director-only).
-    const w9File = typeof body.w9 === 'string' && w9StorageReady() ? w9FromDataUrl(body.w9) : null
+    const w9File = !unpaid && typeof body.w9 === 'string' && w9StorageReady() ? w9FromDataUrl(body.w9) : null
     const w9 = w9File ? await saveW9(workerId, { ...w9File, name: 'W-9 (signup)' }, 'signup').then(() => true, () => false) : false
 
     // Events they said they can work → straight onto those rosters (same pool the
@@ -220,6 +216,11 @@ export async function POST(req: NextRequest) {
     const eventLines = joined.length
       ? `<p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"><strong>You signed up to work:</strong></p><ul style="color:#475569;font-size:14px;line-height:1.7;margin:0 0 20px;padding-left:20px;">${joined.map(e => `<li>${e.name}${e.startDate ? ` — ${e.startDate}${e.endDate && e.endDate !== e.startDate ? ` to ${e.endDate}` : ''}` : ''}</li>`).join('')}</ul>`
       : ''
+    // How they're paid, and the W-9 reminder: paid staff only.
+    const payPara = `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
+            You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).length ? `, with ${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).join(' and ')} as backup` : ''}.
+            ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9. Upload it on your staff portal under <strong>W-9</strong> whenever it suits you. It\'s stored encrypted, and only our tournament directors can open it.'}
+          </p>`
     await sendEmail({
       ...orgSender(org),
       to: email,
@@ -232,15 +233,12 @@ export async function POST(req: NextRequest) {
             availability, and assignments live.${existingUser ? ' It\'s on the login you already had: sign in with the same email and password.' : ''}
           </p>
           ${eventLines}
-          <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">
-            You're set up to be paid by <strong>${payMethod === 'venmo' ? 'Venmo' : payMethod === 'zelle' ? 'Zelle' : 'check'}</strong>${payHandle ? ` (${payHandle})` : ''}${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).length ? `, with ${[payMethod !== 'venmo' && venmoHandle ? 'Venmo' : '', payMethod !== 'zelle' && zelleHandle ? 'Zelle' : '', payMethod !== 'check' && mailingAddress ? 'check' : ''].filter(Boolean).join(' and ')} as backup` : ''}.
-            ${w9 ? 'Your W-9 is on file.' : 'One thing before your first paycheck: we\'ll need a completed W-9. Upload it on your staff portal under <strong>W-9</strong> whenever it suits you. It\'s stored encrypted, and only our tournament directors can open it.'}
-          </p>
+${unpaid ? `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">You joined as ${staffType === 'trainee' ? 'a ref in training' : 'a volunteer'}. It's an unpaid spot, so there's no payment or W-9 to set up.</p>` : payPara}
           <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
             <strong>What happens next:</strong><br>
             1. Sign in to your staff portal.<br>
             2. Set your availability for each event.<br>
-            3. Game assignments land in your portal — pay follows each event.
+            3. Game assignments land in your portal${unpaid ? '' : ' — pay follows each event'}.
           </p>
           <a href="${orgBaseUrl(org?.slug, APP_URL)}/login"
             style="display: inline-block; background: #14b8a6; color: white; font-weight: 600;

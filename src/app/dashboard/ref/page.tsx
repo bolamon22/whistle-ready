@@ -19,7 +19,7 @@ interface Tournament { id: string; name: string; startDate: string; logoUrl: str
 // confirm: their assigner asked them to confirm their games and some still need an
 // answer (lib/officialConfirm); href is their no-login confirm page.
 interface PortalEvent { id: string; name: string; startDate: string; endDate: string; location: string; working: boolean; assignedGames: number; avail?: { days: AvDay[] } | null; confirm?: { confirmBy: string; pending: number; total: number; href: string } | null }
-interface Portal { worker: { id: string; name: string; defaultRole: string; roles: string[] } | null; events: PortalEvent[] }
+interface Portal { worker: { id: string; name: string; defaultRole: string; roles: string[]; unpaid?: boolean } | null; events: PortalEvent[] }
 
 // Which game-day tools each role actually uses — a referee has no business in the
 // setup checklist (Bo, Sep 4). Multi-role workers see the union; no linked worker
@@ -49,8 +49,9 @@ interface Game {
 
 // Assignment slots are stored as ref1/ref2/ref3 and scorekeeper; say them the way the
 // assigner board does.
-const slotLabel = (r?: string) => !r ? '' : r === 'scorekeeper' ? 'Scorekeeper' : /^ref(\d)$/.test(r) ? `Official ${r.slice(3)}` : r === 'ref' ? 'Official' : r
-const slotOrder = (r: string) => r === 'scorekeeper' ? 9 : Number(r.replace(/\D/g, '') || 0)
+// trainee: the ride-along slot of a ref in training (lib/staffType).
+const slotLabel = (r?: string) => !r ? '' : r === 'scorekeeper' ? 'Scorekeeper' : r === 'trainee' ? 'In training' : /^ref(\d)$/.test(r) ? `Official ${r.slice(3)}` : r === 'ref' ? 'Official' : r
+const slotOrder = (r: string) => r === 'scorekeeper' ? 9 : r === 'trainee' ? 10 : Number(r.replace(/\D/g, '') || 0)
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const minsOf = (t?: string) => { const m = /^(\d{1,2}):(\d{2})/.exec(t || ''); return m ? Number(m[1]) * 60 + Number(m[2]) : null }
 const time12 = (t?: string) => { const m = minsOf(t); if (m == null) return t || 'TBD'; const h = Math.floor(m / 60), mm = m % 60; return `${h % 12 || 12}:${String(mm).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}` }
@@ -597,13 +598,14 @@ export default function RefDashboard() {
       })()}
 
       {/* W-9: upload it here instead of emailing it (components/StaffW9Card) */}
-      {portal?.worker && <StaffW9Card />}
+      {/* Volunteers and refs in training (lib/staffType) aren't paid: no W-9, no pay. */}
+      {portal?.worker && !portal.worker.unpaid && <StaffW9Card />}
 
       {/* Receipts: turn in what you bought for an event, see when it's paid back (components/expenses) */}
       <StaffReceipts />
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-2 mb-5">
+      <div className={`grid ${portal?.worker?.unpaid ? 'grid-cols-2' : 'grid-cols-3'} gap-2 mb-5`}>
         <div className="bg-white border border-gray-200 card rounded-2xl p-3 text-center">
           <div className="text-2xl font-bold text-gray-800">{assignments.length}</div>
           <div className="text-[11px] text-gray-500">Assignments</div>
@@ -612,10 +614,10 @@ export default function RefDashboard() {
           <div className="text-2xl font-bold text-gray-800">{assignments.filter(a => !a.game.isCanceled).length}</div>
           <div className="text-[11px] text-gray-500">Active</div>
         </div>
-        <div className="bg-white border border-gray-200 card rounded-2xl p-3 text-center">
+        {!portal?.worker?.unpaid && <div className="bg-white border border-gray-200 card rounded-2xl p-3 text-center">
           <div className="text-2xl font-bold text-emerald-600">${assignments.reduce((s, a) => s + (a.payRate || 0), 0).toFixed(0)}</div>
           <div className="text-[11px] text-gray-500">Pay</div>
-        </div>
+        </div>}
       </div>
 
     </div>

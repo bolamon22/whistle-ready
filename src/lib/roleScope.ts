@@ -67,7 +67,8 @@ export function payStatus(invoiced: number, received: number): PayStatus {
 // scheduler can see who is working and their roles, not what they are paid or
 // how to reach or pay them.
 // refLevel (Oct 15 2026) follows the pay rule: seen and set by whoever sees their pay.
-const WORKER_PAY_KEYS = ['payRateOverride', 'hourlyRate', 'payMethod', 'payHandle', 'venmoHandle', 'zelleHandle', 'refLevel']
+// staffType (lib/staffType, Oct 23 2026): paid or not is a pay decision, so the same rule.
+const WORKER_PAY_KEYS = ['payRateOverride', 'hourlyRate', 'payMethod', 'payHandle', 'venmoHandle', 'zelleHandle', 'refLevel', 'staffType']
 const WORKER_CONTACT_KEYS = ['email', 'phone', 'notes', 'mailingAddress']
 
 /** Whether this viewer sees this staff member's rate and payout details: a role
