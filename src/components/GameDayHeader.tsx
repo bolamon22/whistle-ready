@@ -8,6 +8,10 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 export default function GameDayHeader({ tournamentId, title, fullHref }: { tournamentId: string; title: string; fullHref: string }) {
   return (
     <div className="sticky top-0 z-30 bg-[#0b1f3a] text-white">
+      {/* Phones: no sideways drift (Bo, Oct 23 2026: the page slid left and right past
+        the screen edge). Something wider than the screen, such as the Chirp launcher, let
+        the page pan; clip it on html and body (clip, not hidden, so the sticky header still sticks). */}
+      <style>{'html,body{overflow-x:clip;overscroll-behavior-x:none}'}</style>
       <div className="max-w-6xl mx-auto px-3 h-12 flex items-center gap-2">
         <Link href={`/tournaments/${tournamentId}/today`} data-testid="gd-back" className="inline-flex items-center gap-0.5 text-[13px] font-semibold text-teal-200 shrink-0 pr-1 py-2">
           <ChevronLeft size={16} /> Game day

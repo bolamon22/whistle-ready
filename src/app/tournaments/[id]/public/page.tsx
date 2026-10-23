@@ -619,7 +619,7 @@ function DivisionView({division,games,isFollowed,anyFollowed,toggleFollow,tourna
               <button onClick={()=>setSchedStatus('mine')} className={chip(schedStatus==='mine')}><Star size={13} className="inline -mt-0.5 mr-1"/>My teams{mineCount?` (${mineCount})`:''}</button>
               <button onClick={()=>setSchedStatus('live')} className={chip(schedStatus==='live')}>Live</button>
               <button onClick={()=>setSchedStatus('final')} className={chip(schedStatus==='final')}>Final</button>
-              <select value={selectedTeam||''} onChange={e=>setSelectedTeam(e.target.value||null)} aria-label="Show one team" className="min-h-[36px] ml-auto bg-white border border-slate-200 rounded-full px-3 text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
+              <select value={selectedTeam||''} onChange={e=>setSelectedTeam(e.target.value||null)} aria-label="Show one team" className="min-h-[36px] ml-auto bg-white border border-slate-200 rounded-full px-3 text-base sm:text-[13px] text-slate-700 focus:outline-none focus:ring-2 focus:ring-teal-400">
                 <option value="">All teams</option>
                 {teamsInDiv.map(t=><option key={t} value={t}>{t}</option>)}
               </select>
@@ -964,7 +964,7 @@ export default function PublicTournamentPage() {
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <div className="relative">
               <select value={selectedDiv} onChange={e=>{setPickedTeam('');setSelectedDiv(e.target.value)}}
-                className="appearance-none bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-sm font-semibold text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400">
+                className="appearance-none bg-white border border-slate-300 rounded-lg pl-3 pr-9 py-2 text-base sm:text-sm font-semibold text-slate-800 cursor-pointer focus:outline-none focus:ring-2 focus:ring-teal-400">
                 {divisions.map(d=><option key={d} value={d}>{d}</option>)}
               </select>
               <ChevronDown size={15} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"/>
@@ -984,7 +984,7 @@ export default function PublicTournamentPage() {
                 value={teamSearch}
                 onChange={e => setTeamSearch(e.target.value)}
                 placeholder="Search for a team…"
-                className="w-full pl-9 pr-4 py-3 border border-slate-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent shadow-sm"
+                className="w-full pl-9 pr-4 py-3 border border-slate-200 rounded-xl text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-transparent shadow-sm"
               />
               {teamSearch && <button onClick={()=>setTeamSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X size={16}/></button>}
             </div>

@@ -146,7 +146,11 @@ export default function TodayPage() {
   const nextEvent = info?.next
 
   return (
-    <div className="min-h-screen bg-slate-100 pb-20">
+    <div className="min-h-screen bg-slate-100 pb-20 overflow-x-clip">
+      {/* Phones: no sideways drift (Bo, Oct 23 2026: the page slid left and right past
+          the screen edge). Something wider than the screen, such as the Chirp launcher, let
+          the page pan; clip it on html and body (clip, not hidden, so the sticky header still sticks). */}
+      <style>{'html,body{overflow-x:clip;overscroll-behavior-x:none}'}</style>
       <div className="max-w-md mx-auto">
         <div className="relative overflow-hidden bg-[#0b1f3a] text-white" data-testid="gd-header">
           {/* The event page's hero photo under a light navy wash: clearly visible (Bo), with
@@ -190,8 +194,10 @@ export default function TodayPage() {
               <div className="text-xs text-slate-500 mt-0.5">We&apos;ll remember it on this phone. No login needed.</div>
               <div className="relative mt-3">
                 <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                {/* 16px text: iPhones zoom the whole page into a smaller field and leave it
+                    zoomed, which made the screen slide side to side (Bo, Oct 23 2026). */}
                 <input value={q} onChange={e => setQ(e.target.value)} placeholder="Club or team name" aria-label="Search for your team"
-                  className="w-full min-h-[44px] pl-9 pr-9 rounded-xl border border-slate-200 bg-slate-50 text-[15px] focus:outline-none focus:ring-2 focus:ring-teal-400" />
+                  className="w-full min-h-[44px] pl-9 pr-9 rounded-xl border border-slate-200 bg-slate-50 text-base focus:outline-none focus:ring-2 focus:ring-teal-400" />
                 {q && <button onClick={() => setQ('')} aria-label="Clear" className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 p-1"><X size={16} /></button>}
               </div>
               {matches.length > 0 && (
