@@ -6,6 +6,7 @@ import { useParams } from 'next/navigation'
 import toast from 'react-hot-toast'
 import TournamentNav from '../TournamentNav'
 import ShortTeamsBanner from '@/components/ShortTeamsBanner'
+import SeedingCard from '@/components/SeedingCard'
 import { findShortTeams, describeFinding, isPlaceholder, type BalanceGame } from '@/lib/gameBalance'
 import { poolKey } from '@/lib/poolNames'
 import { nameKey } from '@/lib/names'
@@ -1089,6 +1090,10 @@ if (loading) return (
       <TournamentNav id={id} name={tournament?.name ?? ''} logoUrl={tournament?.logoUrl} />
 
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
+
+        {/* The scheduler seeds here, so the Seeding card is here too (Bo, Oct 23 2026): folded until
+            a division is ready; Seed now opens that division's Bracket tab on this page. */}
+        <div className="pt-4"><SeedingCard tid={id} foldUnlessReady onSeed={d => { selectDiv(d); setActiveTab('bracket'); window.scrollTo({ top: 0, behavior: 'smooth' }) }} /></div>
 
         <div className="flex gap-6">
 

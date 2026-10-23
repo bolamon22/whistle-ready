@@ -14,7 +14,9 @@ import { seesSeeding } from '@/lib/seedingRoles'
 // in red within an hour of its first bracket game. Read-only: Seed now opens the division's
 // Bracket tab, where Seed from standings fills the seeds. Refreshes every minute.
 // Data: api/tournaments/[id]/seeding. compact (Scores page): only the divisions that need
-// seeding now, and nothing at all otherwise.
+// seeding now, and nothing at all otherwise. On the Divisions page (where the scheduler
+// seeds, Bo Oct 23 2026) it starts folded unless a division is ready, and Seed now opens the
+// division right there (onSeed) instead of reloading the page.
 
 type Spot = { num: string; date: string; time: string; field: string }
 type Row = { division: string; poolTotal: number; poolFinal: number; left: Spot[]; firstBracket: Spot | null; flights: { flight: string; count: number; need: number; seeded: boolean }[]; seeded: boolean }
@@ -31,14 +33,16 @@ class Guard extends Component<{ children: ReactNode }, { bad: boolean }> {
   render() { return this.state.bad ? null : this.props.children }
 }
 
-export default function SeedingCard(props: { tid: string; compact?: boolean }) {
+type Props = { tid: string; compact?: boolean; foldUnlessReady?: boolean; onSeed?: (division: string) => void }
+export default function SeedingCard(props: Props) {
   return <Guard><Card {...props} /></Guard>
 }
 
-function Card({ tid, compact }: { tid: string; compact?: boolean }) {
+function Card({ tid, compact, foldUnlessReady, onSeed }: Props) {
   const [rows, setRows] = useState<Row[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(!foldUnlessReady)
+  const [opened, setOpened] = useState(false)
   const { effectiveRole, planOff } = useRole()
   const canSeed = roleCanAccess(effectiveRole, `/tournaments/${tid}/divisions`, planOff)
   const canScore = roleCanAccess(effectiveRole, `/tournaments/${tid}/scores`, planOff)
@@ -55,6 +59,12 @@ function Card({ tid, compact }: { tid: string; compact?: boolean }) {
     window.addEventListener('focus', onFocus)
     return () => { live = false; window.clearInterval(iv); window.removeEventListener('focus', onFocus) }
   }, [tid, allowed])
+
+  // Folded until a division is ready (once per visit, so folding it by hand sticks).
+  useEffect(() => {
+    if (!foldUnlessReady || opened || !rows) return
+    if (rows.some(r => !r.seeded && r.poolTotal > 0 && r.poolFinal >= r.poolTotal)) { setOpen(true); setOpened(true) }
+  }, [rows, foldUnlessReady, opened])
 
   if (!allowed || !rows || !rows.length) return null
   const state = (r: Row) => r.seeded ? 'seeded' : r.poolTotal > 0 && r.poolFinal >= r.poolTotal ? 'ready' : r.poolTotal - r.poolFinal === 1 ? 'one' : 'playing'
@@ -76,7 +86,7 @@ function Card({ tid, compact }: { tid: string; compact?: boolean }) {
           {ready.map(r => (
             <li key={r.division} className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <b>{r.division}</b><span className="text-xs opacity-80">{first(r)}</span>
-              {canSeed && <Link href={seedHref(r)} className="ml-auto rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700">Seed now</Link>}
+              {canSeed && (onSeed ? <button type="button" onClick={() => onSeed(r.division)} className="ml-auto rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700">Seed now</button> : <Link href={seedHref(r)} className="ml-auto rounded-lg bg-teal-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-teal-700">Seed now</Link>)}
             </li>
           ))}
         </ul>
@@ -130,9 +140,9 @@ function Card({ tid, compact }: { tid: string; compact?: boolean }) {
                   {chip(r)}
                   <p className="mt-0.5 text-xs text-slate-500">{why(r)}</p>
                 </div>
-                {s === 'ready' && canSeed && <Link href={seedHref(r)} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700">Seed now</Link>}
+                {s === 'ready' && canSeed && (onSeed ? <button type="button" onClick={() => onSeed(r.division)} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700">Seed now</button> : <Link href={seedHref(r)} className="rounded-lg bg-teal-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-teal-700">Seed now</Link>)}
                 {s === 'one' && canScore && <Link href={`/tournaments/${tid}/scores`} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Post score</Link>}
-                {s === 'seeded' && canSeed && <Link href={seedHref(r)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</Link>}
+                {s === 'seeded' && canSeed && (onSeed ? <button type="button" onClick={() => onSeed(r.division)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</button> : <Link href={seedHref(r)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">View</Link>)}
               </li>
             )
           })}
