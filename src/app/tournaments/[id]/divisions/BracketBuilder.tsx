@@ -771,7 +771,16 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
       )}
 
       {/* ── Seeds tab ─────────────────────────────────────────────────────── */}
-      {tab === 'seeding' && (
+      {tab === 'seeding' && (() => {
+        // Which ranks this flight takes (Oct 23 2026, before Monster Mash): Flight B starts
+        // after Flight A's teams, so its seed 1 is the division's 5th team when A has 4.
+        // Seed from standings used to write ranks 1..N into whichever flight was open, so
+        // Flight B got Flight A's teams. A single bracket takes ranks 1..teamCount.
+        const flightOff = flights.length > 1
+          ? [...flights].sort((a, b) => (a.flight || 'A').localeCompare(b.flight || 'A')).filter(f => (f.flight || 'A') < activeFlight).reduce((n, f) => n + (f.teamCount || 0), 0)
+          : 0
+        const flightTake = standings.slice(flightOff, flightOff + (bracket.teamCount || standings.length))
+        return (
         <div>
           <p className="text-sm text-slate-400 mb-4">
             Enter team names for each seed. Leave blank to show "Seed N" on the bracket.
@@ -781,8 +790,8 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
               <div className="flex items-center justify-between px-3 py-2 bg-slate-900">
                 <span className="text-xs font-semibold text-slate-200 uppercase tracking-wider">{!poolDone ? 'Standings so far' : advanceBy === 'pool' ? 'Seed order · by pool finish' : 'Seed order · division standings'}</span>
                 {poolDone ? (
-                  <button onClick={() => { const next = { ...seeds }; standings.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
-                    className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings ↓</button>
+                  <button onClick={() => { const next: Record<string, string> = {}; flightTake.forEach((r, i) => { next[String(i + 1)] = r.team }); setSeeds(next) }}
+                    className="text-[11px] text-teal-300 hover:text-teal-200">Seed from standings{flightOff > 0 ? ` (ranks ${flightOff + 1}–${flightOff + flightTake.length})` : ''} ↓</button>
                 ) : (
                   <span className="text-[11px] text-amber-300">{poolProgress.scored} of {poolProgress.total} pool games scored · seed after pool play</span>
                 )}
@@ -800,7 +809,7 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {standings.map((r, i) => (
-                    <tr key={r.team}>
+                    <tr key={r.team} className={i < flightOff || i >= flightOff + flightTake.length ? 'opacity-40' : ''}>
                       <td className="px-3 py-1.5 text-slate-400">{i + 1}</td>
                       <td className="px-2 py-1.5 font-medium text-white">{r.team}</td>
                       <td className="px-2 py-1.5 text-center text-slate-200">{r.w}-{r.l}{standings.some(x => x.t > 0) ? `-${r.t}` : ''}</td>
@@ -838,7 +847,8 @@ export default function BracketBuilder({ tournamentId, division, planFormat, pla
             After saving, click <strong className="text-slate-400">Preview</strong> to see the bracket.
           </p>
         </div>
-      )}
+        )
+      })()}
 
       {/* ── Add/remove games panel (toggled from Preview via '+ Add game') ── */}
       {tab === 'preview' && showAddGame && (

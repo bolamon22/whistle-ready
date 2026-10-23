@@ -41,7 +41,10 @@ export async function GET(_: Request, { params }: { params: { id: string } }) {
 
     const when = (g: { date: string; startTime: string }) => `${g.date || '9999'} ${g.startTime || '99:99'}`
     const spot = (g: typeof games[number]) => ({ num: g.gameNumber, date: g.date, time: g.startTime, field: (g.location || '').split(' - ').pop() || '' })
-    const divisions = Array.from(new Set(brackets.map(b => b.division))).map(division => {
+    // A bracket left behind by a renamed or merged division (Monster Mash had a "Girls Middle
+    // School A" bracket with no games) is not a division to seed.
+    const live2 = new Set(games.map(g => g.division))
+    const divisions = Array.from(new Set(brackets.map(b => b.division))).filter(d => live2.has(d)).map(division => {
       const pool = games.filter(g => g.division === division && !isBracket(g.gameNumber))
       const final = (g: typeof games[number]) => g.score1 !== null && g.score2 !== null && !live.has(g.id)
       const left = pool.filter(g => !final(g)).sort((a, b) => when(a).localeCompare(when(b)))
