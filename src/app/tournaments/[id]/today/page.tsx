@@ -145,10 +145,11 @@ export default function TodayPage() {
     <div className="min-h-screen bg-slate-100 pb-20">
       <div className="max-w-md mx-auto">
         <div className="relative overflow-hidden bg-[#0b1f3a] text-white" data-testid="gd-header">
-          {/* The event page's hero photo, faded well back so the text stays easy to read. */}
-          {info?.heroImage && <div className="absolute inset-0 bg-center bg-cover opacity-45" style={{ backgroundImage: `url(${info.heroImage})` }} aria-hidden />}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1f3a]/60 via-[#0b1f3a]/75 to-[#0b1f3a]/95" aria-hidden />
-          <div className="relative px-5 pt-5 pb-5">
+          {/* The event page's hero photo under a light navy wash: clearly visible (Bo), with
+              enough shade and a text shadow to keep the white text readable. */}
+          {info?.heroImage && <div className="absolute inset-0 bg-center bg-cover opacity-95" style={{ backgroundImage: `url(${info.heroImage})` }} aria-hidden />}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1f3a]/35 via-[#0b1f3a]/45 to-[#0b1f3a]/80" aria-hidden />
+          <div className="relative px-5 pt-5 pb-5 [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]">
           <div className="flex items-center justify-between mb-3 gap-2">
             <span className="text-teal-300 text-[11px] font-semibold tracking-[0.12em]">GAME DAY</span>
             <div className="flex items-center gap-1.5">
