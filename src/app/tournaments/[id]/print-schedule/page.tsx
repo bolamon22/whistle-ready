@@ -33,12 +33,55 @@ const fieldShort = (f: string) => (f.includes(' - ') ? f.split(' - ').slice(1).j
 // Up to this many fields side by side on one landscape page; more go to a second grid.
 const GRID_FIELDS = 9
 type DivColor = { bg: string; border: string; text: string }
+type PGame = CpGame & { champ?: boolean; flight?: string; s1?: number | null; s2?: number | null }
+type BrFlight = { flight: string; numberOffset: number; seeds: Record<string, string>; games: { gameNumber: number; team1Source: string; team2Source: string }[] }
+// A slot, not a team yet: "Seed 3", "W-B5", "TBD" (the public bracket's test).
+const slot = (n: string) => /^(seed\s|w-b\d|l-b\d|bracket\b|winner\b|loser\b|tbd$)/i.test((n || '').trim())
+const slotWords = (n: string) => n.replace(/^W-B(\d+)$/i, 'Winner B$1').replace(/^L-B(\d+)$/i, 'Loser B$1')
+/** Who plays a bracket game as the event goes (Bo, Oct 23 2026: the championships sheet
+ *  "just needs to be determined throughout the event"). Game rows keep "W-B3" until someone
+ *  types a name, so this follows the bracket like the public page (lib/championShare
+ *  finalSides): a real name on the row wins, a seed slot is that seed's team once seeds are
+ *  saved, a winner/loser slot is that game's result once it has a final score. */
+function bracketSides(g: PGame, flights: BrFlight[] | undefined, all: PGame[]): [string, string] {
+  const fallback: [string, string] = [slotWords(g.team1), slotWords(g.team2)]
+  if (!flights?.length) return fallback
+  const num = Number(String(g.gameNumber).replace(/^B/i, ''))
+  const br = flights.find(b => b.games.some(x => x.gameNumber + (b.numberOffset || 0) === num))
+  if (!br) return fallback
+  const off = br.numberOffset || 0
+  const row = new Map(all.filter(x => x.division === g.division).map(x => [x.gameNumber, x]))
+  const src = new Map(br.games.map(x => [x.gameNumber, x]))
+  const memo = new Map<number, { a: string | null; b: string | null; w: string | null; l: string | null } | null>()
+  const seen = new Set<number>()
+  const res = (n: number): { a: string | null; b: string | null; w: string | null; l: string | null } | null => {
+    if (memo.has(n)) return memo.get(n)!
+    const bg = src.get(n); if (!bg || seen.has(n)) return null
+    seen.add(n)
+    const r0 = row.get(`B${n + off}`)
+    const side = (s: string, name: string): string | null => {
+      if (name && !slot(name)) return name
+      if (s.startsWith('seed:')) return (br.seeds || {})[s.slice(5)] || null
+      const m = /^(winner|loser):(\d+)$/.exec(s)
+      if (m) { const r = res(Number(m[2])); return r ? (m[1] === 'winner' ? r.w : r.l) : null }
+      return null
+    }
+    const a = side(bg.team1Source || '', r0?.team1 || ''), b = side(bg.team2Source || '', r0?.team2 || '')
+    const done = !!r0 && r0.s1 != null && r0.s2 != null && r0.s1 !== r0.s2
+    const out = { a, b, w: done ? (r0!.s1! > r0!.s2! ? a : b) : null, l: done ? (r0!.s1! > r0!.s2! ? b : a) : null }
+    seen.delete(n); memo.set(n, out)
+    return out
+  }
+  const r = res(num - off)
+  return [r?.a || fallback[0], r?.b || fallback[1]]
+}
 const NO_COLOR: DivColor = { bg: '#f8fafc', border: '#cbd5e1', text: '#475569' }
 
 export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [t, setT] = useState<T | null>(null)
   // champ: the game is a championship (Game.isChampionship), for the Championships sheet.
-  const [games, setGames] = useState<(CpGame & { champ?: boolean })[] | null>(null)
+  // champ, flight, s1/s2: for the Championships sheet (flight letter when a division has two).
+  const [games, setGames] = useState<PGame[] | null>(null)
   const [cp, setCp] = useState<Cp | null>(null)
   const [err, setErr] = useState('')
   // Field directors print it too (Bo, Oct 22 2026: "a printable version on the Scorer and
@@ -53,6 +96,9 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
   const [layout, setLayout] = useState<'grid' | 'time' | 'field' | 'champ'>('grid')
   const [show, setShow] = useState<'both' | 'refs' | 'sk'>('both')
   const [auto, setAuto] = useState(false)
+  // Each championship division's bracket (seeds and where each game's teams come from), so
+  // the Championships sheet names the teams as they're decided.
+  const [brackets, setBrackets] = useState<Record<string, BrFlight[]>>({})
   // The Assigner's print drop-down opens this page with its picks (?day=&layout=&side=&show=)
   // and auto=1, which brings up the browser's Print (Save as PDF) once the games are on the page.
   useEffect(() => {
@@ -71,11 +117,19 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
     ]).then(([tt, g]) => {
       if (!tt || !g || (cid && !Array.isArray(g.checkpoint?.data))) { setErr('That didn’t load. Please try again.'); return }
       setT(tt)
-      if (cid) { setCp(g.checkpoint); setGames(g.checkpoint.data) } else setGames((Array.isArray(g) ? g : []).map((x: any) => ({ ...cpGame(x), champ: !!x.isChampionship })))
+      if (cid) { setCp(g.checkpoint); setGames(g.checkpoint.data) } else setGames((Array.isArray(g) ? g : []).map((x: any) => ({ ...cpGame(x), champ: !!x.isChampionship, flight: String(x.bracketFlight || ''), s1: x.score1 ?? null, s2: x.score2 ?? null })))
     }).catch(() => setErr('That didn’t load. Please try again.'))
   }, [params.id])
 
   const eventSide = teamsSide(t?.teams)
+  useEffect(() => {
+    if (layout !== 'champ' || !games) return
+    let live = true
+    const divs = Array.from(new Set(games.filter(g => g.champ).map(g => g.division)))
+    Promise.all(divs.map(d => fetch(`/api/tournaments/${params.id}/divisions/${encodeURIComponent(d)}/bracket`).then(r => (r.ok ? r.json() : [])).then(b => [d, Array.isArray(b) ? b : []] as const).catch(() => [d, []] as const)))
+      .then(list => { if (live) setBrackets(Object.fromEntries(list)) })
+    return () => { live = false }
+  }, [layout, games, params.id])
   const days = useMemo(() => eventDayList(t, (games || []).map(g => g.date)).filter(d => (games || []).some(g => g.date === d)), [t, games])
   const shown = useMemo(() => (games || [])
     .filter(g => !g.isCanceled && (day === 'all' || g.date === day) && (layout !== 'champ' || !!g.champ))
@@ -170,7 +224,7 @@ export default function PrintSchedule({ params }: { params: { id: string } }) {
             <p className="text-xs text-slate-600">{note} · {shown.length} game{shown.length === 1 ? '' : 's'} · printed {when(new Date().toISOString())}</p>
           </div>
           {layout === 'grid' && groups.map(grp => <GridDay key={grp.key} title={grp.title} games={grp.games} cols={cols} colors={colors} />)}
-          {layout === 'champ' && groups.map(grp => <ChampDay key={grp.key} title={grp.title} games={grp.games} all={games || []} cols={cols} colors={colors} />)}
+          {layout === 'champ' && groups.map(grp => <ChampDay key={grp.key} title={grp.title} games={grp.games} all={games || []} cols={cols} colors={colors} sides={g => bracketSides(g, brackets[g.division], games || [])} />)}
           {(layout === 'time' || layout === 'field') && groups.map(grp => (
             <section key={grp.key} className="ps-group mb-4">
               <h2 className="mb-1 text-sm font-bold text-slate-800">{grp.title}</h2>
@@ -310,7 +364,7 @@ function GridDay({ title, games, cols, colors }: { title: string; games: CpGame[
 // championship, in the order they finish, with when it should end: the next game's start on
 // that field (that's when the field turns over), or one slot later when it's the field's last
 // game. The slot is that field's usual gap that day, 50 minutes when there's nothing to go by.
-function ChampDay({ title, games, all, cols, colors }: { title: string; games: CpGame[]; all: CpGame[]; cols: string[]; colors: Map<string, DivColor> }) {
+function ChampDay({ title, games, all, cols, colors, sides }: { title: string; games: PGame[]; all: PGame[]; cols: string[]; colors: Map<string, DivColor>; sides: (g: PGame) => [string, string] }) {
   const who = (g: CpGame, role: string) => g.officials.filter(o => o.role === role).map(o => o.name).filter(Boolean).join(', ')
   const endOf = (g: CpGame) => {
     const start = mins(g.startTime)
@@ -344,9 +398,9 @@ function ChampDay({ title, games, all, cols, colors }: { title: string; games: C
                   <td className="whitespace-nowrap px-2 py-1.5 text-sm font-bold text-slate-900">{hm(end)}</td>
                   <td className="whitespace-nowrap px-2 py-1.5">{time(g.startTime)}</td>
                   <td className="px-2 py-1.5">{fieldShort(g.location)}</td>
-                  <td className="px-2 py-1.5 font-semibold" style={{ color: dc.text }}>{g.division}</td>
+                  <td className="px-2 py-1.5 font-semibold" style={{ color: dc.text }}>{g.division}{g.flight ? <span className="ml-1 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">Flight {g.flight}</span> : null}</td>
                   <td className="px-2 py-1.5">{g.gameNumber}</td>
-                  <td className="px-2 py-1.5 font-semibold text-slate-900">{g.team1} <span className="font-normal text-slate-400">v</span> {g.team2}</td>
+                  <td className="px-2 py-1.5 font-semibold text-slate-900">{(() => { const [a, b] = sides(g); return <>{a} <span className="font-normal text-slate-400">v</span> {b}</> })()}</td>
                   <td className="px-2 py-1.5 text-slate-700">{cols.map(c => { const n = who(g, c); return n ? `${ROLE_SHORT[c] || c} ${n}` : '' }).filter(Boolean).join(' · ') || <span className="text-slate-400">none yet</span>}</td>
                 </tr>
               )
