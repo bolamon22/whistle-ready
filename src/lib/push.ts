@@ -77,7 +77,7 @@ export async function sendToSubscriptions(
     webpush.setVapidDetails('mailto:info@sunshinelax.com', publicKey, privateKey)
     const data = JSON.stringify(payload)
     await Promise.all(subs.map(async (s) => {
-      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys } as any, data); out.sent++ }
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: s.keys } as any, data, { timeout: 10000 }); out.sent++ }
       catch (e: any) { out.failed++; const code = e?.statusCode; if (code === 404 || code === 410) out.gone.push(s.endpoint) }
     }))
   } catch (e) {
