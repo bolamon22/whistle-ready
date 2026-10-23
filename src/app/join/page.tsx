@@ -344,7 +344,6 @@ function JoinForm() {
 
           {unpaid && (
             <div>
-              <p className="text-xs text-teal-800 bg-teal-50 border border-teal-100 rounded-xl px-3 py-2.5 mb-3"><strong>This is an unpaid position.</strong> No payment details or W-9 needed.</p>
               <label className="block text-xs font-semibold text-slate-600 mb-2">I'm joining as *</label>
               <div className="grid grid-cols-2 gap-2">
                 {([['trainee', 'Ref in training', 'Work games with a crew and learn'], ['volunteer', 'Volunteer', 'Scoreboard, field help, check-in']] as const).map(([v, l, d]) => (

@@ -38,7 +38,7 @@ Anyone already in our pool can ignore it — they're set.`,
   },
   unpaid: {
     subject: 'Join the {org} game-day crew',
-    body: `We'd love your help at our events. This is a volunteer spot, unpaid, and refs in training work games alongside our crews to learn.
+    body: `We'd love your help at our events. Volunteers help run game day, and refs in training work games alongside our crews to learn.
 
 Sign up here and you'll see your schedule, your games and the training videos in the app. It takes about two minutes, with no payment details to fill in.
 

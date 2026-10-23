@@ -233,7 +233,7 @@ export async function POST(req: NextRequest) {
             availability, and assignments live.${existingUser ? ' It\'s on the login you already had: sign in with the same email and password.' : ''}
           </p>
           ${eventLines}
-${unpaid ? `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">You joined as ${staffType === 'trainee' ? 'a ref in training' : 'a volunteer'}. It's an unpaid spot, so there's no payment or W-9 to set up.</p>` : payPara}
+${unpaid ? `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px;">You joined as ${staffType === 'trainee' ? 'a ref in training' : 'a volunteer'}.</p>` : payPara}
           <p style="color: #475569; font-size: 14px; line-height: 1.7; margin: 0 0 24px;">
             <strong>What happens next:</strong><br>
             1. Sign in to your staff portal.<br>
