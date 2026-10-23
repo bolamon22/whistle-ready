@@ -28,9 +28,12 @@ const read = (s: Storage | undefined, k: string) => { try { return s?.getItem(k)
 export default function GameDayGate({ tournamentId, redirect = false, bar = true }: { tournamentId: string; redirect?: boolean; bar?: boolean }) {
   const [info, setInfo] = useState<GameDayInfo | null>(null)
   const [team, setTeam] = useState('')
+  // Already in game day mode (the schedule under /today/schedule): no pill back to it.
+  const [inside, setInside] = useState(false)
 
   useEffect(() => {
     if (!tournamentId) return
+    try { setInside(window.location.pathname.includes('/today')) } catch { }
     let full = false
     try {
       if (new URLSearchParams(window.location.search).get('full') === '1') sessionStorage.setItem(GD_FULL, '1')
@@ -49,7 +52,7 @@ export default function GameDayGate({ tournamentId, redirect = false, bar = true
     return () => { gone = true }
   }, [tournamentId, redirect])
 
-  if (!bar || !info?.active) return null
+  if (!bar || inside || !info?.active) return null
   return (
     <Link href={`/tournaments/${tournamentId}/today`} data-testid="gameday-bar"
       onClick={() => { try { sessionStorage.removeItem(GD_FULL) } catch { } }}

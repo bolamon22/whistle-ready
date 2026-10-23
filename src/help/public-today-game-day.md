@@ -13,7 +13,7 @@ The Game day screen is the phone view of an event: your team's next game, its ga
 1. Under **Find your team**, type your club or team name and tap your team. The phone remembers it, so every later visit opens on your team.
 2. The **YOUR TEAM** card shows the record and **UP NEXT**: opponent, day and time, field, and a countdown (for example "in 25 min", or **Live now**). Tap **Directions** or **Field map**.
 3. Below it, every game for your team is listed by day, with **W** or **L** and the score once it is final.
-4. Use the buttons: **Player waiver**, **Full schedule** (opens your team's games), **Standings**, **Directions**, **Field map** and **Rules**.
+4. Use the buttons: **Player waiver**, **Full schedule** (opens your team's games), **Standings**, **Directions**, **Field map** and **Rules**. The schedule and standings open inside the Game day screen, with every division's pools, games and brackets; tap **Game day** at the top left to come back.
 5. Tap **Change** to pick a different team.
 6. Staff, referees, coaches and club directors: tap **Log in** at the top.
 7. Tap **Full site** for everything else on the event page. On the full site, the **Mobile view** button at the bottom left of a phone screen brings you back here.

@@ -128,8 +128,10 @@ export default function TodayPage() {
 
   const venue = t?.location ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(t.location)}` : `/tournaments/${id}/event?full=1#locations`
   const fieldMap = `/tournaments/${id}/event?full=1#locations`
-  const schedHref = team ? `/tournaments/${id}/public?division=${encodeURIComponent(team.division)}&team=${encodeURIComponent(team.name)}&tab=schedule` : `/tournaments/${id}/public`
-  const standHref = team ? `/tournaments/${id}/public?division=${encodeURIComponent(team.division)}&tab=standings` : `/tournaments/${id}/public`
+  // Schedule and standings open inside game day mode (today/schedule), not the full site.
+  const schedBase = `/tournaments/${id}/today/schedule`
+  const schedHref = team ? `${schedBase}?division=${encodeURIComponent(team.division)}&team=${encodeURIComponent(team.name)}&tab=schedule` : schedBase
+  const standHref = team ? `${schedBase}?division=${encodeURIComponent(team.division)}&tab=standings` : schedBase
   const tiles = [
     { icon: <FileSignature size={21} />, label: 'Player waiver', href: `/tournaments/${id}/player-waiver`, hot: true },
     { icon: <Calendar size={21} />, label: 'Full schedule', href: schedHref },
@@ -202,7 +204,7 @@ export default function TodayPage() {
               )}
               {q.trim().length >= 2 && !matches.length && loaded && <div className="mt-3 text-sm text-slate-500">No team matches &ldquo;{q.trim()}&rdquo;. Try your club&apos;s name.</div>}
               {loaded && !teams.length && <div className="mt-3 text-sm text-slate-500">The schedule hasn&apos;t been posted yet. Check back soon.</div>}
-              <Link href={`/tournaments/${id}/public`} className="mt-3 text-teal-700 text-[13px] font-semibold inline-flex items-center gap-1">Just browsing? See the full schedule <ChevronRight size={13} /></Link>
+              <Link href={schedBase} className="mt-3 text-teal-700 text-[13px] font-semibold inline-flex items-center gap-1">Just browsing? See the full schedule <ChevronRight size={13} /></Link>
             </div>
           ) : (
             <>
