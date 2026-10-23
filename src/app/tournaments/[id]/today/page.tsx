@@ -150,7 +150,7 @@ export default function TodayPage() {
           {/* The event page's hero photo under a light navy wash: clearly visible (Bo), with
               enough shade and a text shadow to keep the white text readable. */}
           {info?.heroImage && <div className="absolute inset-0 bg-center bg-cover opacity-95" style={{ backgroundImage: `url(${info.heroImage})` }} aria-hidden />}
-          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1f3a]/35 via-[#0b1f3a]/45 to-[#0b1f3a]/80" aria-hidden />
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1f3a]/45 via-[#0b1f3a]/55 to-[#0b1f3a]/85" aria-hidden />
           <div className="relative px-5 pt-5 pb-5 [text-shadow:0_1px_3px_rgba(0,0,0,0.55)]">
           <div className="flex items-center justify-between mb-3 gap-2">
             <span className="text-teal-300 text-[11px] font-semibold tracking-[0.12em]">GAME DAY</span>
