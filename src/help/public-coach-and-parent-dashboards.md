@@ -10,10 +10,11 @@ Coaches and parents each have a simple dashboard that opens after signing in.
 
 **Where:** sign in. You're taken to your dashboard automatically.
 
-**Coach Dashboard:**
-1. The first time, pick your **Tournament** and **Your Team**, then tap **Get Started**.
-2. You'll see your number of **Games**, **Wins** and **Losses**, and each game with date, time, opponent, division, location and game number. Played games show the score; others say **Upcoming**.
-3. Tap **Switch Team** to follow a different team or tournament.
+**Coach home:**
+1. Your team is found for you: any team your club registered with your email as its coach. Coach more than one? Tap the team's name in the row at the top to switch.
+2. **Next game** shows the opponent, time and field, with **Directions** and **Game day hub**.
+3. Below it: **Full schedule**, **Standings** and your record, then each game by day with the time, field, opponent and the score once it's played.
+4. "We couldn't find a team" means no team lists your email as its coach. Ask your club director to fix the coach's email, or tap **Find your team's schedule**.
 
 **Parent Dashboard:** four tabs along the bottom of your phone (along the top on a computer).
 1. **Home**: your next game (time, teams, field) with **Directions** and **Full schedule**, any game your player is in that's **Live now** with the score, **Before game day** (each player's waiver on file, and whether phone alerts are on), your players, upcoming events, and links to the website and how-to videos.
@@ -32,7 +33,7 @@ The player's name, date of birth and team can't be changed here; ask your club d
 
 **Common problems:**
 - "No events here yet." Go to **Events** and tap **Follow**.
-- "No games yet for this tournament." or "No games scheduled yet." means the schedule hasn't been posted.
+- "No games yet for this tournament." or "Your games show here once the schedule is posted." means the schedule hasn't been posted.
 - A waiver isn't on **Players**: only waivers saved to your account at the end of the waiver are listed, not ones filled out before you had an account.
 - "can't be blank": parent name and phone, emergency contact, USA Lacrosse member # and grade can be changed but not emptied.
 - Club directors have their own portal; see "Use your club portal (club directors)".
