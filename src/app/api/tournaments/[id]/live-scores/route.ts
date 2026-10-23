@@ -25,10 +25,21 @@ async function ensureTable() {
   } catch { /* ignore, will retry next request */ }
 }
 
+// A database call that stalls (Turso hiccup, dropped connection) has no timeout of its
+// own: on Oct 23 one poll sat for the full 300 s. Every spectator phone hits this route,
+// so give up after 8 s and let the next poll (or the CDN's stale copy) answer instead.
+const DB_GIVE_UP_MS = 8000
+function withTimeout<T>(p: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error('live-scores: database call timed out')), DB_GIVE_UP_MS)
+    p.then(v => { clearTimeout(t); resolve(v) }, e => { clearTimeout(t); reject(e) })
+  })
+}
+
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
-    await ensureTable()
-    const rows: any[] = await prisma.$queryRawUnsafe(`SELECT "key","value" FROM "AppSetting" WHERE "key" LIKE 'liveScore:%'`)
+    await withTimeout(ensureTable())
+    const rows: any[] = await withTimeout(prisma.$queryRawUnsafe(`SELECT "key","value" FROM "AppSetting" WHERE "key" LIKE 'liveScore:%'`)) as any[]
     const scores: Record<string, any> = {}
     for (const r of rows || []) {
       const gameId = String(r.key).slice('liveScore:'.length)
@@ -50,7 +61,8 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       headers: { 'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=20' },
     })
   } catch {
-    return NextResponse.json({ scores: {} })
+    // no-store: an empty answer from a failure must not be cached as if nothing is live
+    return NextResponse.json({ scores: {} }, { headers: { 'Cache-Control': 'no-store' } })
   }
 }
 
