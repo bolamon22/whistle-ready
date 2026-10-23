@@ -18,7 +18,7 @@ export const GD_FULL = 'gd-full'
 export const gdTeamKey = (tournamentId: string) => `gd-team-${tournamentId}`
 
 export type GameDayInfo = {
-  active: boolean; inWindow?: boolean; off?: boolean; from?: string; to?: string; name?: string
+  active: boolean; inWindow?: boolean; off?: boolean; from?: string; to?: string; name?: string; heroImage?: string
   next?: { id: string; name: string; startDate: string; endDate: string } | null
 }
 

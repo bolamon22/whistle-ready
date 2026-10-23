@@ -26,8 +26,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         String(t.orgId), params.id, after).catch(() => [])
       if (n?.[0]) next = { id: String(n[0].id), name: String(n[0].name), startDate: String(n[0].startDate || ''), endDate: String(n[0].endDate || '') }
     }
+    // The event page's hero photo, faded behind the Game day header so phones see the
+    // same event they know from the full site. A stored data: URL is skipped (too big
+    // to send on every visit); uploaded photos are links.
+    let heroImage = ''
+    try {
+      const site = await prisma.appSetting.findUnique({ where: { key: `tournamentSite:${params.id}` } })
+      const h = site ? JSON.parse(site.value || '{}')?.heroImage : ''
+      if (typeof h === 'string' && h && !h.startsWith('data:')) heroImage = h
+    } catch { /* no photo */ }
     const w = gameDayWindow(start, end)
-    const body = { active: inGameDayWindow(start, end) && !off, inWindow: inGameDayWindow(start, end), off, from: w?.from || '', to: w?.to || '', name: String(t.name || ''), next }
+    const body = { active: inGameDayWindow(start, end) && !off, inWindow: inGameDayWindow(start, end), off, from: w?.from || '', to: w?.to || '', name: String(t.name || ''), heroImage, next }
     return NextResponse.json(body, { headers: { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60' } })
   } catch {
     return NextResponse.json({ active: false })

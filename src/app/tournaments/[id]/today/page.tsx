@@ -144,7 +144,11 @@ export default function TodayPage() {
   return (
     <div className="min-h-screen bg-slate-100 pb-20">
       <div className="max-w-md mx-auto">
-        <div className="bg-[#0b1f3a] px-5 pt-5 pb-5 text-white">
+        <div className="relative overflow-hidden bg-[#0b1f3a] text-white" data-testid="gd-header">
+          {/* The event page's hero photo, faded well back so the text stays easy to read. */}
+          {info?.heroImage && <div className="absolute inset-0 bg-center bg-cover opacity-45" style={{ backgroundImage: `url(${info.heroImage})` }} aria-hidden />}
+          <div className="absolute inset-0 bg-gradient-to-b from-[#0b1f3a]/60 via-[#0b1f3a]/75 to-[#0b1f3a]/95" aria-hidden />
+          <div className="relative px-5 pt-5 pb-5">
           <div className="flex items-center justify-between mb-3 gap-2">
             <span className="text-teal-300 text-[11px] font-semibold tracking-[0.12em]">GAME DAY</span>
             <div className="flex items-center gap-1.5">
@@ -164,6 +168,7 @@ export default function TodayPage() {
               Looking for the next one? <span className="text-teal-200 font-semibold">{nextEvent.name} · {fmtRange(nextEvent.startDate, nextEvent.endDate)}</span>
             </Link>
           )}
+          </div>
         </div>
 
         <div className="p-3.5 space-y-3">
