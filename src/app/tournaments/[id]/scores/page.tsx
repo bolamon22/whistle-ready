@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import TournamentNav from '../TournamentNav'
 import LiveTicker, { liveClockText, useNowTicking } from '@/components/LiveTicker'
+import SeedingCard from '@/components/SeedingCard'
 import toast, { Toaster } from 'react-hot-toast'
 import { Search, X, ChevronDown, ChevronUp, Check, ClipboardCheck, Lock } from 'lucide-react'
 
@@ -230,6 +231,9 @@ export default function PostScoresPage({ params }: { params: { id: string } }) {
       <Toaster />
       <TournamentNav id={params.id} name={tName} logoUrl={tLogo} />
       <LiveTicker tournamentId={params.id} games={games} logos={logos} staff scores={liveScores} onStop={stopLive} />
+
+      {/* A division whose pool games are all final and isn't seeded yet (Bo, Oct 23 2026). Nothing otherwise. */}
+      <div className="px-3 sm:px-6 pt-3 empty:hidden"><SeedingCard tid={params.id} compact /></div>
 
       {/* Page header */}
       <div className="bg-white border-b border-slate-200 px-3 sm:px-6 py-3 sm:py-4">

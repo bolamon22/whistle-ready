@@ -344,7 +344,12 @@ export default function DivisionsPage() {
         defaults[div.name] = n % 2 === 0 ? String(Math.min(n - 1, g - 1)) : String(Math.min(n - 1, g - 2))
       })
       setDivGamesPerTeam(defaults)
-      if (d.length > 0) selectDiv(d[0].name)
+      // ?division=&tab=bracket opens one division's Bracket tab (the Seeding card's Seed now).
+      const q = new URLSearchParams(window.location.search)
+      const want = q.get('division')
+      const pickDiv = want && d.some((x: Division) => x.name === want) ? want : d[0]?.name
+      if (pickDiv) selectDiv(pickDiv)
+      if (want && pickDiv === want && q.get('tab') === 'bracket') setActiveTab('bracket')
       setLoading(false)
     })
   }, [id])

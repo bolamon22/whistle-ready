@@ -9,6 +9,7 @@ import BroadcastPage from '../broadcast/page'
 import OpsBoardPage from '../ops/page'
 import IncidentsPage from '../incidents/page'
 import DirectoryPage from '../directory/page'
+import SeedingCard from '@/components/SeedingCard'
 
 const TABS = [
   { key: 'ops',       label: 'Field Request', icon: Radio },
@@ -28,6 +29,9 @@ export default function CommunicationsPage() {
       <EventBackLink id={id} />
       <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2 mb-1"><MessageSquare size={22} className="text-teal-600" /> Communications</h1>
       <p className="text-sm text-slate-500 mb-4">Field requests, broadcasts, incident logging, and staff contacts — all in one place.</p>
+
+      {/* Which divisions are ready to seed (Bo, Oct 23 2026). Shows nothing until a division has a bracket. */}
+      <SeedingCard tid={String(id)} />
 
       <div className="flex gap-1 bg-slate-100 rounded-xl p-1 mb-5">
         {TABS.map(t => {
