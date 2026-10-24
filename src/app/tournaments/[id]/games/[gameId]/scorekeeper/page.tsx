@@ -19,7 +19,7 @@ interface Penalty {
 interface TournamentDefaults { periodSecs: number; penaltySecs: number; rulesUrl: string; askScorer: boolean; penaltyAlert: boolean; keepAwake: boolean }
 
 const DEFAULTS_FALLBACK: TournamentDefaults = { periodSecs: 20 * 60, penaltySecs: 120, rulesUrl: 'https://sunshineeventsgroup.com/rules/', askScorer: false, penaltyAlert: true, keepAwake: true }
-const PRESETS = [30, 60, 120, 180, 300] // :30, 1, 2, 3, 5 min
+const PRESETS = [30, 45, 60, 90, 120, 180, 300] // :30, :45, 1, 1:30, 2, 3, 5 min
 
 function fmt(secs: number) {
   const s = Math.max(0, Math.round(secs))
@@ -1095,7 +1095,7 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
                   <label className="text-xs text-gray-400">Duration</label>
                   <span className="text-[10px] text-emerald-400">★ default {fmt(defaults.penaltySecs)}</span>
                 </div>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-4 gap-2">
                   {PRESETS.map(n => (
                     <button key={n} onClick={() => { setUseCustom(false); setPenSecs(n) }}
                       className={`py-3 rounded-xl text-xs font-bold transition-colors ${!useCustom && penSecs === n ? 'bg-red-600 text-white' : 'bg-gray-800 text-gray-300 hover:bg-gray-700'}`}>{fmt(n)}</button>
