@@ -770,7 +770,10 @@ export default function ScorekeeperPage({ params }: { params: { id: string; game
           <button onClick={resetClock} className="px-5 py-3 rounded-2xl text-base font-bold bg-gray-800 hover:bg-gray-700 text-gray-300">Reset</button>
         </div>
         {officialTimeOnField && (
-          <p className="text-[11px] text-gray-500 mt-3 text-center max-w-[280px]">Official game time is kept on the field by the referees — this clock is for reference.</p>
+          <div role="note" className="mt-3 max-w-[300px] rounded-xl border border-amber-500/60 bg-amber-500/15 px-3 py-2 text-center">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-amber-300">Not the official game time</p>
+            <p className="text-[11px] text-amber-100/90 mt-0.5">The referees keep official time on the field. This clock is for reference only.</p>
+          </div>
         )}
       </div>
 
