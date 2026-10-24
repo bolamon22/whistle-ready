@@ -150,6 +150,7 @@ export default function PublicGamePage(){
                 <div className="mt-2 flex flex-col items-center" data-testid="live-clock">
                   <span className={`text-2xl font-extrabold tabular-nums ${liveScore!.clockRunning?'text-red-600':'text-slate-500'}`}>{clockNow}</span>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">{liveScore!.periodLabel}{liveScore!.clockRunning?'':' · clock stopped'}</span>
+                  <span className="mt-0.5 text-[10px] font-semibold text-amber-700">Unofficial clock · the referees keep official time</span>
                 </div>
               )}
             </div>
